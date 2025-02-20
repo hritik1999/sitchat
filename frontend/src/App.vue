@@ -1,5 +1,5 @@
 <script setup>
-
+import { Button } from '@/components/ui/button'
 </script>
 
 <template>
@@ -9,5 +9,6 @@
       <router-link to="/about">About</router-link>
     </nav>
     <router-view />
+    <Button>Click me</Button>
   </div>
 </template>
