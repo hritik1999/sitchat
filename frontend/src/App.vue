@@ -1,5 +1,12 @@
-<script setup>
+<script>
 import { Button } from '@/components/ui/button'
+
+export default {
+  components: {
+    Button
+  }
+}
+
 </script>
 
 <template>
