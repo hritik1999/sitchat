@@ -55,7 +55,7 @@ class Director:
         outline = chain.invoke({})
         return outline.content
     
-    def generate_turn_instructions(self,chat_history,outline,num_lines=10):
+    def generate_turn_instructions(self,chat_history,outline,num_lines=6):
         dialogue_turn_prompt = f"""
         Given the characters and the outline of the upcoming plot for this scene, please translate the plot outline into a script format consisting of up to {num_lines} lines. Ensure that the new lines follow the storyline and seamlessly connect with the preceding script.
 
@@ -64,7 +64,7 @@ class Director:
         Ensure your continuation smoothly integrates with the existing script. Prefer character dialogues over narration when possible.
 
         Output the script continuation in JSON format. Each line should be a dictionary with keys "role" and "instruction".In the instruction provide a brief synopsis of the upcoming line for the actor. However, do not directly provide a line.use keywords to instruct the actor on how to role-play the character in the next line, so that the actor can play out the dialogue that fits the script.
-        The "role" can be "Narration" or one of the characters in the scene but not the player. If it is narration you can send content. 
+        The "role" can be "Narration" or one of the characters in the scene but not the player. If it is narration you can send content and do not mention player in narration. 
         Example format:
         ```
         {{"scripts": [{{"role": "Alice", "instruction": "..." }}, {{"role": "Bob", "instruction": "..." }}, {{"role": "Narration", "content": "..." }}, ...]}}

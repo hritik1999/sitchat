@@ -66,12 +66,7 @@ class Stage:
           - If the player chooses to interrupt, call player_interrupt,
             then break out of the current script processing.
           - Otherwise, process the line as normal.
-        """
-        # Remove markdown code fences if present.
-        script_str = script_json.strip()
-        if script_str.startswith("```") and script_str.endswith("```"):
-            script_str = script_str.strip("`").strip()
-        
+        """        
         try:
             script_str = self._clean_json(script_json)
             script_data = json.loads(script_str)
@@ -90,10 +85,7 @@ class Stage:
 
             role = line.get("role", "")
             # For actor lines, check for "instruction" then fallback to "content"
-            if "instruction" in line:
-                instructions = line["instruction"]
-            else:
-                instructions = line.get("content", "")
+            instructions = line.get("instruction") or line.get("content", "")
                 
             if role in self.actors:
                 actor = self.actors[role]
@@ -127,10 +119,10 @@ class Stage:
         # Director generates an outline based on the current chat history and current plot objective.
         outline = self.director.generate_outline(self.chat_history, objective)
         print("Director Outline:")
+        outline = json.loads(self._clean_json(outline))
         print(outline)
-
         # Director generates turn instructions (script) based on the outline.
-        script_json = self.director.generate_turn_instructions(self.chat_history, outline)
+        script_json = self.director.generate_turn_instructions(self.chat_history,outline['new_outline'])
         print("Director Script Turn:")
         print(script_json)
 
