@@ -23,7 +23,7 @@ class Director:
 
             Relationships among the characters: {relations}
 
-            Note: There is also a player in the show whom you cannot direct or give instructions to, but your goal is to keep them engaged and entertained.
+            Note: There is also a player in the show whom you cannot direct or give instructions to, but your goal is to keep them engaged and entertained by instructing the actors.
             Player description: {player}
             """
         
