@@ -23,7 +23,7 @@ class Director:
 
             Relationships among the characters: {relations}
 
-            Note: There is also a player in the show whom you cannot direct or give instructions to, but your goal is to keep them engaged and entertained by instructing the actors.
+            Note: There is also a player who is part of the show but you cannot direct or give instructions to the player.
             Player description: {player}
             """
         
@@ -92,7 +92,7 @@ class Director:
         {{"completed": true or false, "reason": "Your reason"}}
         ```
         chat_history: {chat_history}
-        plot objective: {outline}
+        plot objective: {plot_objective}
 
         Return only a valid JSON string without any markdown or additional formatting.
         """
