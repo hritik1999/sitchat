@@ -5,10 +5,6 @@
       "paths": {
         "@/*": ["./src/*"]
       },
-      "types": ["vue", "node"],
-      "allowJs": true,
-      "checkJs": true,
-      "skipLibCheck": true
       // ...
     }
   }
