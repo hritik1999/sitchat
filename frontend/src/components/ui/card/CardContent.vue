@@ -7,10 +7,7 @@ const props = defineProps({
 </script>
 
 <template>
-  <li
-    data-sidebar="menu-item"
-    :class="cn('group/menu-item relative', props.class)"
-  >
+  <div :class="cn('p-6 pt-0', props.class)">
     <slot />
-  </li>
+  </div>
 </template>

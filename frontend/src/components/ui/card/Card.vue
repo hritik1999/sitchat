@@ -8,12 +8,8 @@ const props = defineProps({
 
 <template>
   <div
-    data-sidebar="content"
     :class="
-      cn(
-        'flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-hidden',
-        props.class,
-      )
+      cn('rounded-xl border border-neutral-200 bg-white text-neutral-950 shadow dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-50', props.class)
     "
   >
     <slot />
