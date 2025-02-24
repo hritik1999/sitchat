@@ -1,7 +1,7 @@
 <template>
   <Card class="w-full h-full flex flex-col">
     <CardHeader class="border-b text-center">
-      <CardTitle>SitChat</CardTitle>
+      <CardTitle> SitChat</CardTitle>
     </CardHeader>
     <CardContent class="flex-1 p-4 overflow-hidden">
       <ScrollArea class="h-full w-full">
@@ -9,27 +9,34 @@
           <div
             v-for="(message, index) in messages"
             :key="index"
-            class="flex items-end"
-            :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
+            class="flex items-end gap-2"
+            :class="characters[message.character].alignRight ? 'justify-end' : 'justify-start'"
           >
-            <div
-              class="flex flex-col space-y-2 max-w-[80%]"
-              :class="message.role === 'user' ? 'items-end' : 'items-start'"
-            >
+            <img
+              v-if="!characters[message.character].alignRight"
+              :src="characters[message.character].avatar"
+              class="h-8 w-8 rounded-full"
+            />
+            <div class="flex flex-col space-y-2 max-w-[70%]"
+              :class="characters[message.character].alignRight ? 'items-end' : 'items-start'">
               <div
                 class="rounded-lg px-4 py-2"
-                :class="
-                  message.role === 'user'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted'
-                "
+                :class="[
+                  characters[message.character].bg,
+                  characters[message.character].text
+                ]"
               >
                 {{ message.content }}
               </div>
               <span class="text-xs text-muted-foreground">
-                {{ message.timestamp }} - {{ message.role }}
+                {{ message.timestamp }} - {{ characters[message.character].name }}
               </span>
             </div>
+            <img
+              v-if="characters[message.character].alignRight"
+              :src="characters[message.character].avatar"
+              class="h-8 w-8 rounded-full"
+            />
           </div>
         </div>
       </ScrollArea>
@@ -71,10 +78,38 @@ export default {
     return {
       newMessage: '',
       mode: useColorMode('dark'),
+      characters: {
+        user: {
+          name: 'You',
+          avatar: '/user-avatar.png',
+          bg: 'bg-primary',
+          text: 'text-primary-foreground',
+          alignRight: true
+        },
+        assistant: {
+          name: 'AI Assistant',
+          avatar: '/assistant-avatar.png',
+          bg: 'bg-muted',
+          text: 'text-foreground',
+          alignRight: false
+        },
+        dog: {
+          name: 'Dog Bot',
+          avatar: '/dog-avatar.png',
+          bg: 'bg-amber-500',
+          text: 'text-white',
+          alignRight: false
+        }
+      },
       messages: [
         {
           content: 'Hello! How can I help you today?',
-          role: 'bot',
+          character: 'assistant',
+          timestamp: this.getCurrentTime()
+        },
+        {
+          content: 'Woof! I\'m here to help with pet questions!',
+          character: 'dog',
           timestamp: this.getCurrentTime()
         }
       ]
@@ -89,22 +124,29 @@ export default {
 
       const userMessage = {
         content: this.newMessage.trim(),
-        role: 'user',
+        character: 'user',
         timestamp: this.getCurrentTime()
       }
 
       this.messages.push(userMessage)
       this.newMessage = ''
 
-      // Simulate bot response
+      // Simulate different character responses
       setTimeout(() => {
         this.messages.push({
-          content: 'This is a simulated response',
-          role: 'bot',
+          content: 'This is an AI response',
+          character: 'assistant',
           timestamp: this.getCurrentTime()
         })
-        this.scrollToBottom()
       }, 1000)
+
+      setTimeout(() => {
+        this.messages.push({
+          content: 'Woof! That\'s interesting!',
+          character: 'dog',
+          timestamp: this.getCurrentTime()
+        })
+      }, 1500)
 
       await this.$nextTick()
       this.scrollToBottom()
@@ -121,3 +163,10 @@ export default {
   }
 }
 </script>
+
+<style scoped>
+/* Custom avatar styling */
+img {
+  flex-shrink: 0;
+}
+</style>
