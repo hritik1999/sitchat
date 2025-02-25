@@ -247,9 +247,11 @@ if __name__ == "__main__":
 
     # Define a list of plot objectives.
     plot_objectives = [
-        "Ross tells a boring story about dinosaurs and chandler starts roasting him about it. ",  # Fixed typo
-        " Ross becomes enraged and Joey tries to patch them up and stop them from fighting!",  # Added "up"
-        "They all make up and enjoy their coffee."  # Fixed "The all"
+        "Ross tells a boring story about dinosaur ",
+        "chandler starts roasting him about it.", 
+        "Ross becomes enraged at chandler for joking about dinosours",  
+        "Joey stops ross and chandler for fight and switches the topic",
+        "they pay the bill and leave"
     ]
 
     # Initialize the Stage with actors, director, player, and plot objectives.

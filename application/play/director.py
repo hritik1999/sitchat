@@ -14,7 +14,7 @@ class Director:
         self.relations = relations
         self.llm = llm
 
-        self.system_prompt = f"""You are the director of a drama. You are directing "{show}".
+        self.system_prompt = f"""You are the director of a drama titled "{show}". Your role is to guide the narrative while ensuring consistency in character development, relationships, and plot progression. 
 
             Description of the show: {description}
 
@@ -24,29 +24,39 @@ class Director:
 
             Relationships among the characters: {relations}
 
-            Note: There is also a player who is part of the show but you cannot direct or give instructions to the player.
+            Note: There is also a player who is part of the show, but you must not direct or give instructions to the player.
             Player description: {player}
             """
         
     def generate_outline(self,chat_history,plot_objective):
         outline_prompt = f"""
-            Given the characters and the existing script for this scene, please first summarize what has happened in the plot so far.
+                Given the characters, their relationships, and the chat history for the events till now, please perform the following:
 
-            Then, based on the relationships and the chat history between characters, write a detailed continuation for the upcoming script. Ensure that the combined plot of the current scene and the continuation adheres strictly to the given plot objective, and that the content is consistent with the characters' images.
+                1. **Summarize** the events that have unfolded so far in a concise yet detailed.
+                2. **Outline** a detailed narrative continuation for the upcoming scene. Ensure that this outline:
 
-            The existing script may have partially achieved the plot objective. You must follow the requirements of the plot objective closely, continuing the existing script and gradually developing the plot. Do not disregard the existing script or introduce developments beyond the specified objective.
+                - Seamlessly continues from the existing script.
+                - Gradually drives the plot toward the specified plot objective and achieves the plot objective while avoiding abrupt twists.
+                -the content should consistent with the characters' images.
+                - Your output should describe what will happen next without using a dialogue script format. 
+                - All characters mentioned must remain in the scene.
+                - Do not include events that have already occurred, and avoid introducing premature plot twists. 
+                - Do not disregard the existing script or introduce developments beyond the specified objective.
+                - Do not include the player in your outline but make the characters engage with him.
 
-            Your output should describe what will happen next without using a dialogue script format. Do not include events that have already occurred, and avoid introducing premature plot twists. All characters mentioned must remain in the scene.
+                Make sure that your continuation is coherent and maintains the overall mood and style of the show.
 
-            Output your result in JSON format. Example:
-            ```
-            {{"previous_outline": "Summary of the existing script", "new_outline": "Continuation for the upcoming script"}}
-            ```
-            chat_history: {chat_history}
-            plot_objective: {plot_objective}
+                Output your result in JSON format. Example:
+                    ```
+                    {{"previous_outline": "Summary of the existing script", "new_outline": "Continuation for the upcoming script"}}
+                    ```
 
-            Return only a valid JSON string without any markdown or additional formatting.
-            """
+                    chat_history: {chat_history}
+                    plot_objective to achieve: {plot_objective}
+
+                Return only a valid JSON string without any markdown or additional formatting.
+
+                """
         messages = [
             SystemMessage(content=self.system_prompt),
             HumanMessage(content=outline_prompt)
@@ -58,23 +68,28 @@ class Director:
     
     def generate_turn_instructions(self,chat_history,outline,num_lines=6):
         dialogue_turn_prompt = f"""
-        Given the characters and the outline of the upcoming plot for this scene, please translate the plot outline into a script format consisting of up to {num_lines} lines. Ensure that the new lines follow the storyline and seamlessly connect with the preceding script.
+            Given the established characters and the detailed narrative outline for the upcoming scene, please convert the outline into a script format with up to {num_lines} lines. Follow these guidelines:
 
-        Develop the script gradually and enrich the details based on the provided plot outline. If the outlined events are covered before reaching {num_lines} lines, you may stop early.
+            1. Ensure each line builds naturally on the previous events, maintaining narrative continuity.
+            2. Use keywords and brief instructions rather than explicit dialogue, allowing actors creative freedom in their performance.
+            3. Ensure that the transitions between lines are smooth and that the overall tone remains consistent with the show's style.
+            4. Do not include the player in your script but instruct the characters to engage the player if required.
 
-        Ensure your continuation smoothly integrates with the existing script. Prefer character dialogues over narration when possible.
+            Your output should be a JSON object with a key "scripts" whose value is a list of dictionaries. Each dictionary should have:
+            - "role": Either one of the characters in the scene or "Narration" (do not include the player).
+            - "instruction" (or "content" if it is narration): A brief, keyword-driven guideline for how the line should be performed.
 
-        Output the script continuation in JSON format. Each line should be a dictionary with keys "role" and "instruction".In the instruction provide a brief synopsis of the upcoming line for the actor. However, do not directly provide a line.use keywords to instruct the actor on how to role-play the character in the next line, so that the actor can play out the dialogue that fits the script.
-        The "role" can be "Narration" or one of the characters in the scene but not the player. If it is narration you can send content and do not mention player in narration. 
-        Example format:
-        ```
-        {{"scripts": [{{"role": "Alice", "instruction": "..." }}, {{"role": "Bob", "instruction": "..." }}, {{"role": "Narration", "content": "..." }}, ...]}}
-        ```
-        chat_history: {chat_history}
-        outline of upcoming plot: {outline}
+            Example format:
+            ```
+            {{"scripts": [{{"role": "Alice", "instruction": "..." }}, {{"role": "Bob", "instruction": "..." }}, {{"role": "Narration", "content": "..." }}, ...]}}
+            ```
+            
+            chat_history: {chat_history}
+            outline of upcoming plot: {outline}
 
-        Return only a valid JSON string without any markdown or additional formatting.
-        """
+            Return only a valid JSON string without any markdown or additional formatting.
+
+            """
         messages = [
             SystemMessage(content=self.system_prompt),
             HumanMessage(content=dialogue_turn_prompt)
@@ -89,9 +104,9 @@ class Director:
         Given the characters and the plot objective of this scene, please determine whether the existing script has included the plot objective.
 
         You should output your answer in JSON format. Give your result in "completed", and explain your reason in "reason". Format example:
-        ```
+        
         {{"completed": true or false, "reason": "Your reason"}}
-        ```
+
         chat_history: {chat_history}
         plot objective: {plot_objective}
 
