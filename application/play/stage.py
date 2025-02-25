@@ -1,15 +1,16 @@
 import json
 import re
 from application.ai.llm import llm
-from application.play.actor import Actor  # Your Actor class
-from application.play.director import Director  # Your Director class with check_objective method
+from application.play.actor import Actor
+from application.play.director import Director
 
 class Player:
     def __init__(self, name, description):
         self.name = name
         self.description = description
         
-    def reply(self):
+    def reply(self, instructions=None, chat_history=None):
+        # Added optional parameters to match the expected method signature
         player_line = input("Your line: ")
         return player_line
 
@@ -47,6 +48,12 @@ class Stage:
         # Remove markdown fences if present.
         if cleaned.startswith("```") and cleaned.endswith("```"):
             cleaned = cleaned.strip("`").strip()
+            
+        # Check if there's a json prefix line
+        lines = cleaned.split("\n")
+        if lines and lines[0].lower().startswith('json'):
+            cleaned = "\n".join(lines[1:])
+            
         # Remove trailing commas before a closing brace/bracket.
         cleaned = re.sub(r",\s*([\]}])", r"\1", cleaned)
         return cleaned
@@ -78,12 +85,12 @@ class Stage:
 
             role = line.get("role", "")
             # For actor lines, check for "instruction" then fallback to "content"
-            instructions = line.get("instruction") or line.get("content", "")
+            instructions = line.get("instruction", "") or line.get("content", "")
                 
             if role in self.actors:
                 actor = self.actors[role]
                 # Update the actor's chat_history dynamically before calling reply.
-                reply_output = actor.reply(instructions,self.chat_history)
+                reply_output = actor.reply(instructions, self.chat_history)
                 dialogue_line = f"{role}: {reply_output}"
                 print(dialogue_line)
                 self.add_to_chat_history(dialogue_line)
@@ -93,7 +100,7 @@ class Stage:
                 self.add_to_chat_history(dialogue_line)
             elif role.lower() == "player":
                 reply_output = self.player.reply(instructions, self.chat_history)
-                dialogue_line = f"Player: {reply_output}"
+                dialogue_line = f"{self.player.name}: {reply_output}"  # Use player name instead of "Player"
                 print(dialogue_line)
                 self.add_to_chat_history(dialogue_line)
             else:
@@ -110,17 +117,28 @@ class Stage:
 
         print(f"\n--- Advancing Turn for Plot Objective: '{objective}' ---")
         # Director generates an outline based on the current chat history and current plot objective.
-        outline = self.director.generate_outline(self.chat_history, objective)
-        print("Director Outline:")
-        outline = json.loads(self._clean_json(outline))
-        print(outline)
-        # Director generates turn instructions (script) based on the outline.
-        script_json = self.director.generate_turn_instructions(self.chat_history,outline['new_outline'])
-        print("Director Script Turn:")
-        print(script_json)
+        outline_str = self.director.generate_outline(self.chat_history, objective)
+        
+        try:
+            outline = json.loads(self._clean_json(outline_str))
+            print("Director Outline:")
+            print(outline)
+            
+            # Get the new outline from the result
+            new_outline = outline.get('new_outline', outline)  # Fallback to the entire outline
+            
+            # Director generates turn instructions (script) based on the outline.
+            script_json = self.director.generate_turn_instructions(self.chat_history, new_outline)
+            print("Director Script Turn:")
+            print(script_json)
 
-        # Process the script, allowing for player interruptions during processing.
-        self.process_director_script(script_json)
+            # Process the script, allowing for player interruptions during processing.
+            self.process_director_script(script_json)
+        except Exception as e:
+            print(f"Error processing outline: {e}")
+            print("Original outline string:")
+            print(outline_str)
+            return
 
         # Check if the objective has been reached using the director's check_objective method.
         print("\n--- Checking if Objective is Reached ---")
@@ -128,7 +146,7 @@ class Stage:
         print("Objective Check Result:")
         print(check_result_str)
         try:
-            check_result = json.loads(check_result_str)
+            check_result = json.loads(self._clean_json(check_result_str))
             if check_result.get("completed", False):
                 print(f"Objective '{objective}' completed: {check_result.get('reason', '')}")
                 self.current_objective_index += 1
@@ -136,25 +154,38 @@ class Stage:
                 print(f"Objective '{objective}' not yet completed: {check_result.get('reason', '')}")
         except Exception as e:
             print("Error parsing objective check result:", e)
+            print("Original check result string:")
+            print(check_result_str)
 
     def player_interrupt(self, player_input):
         print("\n--- Player Interrupts ---")
         # Add the player's input to the chat history.
-        interrupt_line = f"Player: {player_input}"
+        interrupt_line = f"{self.player.name}: {player_input}"  # Use player name instead of "Player"
         print(interrupt_line)
         self.add_to_chat_history(interrupt_line)
+        
         # After the interruption, ask the director to generate a new outline and script that includes the player's input.
         current_obj = self.current_objective()
         if not current_obj:
             print("No current objective to continue after interruption.")
             return
-        outline = self.director.generate_outline(self.chat_history, current_obj)
-        print("Director Outline after Player Interrupt:")
-        print(outline)
-        script_json = self.director.generate_turn_instructions(self.chat_history, outline)
-        print("Director Script Turn after Player Interrupt:")
-        print(script_json)
-        self.process_director_script(script_json)
+            
+        try:
+            outline_str = self.director.generate_outline(self.chat_history, current_obj)
+            print("Director Outline after Player Interrupt:")
+            print(outline_str)
+            
+            outline = json.loads(self._clean_json(outline_str))
+            new_outline = outline.get('new_outline', outline)  # Fallback to the entire outline
+            
+            script_json = self.director.generate_turn_instructions(self.chat_history, new_outline)
+            print("Director Script Turn after Player Interrupt:")
+            print(script_json)
+            self.process_director_script(script_json)
+        except Exception as e:
+            print(f"Error processing outline after interruption: {e}")
+            print("Original outline string:")
+            print(outline_str)
 
     def run_stage(self):
         while self.current_objective_index < len(self.plot_objectives):
@@ -174,14 +205,14 @@ if __name__ == "__main__":
     description = "A show about 6 friends and their day to day life in new york."
     background = "Chandler, joey and ross are sitting in central perk waiting for their coffee after a long day at work!"
     actors_data = {
-        "Chandler": "A sarcastic character from a famous TV show.",
-        "Joey": "A lovable, goofy friend.",
-        "Ross": "A somewhat awkward yet caring friend."
+        "Chandler": "chandler from the famous tv show friends.",
+        "Joey": "Joey from the famous tv show friends.",
+        "Ross": "Joey from the famous tv show friends."
     }
     relations = "Chandler is best friends with Joey, and Ross is Chandler's roommate."
     player_description = "A person sharing a table with them due to over capacity in the cafe."
 
-    director = Director(show, description, background, actors_data, player_description, relations)
+    director = Director(llm,show,description, background, actors_data, player_description, relations)
 
     # Sample initialization for Actors.
     actors = {
@@ -195,14 +226,14 @@ if __name__ == "__main__":
         "Joey": Actor(
             name="Joey",
             description="A charming and sometimes clueless friend.",
-            relations='{"Chandler": "best friend", "Ross": "roommate"}',
+            relations='{"Chandler": "best friend", "Ross": "friend"}',  # Fixed relation
             background="At Central Perk enjoying a coffee.",
             llm=llm,
         ),
         "Ross": Actor(
             name="Ross",
             description="A caring friend who often finds himself in awkward situations.",
-            relations='{"Chandler": "roommate", "Joey": "best friend"}',
+            relations='{"Chandler": "friend", "Joey": "friend"}',  # Fixed relation
             background="At Central Perk with Chandler and Joey.",
             llm=llm,
         )
@@ -216,9 +247,9 @@ if __name__ == "__main__":
 
     # Define a list of plot objectives.
     plot_objectives = [
-        "Ross tells a boring story about dinosours and chandler roasts him hurting ross",
-        "Joey tries to patch them and stop them from fighting!",
-        "The all make up enjoy the coffee."
+        "Ross tells a boring story about dinosaurs and chandler starts roasting him about it. ",  # Fixed typo
+        " Ross becomes enraged and Joey tries to patch them up and stop them from fighting!",  # Added "up"
+        "They all make up and enjoy their coffee."  # Fixed "The all"
     ]
 
     # Initialize the Stage with actors, director, player, and plot objectives.

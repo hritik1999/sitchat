@@ -27,10 +27,12 @@ class Actor:
 
     def reply(self,chat_history, instructions):
 
-        actor_prompt = f"""The script so far is as follows: 
-                                {chat_history}
+        actor_prompt = f"""The script so far is as follows: {chat_history}
 
-                            Director's instructions: {instructions}"""
+                            Director's instructions: {instructions}
+
+                            {self.name}:
+                        """
         messages = [
             SystemMessage(content=self.system_prompt),
             HumanMessage(content=actor_prompt)

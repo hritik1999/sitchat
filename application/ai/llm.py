@@ -1,7 +1,8 @@
 from langchain_openai import ChatOpenAI
+import os
 
 llm = ChatOpenAI(
-    model_name="llama3.2:3b-instruct-fp16",
-    base_url="http://localhost:11434/v1",
-    temperature=0
+    model_name="gpt-4o-mini",
+    temperature=0,
+    api_key=os.getenv('OPENAI_API_KEY')
 )

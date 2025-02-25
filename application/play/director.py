@@ -4,7 +4,7 @@ from application.ai.llm import llm
 
 class Director:
 
-    def __init__(self,show,description,background,actors,player,relations):
+    def __init__(self,llm,show,description,background,actors,player,relations):
 
         self.show = show
         self.description = description
@@ -12,6 +12,7 @@ class Director:
         self.actors = actors
         self.player = player
         self.relations = relations
+        self.llm = llm
 
         self.system_prompt = f"""You are the director of a drama. You are directing "{show}".
 
@@ -51,7 +52,7 @@ class Director:
             HumanMessage(content=outline_prompt)
         ]
         chat_prompt = ChatPromptTemplate.from_messages(messages)
-        chain = chat_prompt | llm 
+        chain = chat_prompt | self.llm 
         outline = chain.invoke({})
         return outline.content
     
@@ -79,7 +80,7 @@ class Director:
             HumanMessage(content=dialogue_turn_prompt)
         ]
         chat_prompt = ChatPromptTemplate.from_messages(messages)
-        chain = chat_prompt | llm 
+        chain = chat_prompt | self.llm 
         script = chain.invoke({})
         return script.content
     
@@ -101,7 +102,7 @@ class Director:
             HumanMessage(content=check_objective_prompt)
         ]
         chat_prompt = ChatPromptTemplate.from_messages(messages)
-        chain = chat_prompt | llm 
+        chain = chat_prompt | self.llm 
         objective_status = chain.invoke({})
         return objective_status.content
     
