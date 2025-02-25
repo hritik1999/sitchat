@@ -1,7 +1,5 @@
 import json
 import re
-from langchain.schema import HumanMessage, SystemMessage
-from langchain.prompts import ChatPromptTemplate
 from application.ai.llm import llm
 from application.play.actor import Actor  # Your Actor class
 from application.play.director import Director  # Your Director class with check_objective method
@@ -10,13 +8,8 @@ class Player:
     def __init__(self, name, description):
         self.name = name
         self.description = description
-        self.system_prompt = f"""You are {name}, a lively and engaged participant in the drama.
-Description: {description}
-"""
         
-    def reply(self, instructions, chat_history):
-        # Display the director's instructions for context and then prompt the player.
-        print(f"\nDirector instructs you: {instructions}")
+    def reply(self):
         player_line = input("Your line: ")
         return player_line
 
