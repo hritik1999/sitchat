@@ -3,16 +3,7 @@ import re
 from application.ai.llm import llm
 from application.play.actor import Actor
 from application.play.director import Director
-
-class Player:
-    def __init__(self, name, description):
-        self.name = name
-        self.description = description
-        
-    def reply(self, instructions=None, chat_history=None):
-        # Added optional parameters to match the expected method signature
-        player_line = input("Your line: ")
-        return player_line
+from application.play.player import Player
 
 class Stage:
     def __init__(self, actors, director, player, plot_objectives):
@@ -27,7 +18,10 @@ class Stage:
         self.player = player
         self.plot_objectives = plot_objectives
         self.current_objective_index = 0
-        self.chat_history = ""  # running dialogue/script
+        self.chat_history = ""
+        self.plot_failure_reason=''
+        self.chat_summary=''
+        self.full_chat = ''
 
     def add_to_chat_history(self, text):
         if self.chat_history:
@@ -94,20 +88,24 @@ class Stage:
                 dialogue_line = f"{role}: {reply_output}"
                 print(dialogue_line)
                 self.add_to_chat_history(dialogue_line)
+                self.full_chat += "\n" + dialogue_line
             elif role.lower() == "narration":
                 dialogue_line = f"Narration: {line.get('content', instructions)}"
                 print(dialogue_line)
                 self.add_to_chat_history(dialogue_line)
+                self.full_chat += "\n" + dialogue_line
             elif role.lower() == "player":
                 reply_output = self.player.reply(instructions, self.chat_history)
                 dialogue_line = f"{self.player.name}: {reply_output}"  # Use player name instead of "Player"
                 print(dialogue_line)
                 self.add_to_chat_history(dialogue_line)
+                self.full_chat += "\n" + dialogue_line
             else:
                 # Unrecognized role; treat as narration.
                 dialogue_line = f"{role}: {instructions}"
                 print(dialogue_line)
                 self.add_to_chat_history(dialogue_line)
+                self.full_chat += "\n" + dialogue_line
 
     def advance_turn(self):
         objective = self.current_objective()
@@ -117,13 +115,19 @@ class Stage:
 
         print(f"\n--- Advancing Turn for Plot Objective: '{objective}' ---")
         # Director generates an outline based on the current chat history and current plot objective.
-        outline_str = self.director.generate_outline(self.chat_history, objective)
+        outline_str = self.director.generate_outline(self.chat_history, objective,self.plot_failure_reason)
         
         try:
             outline = json.loads(self._clean_json(outline_str))
             print("Director Outline:")
             print(outline)
-            
+            self.chat_summary = outline.get('previous_outline')
+
+            # updating the background to include the summary and clearing the chat history to reduce context window
+            self.chat_history=''
+            self.director.background = self.chat_summary
+            for actor in self.actors:
+                self.actors[actor].background = self.chat_summary
             # Get the new outline from the result
             new_outline = outline.get('new_outline', outline)  # Fallback to the entire outline
             
@@ -142,16 +146,16 @@ class Stage:
 
         # Check if the objective has been reached using the director's check_objective method.
         print("\n--- Checking if Objective is Reached ---")
-        check_result_str = self.director.check_objective(self.chat_history, objective)
-        print("Objective Check Result:")
-        print(check_result_str)
+        check_result_str = self.director.check_objective(self.full_chat, objective)
         try:
             check_result = json.loads(self._clean_json(check_result_str))
             if check_result.get("completed", False):
                 print(f"Objective '{objective}' completed: {check_result.get('reason', '')}")
                 self.current_objective_index += 1
+                self.plot_failure_reason = ''
             else:
                 print(f"Objective '{objective}' not yet completed: {check_result.get('reason', '')}")
+                self.plot_failure_reason = 'Plot objective not met due to the following reason:' + check_result.get('reason') +'Please make the plot so it is addressed and the plot objective is completed'
         except Exception as e:
             print("Error parsing objective check result:", e)
             print("Original check result string:")
@@ -196,7 +200,11 @@ class Stage:
                 self.player_interrupt(simulate_interrupt)
         print("\nAll plot objectives completed. The story ends here.")
         print("\nFinal Chat History:")
-        print(self.chat_history)
+        print(self.full_chat)
+
+
+
+
 
 # ---------------- Test Code ----------------
 if __name__ == "__main__":
@@ -248,9 +256,9 @@ if __name__ == "__main__":
     # Define a list of plot objectives.
     plot_objectives = [
         "Ross tells a boring story about dinosaur and chandler starts roasting him about it.", 
-        "Ross becomes enraged at chandler for joking about dinosours",  
-        "Joey stops chandler from making anymore jokes and calms ross down",
-        "they fight over the bill and decide chandler will pay and leave."
+        "Ross becomes enraged at chandler for joking about dinosours.",  
+        "Joey stops chandler from making anymore jokes and chandler stops. Also joey calms ross down.",
+        "Ross and joey make chandler pay the coffee bill for making stupid jokes."
     ]
 
     # Initialize the Stage with actors, director, player, and plot objectives.

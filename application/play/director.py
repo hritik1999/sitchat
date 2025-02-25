@@ -28,11 +28,11 @@ class Director:
             Player description: {player}
             """
         
-    def generate_outline(self,chat_history,plot_objective):
+    def generate_outline(self,chat_history,plot_objective,plot_failure_reason=''):
         outline_prompt = f"""
                 Given the characters, their relationships, and the chat history for the events till now, please perform the following:
 
-                1. **Summarize** the events that have unfolded so far in a concise yet detailed.
+                1. **Summarize** the events that have unfolded so far in a concise yet detailed using background and chat history. Highlight key character interactions and turning points.
                 2. **Outline** a detailed narrative continuation for the upcoming scene. Ensure that this outline:
 
                 - Seamlessly continues from the existing script.
@@ -53,6 +53,7 @@ class Director:
 
                     chat_history: {chat_history}
                     plot_objective to achieve: {plot_objective}
+                    {plot_failure_reason}
 
                 Return only a valid JSON string without any markdown or additional formatting.
 
@@ -66,14 +67,16 @@ class Director:
         outline = chain.invoke({})
         return outline.content
     
-    def generate_turn_instructions(self,chat_history,outline,num_lines=6):
+    def generate_turn_instructions(self,chat_history,outline,num_lines=10):
         dialogue_turn_prompt = f"""
             Given the established characters and the detailed narrative outline for the upcoming scene, please convert the outline into a script format with up to {num_lines} lines. Follow these guidelines:
 
             1. Ensure each line builds naturally on the previous events, maintaining narrative continuity.
             2. Use keywords and brief instructions rather than explicit dialogue, allowing actors creative freedom in their performance.
             3. Ensure that the transitions between lines are smooth and that the overall tone remains consistent with the show's style.
-            4. Do not include the player in your script but instruct the characters to engage the player if required.
+            4. Use character dialogues to replace Narration wherever possible.
+            5. Do not include the player in your script but instruct the characters to engage the player if required.
+            6. If the outlined events are covered before reaching {num_lines} lines, you may stop early.
 
             Your output should be a JSON object with a key "scripts" whose value is a list of dictionaries. Each dictionary should have:
             - "role": Either one of the characters in the scene or "Narration" (do not include the player).
@@ -101,7 +104,7 @@ class Director:
     
     def check_objective(self,chat_history,plot_objective):
         check_objective_prompt = f"""
-        Given the characters and the plot objective of this scene, please determine whether the existing script has included the plot objective.
+        Given the plot objective of this scene and chat history, please determine whether the existing script has achieved the plot objective or similar result as the plot objective.
 
         You should output your answer in JSON format. Give your result in "completed", and explain your reason in "reason". Format example:
         
