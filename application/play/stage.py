@@ -115,6 +115,7 @@ class Stage:
 
         print(f"\n--- Advancing Turn for Plot Objective: '{objective}' ---")
         # Director generates an outline based on the current chat history and current plot objective.
+        print(f"Current plot_failure_reason: {self.plot_failure_reason}")
         outline_str = self.director.generate_outline(self.chat_history, objective,self.plot_failure_reason)
         
         try:
