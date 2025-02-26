@@ -11,9 +11,8 @@ active_stages = {}
 
 
 class StageResource(Resource):
-    def __init__(self, **kwargs):
-        self.socketio = kwargs.get('socketio')
-        super().__init__()
+    def __init__(self, socketio):
+        self.socketio = socketio
     def post(self):
         """Create a new stage session"""
         data = request.get_json()
@@ -85,9 +84,8 @@ class StageResource(Resource):
         })
     
 class AdvanceTurnResource(Resource):
-    def __init__(self, **kwargs):
-        self.socketio = kwargs.get('socketio')
-        super().__init__()
+    def __init__(self, socketio):
+        self.socketio = socketio
     def post(self, session_id):
         """Advance the turn for a stage session"""
         if session_id not in active_stages:
@@ -103,9 +101,8 @@ class AdvanceTurnResource(Resource):
         })
     
 class PlayerInterruptResource(Resource):
-    def __init__(self, **kwargs):
-        self.socketio = kwargs.get('socketio')
-        super().__init__()
+    def __init__(self, socketio):
+        self.socketio = socketio
     def post(self, session_id):
         """Handle a player interruption"""
         if session_id not in active_stages:
@@ -125,8 +122,7 @@ class PlayerInterruptResource(Resource):
     
 def setup_api(api, socketio):
     # Add resources to the API with keyword arguments
-    api.add_resource(StageResource, '/api/stage', '/api/stage/<string:session_id>', 
-                    resource_class_kwargs={'socketio': socketio})
+    api.add_resource(StageResource, '/api/stage', '/api/stage/<string:session_id>', resource_class_kwargs={'socketio': socketio})
     api.add_resource(AdvanceTurnResource, '/api/stage/<string:session_id>/advance',
                     resource_class_kwargs={'socketio': socketio})
     api.add_resource(PlayerInterruptResource, '/api/stage/<string:session_id>/interrupt',

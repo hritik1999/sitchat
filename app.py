@@ -1,3 +1,5 @@
+import eventlet
+eventlet.monkey_patch()
 from flask import Flask
 from flask_cors import CORS
 from flask_restful import Api
@@ -54,7 +56,4 @@ def after_request(response):
 setup_api(web_api, socketio)
 
 if __name__ == '__main__':
-    # Important: Use eventlet for running the server
-    import eventlet
-    eventlet.monkey_patch()
     socketio.run(app, debug=True, port=5001, host='0.0.0.0')
