@@ -280,6 +280,17 @@ export default {
     console.log('Connected to Socket.IO server with ID:', this.socket.id);
     console.log('Transport used:', this.socket.io.engine.transport.name);
   });
+
+  this.socket.on('dialogue', (data) => {
+        this.dialogueHistory.push(data);
+        // Auto-scroll to bottom of dialogue
+        this.$nextTick(() => {
+          const container = document.querySelector('.dialogue-container');
+          if (container) {
+            container.scrollTop = container.scrollHeight;
+          }
+        });
+      });
   
   this.socket.on('connect_error', (error) => {
     console.error('Connection error:', error);

@@ -44,6 +44,8 @@ def handle_join(data):
         socketio.emit('status', {'message': f'Joined session {session_id}'})
     else:
         socketio.emit('error', {'message': 'Session not found'})
+
+
 @app.after_request
 def after_request(response):
     response.headers.add('Access-Control-Allow-Origin', 'http://localhost:5173')
