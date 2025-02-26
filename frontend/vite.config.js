@@ -8,5 +8,18 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
+  },
+  server: {
+    proxy: {
+      '/socket.io': {
+        target: 'http://localhost:5001',
+        ws: true,
+        changeOrigin: true
+      },
+      '/api': {
+        target: 'http://localhost:5001',
+        changeOrigin: true
+      }
+    }
   }
 })
