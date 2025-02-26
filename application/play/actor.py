@@ -1,6 +1,6 @@
 from langchain.schema import HumanMessage, SystemMessage
 from langchain.prompts import ChatPromptTemplate
-from application.ai.llm import llm
+from application.ai.llm import actor_llm
 
 class Actor:
     def __init__(self, name, description, relations, background, llm):
@@ -47,7 +47,7 @@ class Actor:
             HumanMessage(content=actor_prompt)
         ]
         chat_prompt = ChatPromptTemplate.from_messages(messages)
-        chain = chat_prompt | llm 
+        chain = chat_prompt | self.llm 
         dialogue = chain.invoke({})
         return dialogue.content
 

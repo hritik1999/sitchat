@@ -1,6 +1,6 @@
 import json
 import re
-from application.ai.llm import llm
+from application.ai.llm import actor_llm,director_llm
 from application.play.actor import Actor
 from application.play.director import Director
 from application.play.player import Player
@@ -18,16 +18,16 @@ class Stage:
         self.player = player
         self.plot_objectives = plot_objectives
         self.current_objective_index = 0
-        self.chat_history = ""
+        self.context = ""
         self.plot_failure_reason=''
         self.chat_summary=''
         self.full_chat = ''
 
     def add_to_chat_history(self, text):
-        if self.chat_history:
-            self.chat_history += "\n" + text
+        if self.context:
+            self.context += "\n" + text
         else:
-            self.chat_history = text
+            self.context = text
 
     def current_objective(self):
         if self.current_objective_index < len(self.plot_objectives):
@@ -84,7 +84,7 @@ class Stage:
             if role in self.actors:
                 actor = self.actors[role]
                 # Update the actor's chat_history dynamically before calling reply.
-                reply_output = actor.reply(instructions, self.chat_history)
+                reply_output = actor.reply(instructions, self.context)
                 dialogue_line = f"{role}: {reply_output}"
                 print(dialogue_line)
                 self.add_to_chat_history(dialogue_line)
@@ -95,7 +95,7 @@ class Stage:
                 self.add_to_chat_history(dialogue_line)
                 self.full_chat += "\n" + dialogue_line
             elif role.lower() == "player":
-                reply_output = self.player.reply(instructions, self.chat_history)
+                reply_output = self.player.reply()
                 dialogue_line = f"{self.player.name}: {reply_output}"  # Use player name instead of "Player"
                 print(dialogue_line)
                 self.add_to_chat_history(dialogue_line)
@@ -116,7 +116,7 @@ class Stage:
         print(f"\n--- Advancing Turn for Plot Objective: '{objective}' ---")
         # Director generates an outline based on the current chat history and current plot objective.
         print(f"Current plot_failure_reason: {self.plot_failure_reason}")
-        outline_str = self.director.generate_outline(self.chat_history, objective,self.plot_failure_reason)
+        outline_str = self.director.generate_outline(self.context, objective,self.plot_failure_reason)
         
         try:
             outline = json.loads(self._clean_json(outline_str))
@@ -125,7 +125,7 @@ class Stage:
             self.chat_summary = outline.get('previous_outline')
 
             # updating the background to include the summary and clearing the chat history to reduce context window
-            self.chat_history=''
+            self.context=''
             self.director.background = self.chat_summary
             for actor in self.actors:
                 self.actors[actor].background = self.chat_summary
@@ -133,7 +133,7 @@ class Stage:
             new_outline = outline.get('new_outline', outline)  # Fallback to the entire outline
             
             # Director generates turn instructions (script) based on the outline.
-            script_json = self.director.generate_turn_instructions(self.chat_history, new_outline)
+            script_json = self.director.generate_turn_instructions(self.context, new_outline)
             print("Director Script Turn:")
             print(script_json)
 
@@ -176,14 +176,14 @@ class Stage:
             return
             
         try:
-            outline_str = self.director.generate_outline(self.chat_history, current_obj)
+            outline_str = self.director.generate_outline(self.context, current_obj)
             print("Director Outline after Player Interrupt:")
             print(outline_str)
             
             outline = json.loads(self._clean_json(outline_str))
             new_outline = outline.get('new_outline', outline)  # Fallback to the entire outline
             
-            script_json = self.director.generate_turn_instructions(self.chat_history, new_outline)
+            script_json = self.director.generate_turn_instructions(self.context, new_outline)
             print("Director Script Turn after Player Interrupt:")
             print(script_json)
             self.process_director_script(script_json)
@@ -221,7 +221,7 @@ if __name__ == "__main__":
     relations = "Chandler is best friends with Joey, and Ross is Chandler's roommate."
     player_description = "A person sharing a table with them due to over capacity in the cafe."
 
-    director = Director(llm,show,description, background, actors_data, player_description, relations)
+    director = Director(director_llm,show,description, background, actors_data, player_description, relations)
 
     # Sample initialization for Actors.
     actors = {
@@ -230,21 +230,21 @@ if __name__ == "__main__":
             description="A sarcastic and witty character from a famous TV show.",
             relations='{"Joey": "best friend", "Ross": "roommate"}',
             background="At Central Perk with Joey and Ross.",
-            llm=llm,
+            llm=actor_llm,
         ),
         "Joey": Actor(
             name="Joey",
             description="A charming and sometimes clueless friend.",
             relations='{"Chandler": "best friend", "Ross": "friend"}',  # Fixed relation
             background="At Central Perk enjoying a coffee.",
-            llm=llm,
+            llm=actor_llm,
         ),
         "Ross": Actor(
             name="Ross",
             description="A caring friend who often finds himself in awkward situations.",
             relations='{"Chandler": "friend", "Joey": "friend"}',  # Fixed relation
             background="At Central Perk with Chandler and Joey.",
-            llm=llm,
+            llm=actor_llm,
         )
     }
 

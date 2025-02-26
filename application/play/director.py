@@ -1,6 +1,6 @@
 from langchain.schema import HumanMessage, SystemMessage
 from langchain.prompts import ChatPromptTemplate
-from application.ai.llm import llm
+from application.ai.llm import director_llm
 
 class Director:
 
