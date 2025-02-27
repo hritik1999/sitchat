@@ -42,7 +42,6 @@ class Director:
                 - All characters mentioned must remain in the scene.
                 - Do not include events that have already occurred, and avoid introducing premature plot twists. 
                 - Do not disregard the existing script or introduce developments beyond the specified objective.
-                - Do not include the player in your outline but make the characters engage with him.
 
                 Make sure that your continuation is coherent and maintains the overall mood and style of the show.
 
@@ -76,6 +75,7 @@ class Director:
             3. Ensure that the transitions between lines are smooth and that the overall tone remains consistent with the show's style.
             4. Use character dialogues to replace Narration wherever possible.
             5. Do not include the player in your script but instruct the characters to engage the player if required.
+            6. Do not mention the Player in the narration.
             6. If the outlined events are covered before reaching {num_lines} lines, you may stop early.
 
             Your output should be a JSON object with a key "scripts" whose value is a list of dictionaries. Each dictionary should have:

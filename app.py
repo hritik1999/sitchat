@@ -27,24 +27,45 @@ socketio = SocketIO(
     logger=True,               # Enable logging
     engineio_logger=True       # Enable engine.io logging
 )
-# Configure CORS to explicitly allow your frontend origin
-
-
-
 
 # Socket.IO events
 @socketio.on('connect')
 def handle_connect():
     socketio.emit('status', {'message': 'Connected to server'})
 
-@socketio.on('join_session')
+@socketio.on('disconnect')
+def handle_disconnect():
+    print("Client disconnected")
+
+socketio.on('join_session')
 def handle_join(data):
     session_id = data.get('session_id')
     if session_id in active_stages:
         socketio.emit('status', {'message': f'Joined session {session_id}'})
+        
+        # Send the current dialogue history to catch up the client
+        stage = active_stages[session_id]
+        for line in stage.dialogue_history:
+            socketio.emit('dialogue', line)
+            
+        # Ensure story completion is properly detected
+        is_completed = (stage.current_objective_index >= len(stage.plot_objectives) or stage.story_completed)
+        
+        # If index exceeds or equals objectives count, mark story as complete
+        if stage.current_objective_index >= len(stage.plot_objectives):
+            stage.story_completed = True
+        
+        # Send the current objective info with story_completed flag
+        socketio.emit('objective_status', {
+            'current': stage.current_objective(),
+            'index': stage.current_objective_index,
+            'total': len(stage.plot_objectives),
+            'completed': is_completed,
+            'story_completed': is_completed,
+            'final': is_completed
+        })
     else:
         socketio.emit('error', {'message': 'Session not found'})
-
 
 @app.after_request
 def after_request(response):

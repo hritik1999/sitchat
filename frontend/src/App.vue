@@ -108,8 +108,8 @@
           </div>
         </CardContent>
         <CardFooter>
-          <Button @click="createStage" size="lg" class="w-full">
-            Create Story
+          <Button @click="createStage" size="lg" class="w-full" :disabled="isProcessing">
+            {{ isProcessing ? 'Creating...' : 'Create Story' }}
           </Button>
         </CardFooter>
       </Card>
@@ -119,19 +119,42 @@
     <div v-else class="space-y-6">
       <div class="flex justify-between items-center">
         <h1 class="text-3xl font-bold tracking-tight">Interactive Story</h1>
-        <Badge v-if="stageState.completed" variant="success">Completed</Badge>
+        <!-- Added additional condition to check for when index >= total -->
+        <Badge v-if="stageState.current_objective_index >= stageState.total_objectives || stageState.story_completed" variant="success">
+          Story Completed 🎉
+        </Badge>
+        <Badge v-else-if="stageState.completed" variant="success">Completed</Badge>
         <Badge v-else>In Progress</Badge>
       </div>
       
       <Card>
         <CardHeader>
-          <CardTitle>Objective {{ stageState.current_objective_index + 1 }} of {{ stageState.total_objectives }}</CardTitle>
-          <CardDescription>{{ stageState.current_objective }}</CardDescription>
+          <div class="flex justify-between items-center">
+            <div>
+              <!-- Fix for the index showing as 5 of 4 -->
+              <CardTitle v-if="stageState.current_objective_index >= stageState.total_objectives || stageState.story_completed">
+                Story Completed 🎉
+              </CardTitle>
+              <CardTitle v-else>
+                Objective {{ stageState.current_objective_index + 1 }} of {{ stageState.total_objectives }}
+              </CardTitle>
+              <CardDescription v-if="stageState.current_objective_index >= stageState.total_objectives || stageState.story_completed">
+                All objectives have been completed!
+              </CardDescription>
+              <CardDescription v-else>
+                {{ stageState.current_objective }}
+              </CardDescription>
+            </div>
+            <Badge v-if="directorStatus.status === 'directing'" variant="outline" class="bg-amber-100 dark:bg-amber-900 animate-pulse">
+              Director is directing...
+            </Badge>
+          </div>
         </CardHeader>
         <CardContent>
           <Progress :value="progressPercentage" class="mb-4" />
           
-          <div class="h-96 overflow-y-auto p-4 bg-muted rounded-md space-y-3 mb-4">
+          <div id="dialogue-container" class="h-96 overflow-y-auto p-4 bg-muted rounded-md space-y-3 mb-4 dialogue-container">
+            <!-- Dialogue history -->
             <div v-for="(line, index) in dialogueHistory" :key="index" 
                  class="p-3 rounded-lg" 
                  :class="{
@@ -143,37 +166,62 @@
               <div class="font-semibold">{{ line.role }}</div>
               <div>{{ line.content }}</div>
             </div>
+            
+            <!-- Typing indicators -->
+            <div v-for="(status, role) in typingIndicators" :key="`typing-${role}`"
+                 v-show="status === 'typing'"
+                 class="p-3 rounded-lg bg-muted-foreground/5 animate-pulse">
+              <div class="font-semibold">{{ role }}</div>
+              <div class="flex space-x-1">
+                <span class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 0ms"></span>
+                <span class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 150ms"></span>
+                <span class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 300ms"></span>
+              </div>
+            </div>
           </div>
           
-          <div v-if="!stageState.completed">
+          <!-- Only show input if story is not completed -->
+          <div v-if="!(stageState.current_objective_index >= stageState.total_objectives || stageState.story_completed)">
             <div class="space-y-2">
               <Label for="player-input">Your Response</Label>
               <Textarea 
                 id="player-input" 
                 v-model="playerInput" 
-                placeholder="Type your response or continue..."
+                placeholder="Type your response..."
                 rows="3"
+                :disabled="isProcessing || directorStatus.status === 'directing'"
               />
             </div>
           </div>
         </CardContent>
-        <CardFooter class="flex justify-between gap-2">
-          <Button v-if="!stageState.completed" @click="sendPlayerInput" :disabled="!playerInput.trim()" variant="default" size="lg" class="flex-1">
+        <CardFooter>
+          <!-- Only show Send button if story is not completed -->
+          <Button 
+            v-if="!(stageState.current_objective_index >= stageState.total_objectives || stageState.story_completed)" 
+            @click="sendPlayerInput" 
+            :disabled="!playerInput.trim() || isProcessing || directorStatus.status === 'directing'" 
+            variant="default" 
+            size="lg" 
+            class="w-full">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-send mr-2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
             Send
+            <span v-if="isProcessing || directorStatus.status === 'directing'" class="ml-2">(Please wait...)</span>
           </Button>
-          <Button v-if="!stageState.completed" @click="advanceTurn" variant="secondary" size="lg" class="flex-1">
-            Continue
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-arrow-right ml-2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-          </Button>
-          <Button v-if="stageState.completed" @click="resetStory" variant="default" size="lg" class="w-full">
+          
+          <!-- Show Start New Story button if story is completed -->
+          <Button 
+            v-if="stageState.current_objective_index >= stageState.total_objectives || stageState.story_completed" 
+            @click="resetStory" 
+            variant="default" 
+            size="lg" 
+            class="w-full">
             Start New Story
           </Button>
         </CardFooter>
       </Card>
       
-      <Alert v-if="stageState.completed" variant="success">
-        <AlertTitle>Story Complete</AlertTitle>
+      <Alert v-if="stageState.current_objective_index >= stageState.total_objectives || stageState.story_completed" variant="success">
+        <AlertTitle>Story Complete! 🎉</AlertTitle>
         <AlertDescription>
           All objectives have been fulfilled. You can start a new story or review the dialogue above.
         </AlertDescription>
@@ -183,6 +231,7 @@
 </template>
 
 <script>
+import { reactive, ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import io from 'socket.io-client';
 import { Input } from '@/components/ui/input'
 import {Card,CardContent,CardDescription,CardFooter,CardHeader,CardTitle,} from '@/components/ui/card'
@@ -194,6 +243,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
 import { useColorMode } from '@vueuse/core'
 import { useToast } from 'vue-toastification';
+
 export default {
   components: {
     Card, 
@@ -219,14 +269,20 @@ export default {
       apiBaseUrl: 'http://localhost:5001/api',
       sessionId: null,
       playerInput: '',
-      // mode: useColorMode('dark'),
       dialogueHistory: [],
+      typingIndicators: reactive({}),  // Use reactive for Vue 3
+      directorStatus: {
+        status: 'idle',
+        message: ''
+      },
+      isProcessing: false,
       stageState: {
         current_objective_index: 0,
         total_objectives: 0,
         current_objective: '',
         plot_failure_reason: '',
-        completed: false
+        completed: false,
+        story_completed: false
       },
       setup: {
         show: 'Friends',
@@ -269,53 +325,110 @@ export default {
   
   methods: {
     setupSocketConnection() {
-  // Make sure you've imported io correctly
-  this.socket = io("http://localhost:5001", {
-    transports: ['polling', 'websocket'],  // Try polling first, then websocket
-    reconnectionDelayMax: 10000,
-    reconnectionAttempts: 10
-  });
-  
-  this.socket.on('connect', () => {
-    console.log('Connected to Socket.IO server with ID:', this.socket.id);
-    console.log('Transport used:', this.socket.io.engine.transport.name);
-  });
+      // Make sure you've imported io correctly
+      this.socket = io("http://localhost:5001", {
+        transports: ['polling', 'websocket'],  // Try polling first, then websocket
+        reconnectionDelayMax: 10000,
+        reconnectionAttempts: 10
+      });
+      
+      this.socket.on('connect', () => {
+        console.log('Connected to Socket.IO server with ID:', this.socket.id);
+        console.log('Transport used:', this.socket.io.engine.transport.name);
+      });
 
-  this.socket.on('dialogue', (data) => {
+      this.socket.on('dialogue', (data) => {
         this.dialogueHistory.push(data);
         // Auto-scroll to bottom of dialogue
-        this.$nextTick(() => {
-          const container = document.querySelector('.dialogue-container');
-          if (container) {
-            container.scrollTop = container.scrollHeight;
-          }
-        });
+        this.scrollToBottom();
       });
-  
-  this.socket.on('connect_error', (error) => {
-    console.error('Connection error:', error);
-  });
       
+      // New event for typing indicators - using Vue 3 reactivity
+      this.socket.on('typing_indicator', (data) => {
+        console.log('Typing indicator:', data);
+        const { role, status } = data;
+        // Direct property assignment works in Vue 3
+        this.typingIndicators[role] = status;
+        
+        // Auto-scroll to see typing indicator
+        this.scrollToBottom();
+      });
+      
+      // New event for director status
+      this.socket.on('director_status', (data) => {
+        console.log('Director status:', data);
+        this.directorStatus = data;
+        this.isProcessing = data.status === 'directing';
+      });
+      
+      this.socket.on('connect_error', (error) => {
+        console.error('Connection error:', error);
+        this.toast.error('Connection error: ' + error.message);
+      });
+          
       this.socket.on('status', (data) => {
         console.log('Status:', data.message);
+        // Don't show the "Already processing" message as a toast - it's confusing
+        if (!data.message.includes('Already processing')) {
+          this.toast.info(data.message);
+        }
       });
-      
+          
       this.socket.on('error', (data) => {
         console.error('Error:', data.message);
-        this.$toast.error(data.message);
+        this.toast.error(data.message);
       });
-      
+          
       this.socket.on('objective_status', (data) => {
+        console.log('Objective status:', data);
         if (data.completed) {
-          this.$toast.success('Objective completed: ' + data.message);
-        } else {
-          console.log('Objective not yet complete:', data.message);
+          this.toast.success(data.message || 'Objective completed!');
+          
+          // Update local state if we have the objective index
+          if (data.index !== undefined) {
+            this.stageState.current_objective_index = data.index;
+          }
+          
+          // Check if we have a new current objective
+          if (data.current !== undefined) {
+            this.stageState.current_objective = data.current;
+          }
+          
+          // Update completion status
+          if (data.total !== undefined) {
+            this.stageState.total_objectives = data.total;
+            this.stageState.completed = (data.index >= data.total);
+            
+            // Check if we've reached or exceeded total objectives
+            if (data.index >= data.total) {
+              this.stageState.story_completed = true;
+              this.toast.success('🎉 Story completed! All objectives have been fulfilled.');
+            }
+          }
+          
+          // Check for explicit story completion flag
+          if (data.story_completed || data.final) {
+            this.stageState.story_completed = true;
+            this.toast.success('🎉 Story completed! All objectives have been fulfilled.');
+          }
+        }
+      });
+    },
+    
+    scrollToBottom() {
+      nextTick(() => {
+        const container = document.getElementById('dialogue-container');
+        if (container) {
+          container.scrollTop = container.scrollHeight;
         }
       });
     },
     
     async createStage() {
+      if (this.isProcessing) return;
+      
       try {
+        this.isProcessing = true;
         // Transform actors array to object format needed by API
         const actorsData = {};
         this.actors.forEach(actor => {
@@ -349,43 +462,24 @@ export default {
           // Join the Socket.IO room for this session
           this.socket.emit('join_session', { session_id: this.sessionId });
           
-          // Advance the first turn automatically
-          this.advanceTurn();
+          // Story will start automatically, no need to manually advance turn
           this.toast.success('Story created successfully!');
         } else {
           this.toast.error('Error creating stage: ' + (data.error || 'Unknown error'));
         }
+        this.isProcessing = false;
       } catch (error) {
         console.error('Error creating stage:', error);
         this.toast.error('Error creating stage: ' + error.message);
-      }
-    },
-    
-    async advanceTurn() {
-      if (this.stageState.completed) return;
-      
-      try {
-        const response = await fetch(`${this.apiBaseUrl}/stage/${this.sessionId}/advance`, {
-          method: 'POST'
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-          this.stageState = data.state;
-        } else {
-          this.toast.error('Error advancing turn: ' + (data.error || 'Unknown error'));
-        }
-      } catch (error) {
-        console.error('Error advancing turn:', error);
-        this.toast.error('Error advancing turn: ' + error.message);
+        this.isProcessing = false;
       }
     },
     
     async sendPlayerInput() {
-      if (!this.playerInput.trim()) return;
+      if (!this.playerInput.trim() || this.isProcessing || this.directorStatus.status === 'directing') return;
       
       try {
+        this.isProcessing = true;
         const response = await fetch(`${this.apiBaseUrl}/stage/${this.sessionId}/interrupt`, {
           method: 'POST',
           headers: {
@@ -399,14 +493,16 @@ export default {
         const data = await response.json();
         
         if (response.ok) {
-          this.stageState = data.state;
           this.playerInput = ''; // Clear input after sending
         } else {
-          this.$toast.error('Error sending input: ' + (data.error || 'Unknown error'));
+          this.toast.error('Error sending input: ' + (data.error || 'Unknown error'));
+          this.isProcessing = false;
         }
+        // Note: isProcessing will be set when director_status changes
       } catch (error) {
         console.error('Error sending player input:', error);
         this.toast.error('Error sending input: ' + error.message);
+        this.isProcessing = false;
       }
     },
     
@@ -414,12 +510,19 @@ export default {
       this.sessionId = null;
       this.dialogueHistory = [];
       this.playerInput = '';
+      // Clear typing indicators
+      Object.keys(this.typingIndicators).forEach(key => {
+        delete this.typingIndicators[key];
+      });
+      this.directorStatus = { status: 'idle', message: '' };
+      this.isProcessing = false;
       this.stageState = {
         current_objective_index: 0,
         total_objectives: 0,
         current_objective: '',
         plot_failure_reason: '',
-        completed: false
+        completed: false,
+        story_completed: false
       };
       this.toast.info('Started a new story');
     },
@@ -447,3 +550,9 @@ export default {
   },
 };
 </script>
+
+<style scoped>
+.dialogue-container {
+  scroll-behavior: smooth;
+}
+</style>
