@@ -72,18 +72,49 @@ onMounted(async () => {
 
 async function getUser(userId) {
   try {
+    // Try to fetch the user profile
     const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('id', userId)
-      .single()
+      .maybeSingle() // Use maybeSingle() instead of single() to avoid errors when no records found
     
-    if (error) throw error
+    if (error && error.code !== 'PGRST116') {
+      // Only throw for errors other than "no records found"
+      throw error
+    }
     
-    user.value = data
+    if (data) {
+      // If data exists, use it
+      user.value = data
+    } else {
+      // If no profile exists yet, create a minimal user object
+      // This provides a fallback while the profile is being created
+      const { data: sessionData } = await supabase.auth.getSession()
+      const email = sessionData?.session?.user?.email || 'User'
+      
+      user.value = { 
+        id: userId, 
+        username: 'User',
+        email: email
+      }
+      
+      // Optionally, retry after a short delay
+      setTimeout(() => {
+        // This will retry once after 2 seconds
+        getUser(userId)
+      }, 2000)
+    }
   } catch (error) {
     console.error('Error fetching user:', error)
-    user.value = { id: userId, email: 'User' }
+    // Fallback with minimal user info
+    const { data: sessionData } = await supabase.auth.getSession()
+    const email = sessionData?.session?.user?.email || 'User'
+    
+    user.value = { 
+      id: userId, 
+      email: email
+    }
   }
 }
 

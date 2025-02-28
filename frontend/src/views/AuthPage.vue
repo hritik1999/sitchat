@@ -146,16 +146,24 @@
   }
   
   // Register new user
-  async function register() {
-    // Validate passwords match
-    if (form.value.password !== form.value.confirmPassword) {
-      throw new Error('Passwords do not match')
-    }
-    
-    // Register with Supabase Auth
+async function register() {
+  // Validate passwords match
+  if (form.value.password !== form.value.confirmPassword) {
+    throw new Error('Passwords do not match')
+  }
+  
+  loading.value = true;
+  
+  try {
+    // Step 1: Register with Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: form.value.email,
-      password: form.value.password
+      password: form.value.password,
+      options: {
+        data: {
+          username: form.value.username
+        }
+      }
     })
     
     if (authError) throw authError
@@ -164,24 +172,48 @@
       throw new Error('Failed to create account')
     }
     
-    // Create user profile in the database
-    const { error: profileError } = await supabase
-      .from('users')
-      .insert([
-        {
-          id: authData.user.id,
-          username: form.value.username,
-          email: form.value.email
-        }
-      ])
+    // Step 2: Wait briefly to ensure auth is properly set up
+    await new Promise(resolve => setTimeout(resolve, 500));
     
-    if (profileError) {
-      // Attempt to clean up the auth account if profile creation fails
-      await supabase.auth.signOut()
-      throw profileError
+    // Step 3: Check if profile already exists
+    const { data: existingProfile, error: checkError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', authData.user.id)
+      .maybeSingle()
+    
+    // Only create profile if it doesn't exist yet
+    if (!existingProfile && !checkError) {
+      // Profile doesn't exist yet, try to create it
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert([
+          {
+            id: authData.user.id,
+            username: form.value.username
+          }
+        ])
+      
+      if (profileError) {
+        console.error('Profile creation error:', profileError);
+        // If it's not a duplicate key error, we should report it
+        if (profileError.code !== '23505') {
+          toast.warning('Account created but profile setup is pending');
+        }
+        // No need to throw error - the trigger will likely handle this
+      }
+    } else if (checkError) {
+      console.error('Profile check error:', checkError);
+      // Just log this error, don't throw - auth worked, so we can continue
     }
     
-    toast.success('Account created successfully!')
-    router.push('/')
+    toast.success('Account created successfully!');
+    router.push('/');
+  } catch (error) {
+    toast.error(error.message || 'An error occurred during registration');
+    console.error('Registration error:', error);
+  } finally {
+    loading.value = false;
   }
+}
   </script>

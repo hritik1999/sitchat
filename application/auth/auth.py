@@ -62,9 +62,21 @@ class Auth:
             if not auth_response.user:
                 return {"error": "Failed to create user", "details": auth_response}, 400
             
-            # Then create the user profile
+            # Then create the user profile using the service role client
             user_id = auth_response.user.id
-            profile = db.create_user_profile(user_id, username)
+            
+            # Get the supabase client with service role - bypasses RLS
+            supabase_admin = create_client(
+                os.getenv('SUPABASE_URL'),
+                os.getenv('SUPABASE_SERVICE_KEY')  # Make sure this is the service key
+            )
+            
+            profile_response = supabase_admin.table('users').insert({
+                "id": user_id,
+                "username": username
+            }).execute()
+            
+            profile = profile_response.data[0] if profile_response.data else None
             
             if not profile:
                 return {"error": "User created but profile creation failed"}, 500
