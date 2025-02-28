@@ -4,6 +4,7 @@ from flask import Flask
 from flask_cors import CORS
 from flask_restful import Api
 from flask_socketio import SocketIO
+import threading  # Add this import here
 from application.api.api import setup_api, active_stages
 from application.ai.llm import actor_llm, director_llm
 from application.play.actor import Actor
@@ -13,6 +14,8 @@ from application.play.stage import Stage
 from application.database.db import db
 from dotenv import load_dotenv
 import os
+import json 
+import time
 
 # Load environment variables
 load_dotenv()
@@ -56,7 +59,11 @@ def handle_disconnect():
 @socketio.on('join_session')
 def handle_join(data):
     session_id = data.get('session_id')
+    print(f"🔵 Socket join request for session: {session_id}")
+    print(f"🔵 Available active stages: {list(active_stages.keys())}")
+    
     if session_id in active_stages:
+        print(f"✅ Found active stage for session: {session_id}")
         socketio.emit('status', {'message': f'Joined session {session_id}'})
         
         # Send the current dialogue history to catch up the client
@@ -80,21 +87,37 @@ def handle_join(data):
             'story_completed': is_completed,
             'final': is_completed
         })
+        
+        # Check if dialogue history is empty and we need to start the chat
+        if len(stage.dialogue_history) == 0 and not stage.story_completed and not stage.is_processing:
+            # Directly call advance_turn without creating a new thread to keep it simple
+            socketio.emit('status', {'message': 'Starting conversation...'})
+            try:
+                # Use a small delay to make sure the client is ready
+                import time
+                time.sleep(1)
+                stage.advance_turn()
+            except Exception as e:
+                socketio.emit('error', {'message': f'Error starting sequence: {str(e)}'})
     else:
         # Check if this is a database chat session that should be loaded
         chat_id = session_id
         try:
+            print(f"🔍 Looking up chat in database: {chat_id}")
             chat = db.get_chat(chat_id)
             if chat:
+                print(f"✅ Found chat in database: {chat}")
                 # Get the episode details
                 episode = db.get_episode(chat['episode_id'])
                 if not episode:
+                    print(f"❌ Episode not found for chat: {chat_id}")
                     socketio.emit('error', {'message': 'Episode not found for this chat'})
                     return
                 
                 # Get the show details
                 show = db.get_show(episode['show_id'])
                 if not show:
+                    print(f"❌ Show not found for episode: {episode['id']}")
                     socketio.emit('error', {'message': 'Show not found for this episode'})
                     return
                 
@@ -144,9 +167,13 @@ def handle_join(data):
                 stage.current_objective_index = chat['current_objective_index']
                 
                 # Load chat history from database
-                if stage.load_chat_history():
+                print(f"🔄 Loading chat history for: {chat_id}")
+                loaded = stage.load_chat_history()
+                if loaded:
+                    print(f"✅ Successfully loaded chat history")
                     # Store in active stages
                     active_stages[chat_id] = stage
+                    print(f"✅ Added to active_stages: {chat_id}")
                     
                     # Send status message
                     socketio.emit('status', {'message': f'Restored chat session {chat_id}'})
@@ -169,12 +196,151 @@ def handle_join(data):
                         'final': is_completed
                     })
                     
+                    # If there's no dialogue yet, start the conversation
+                    if len(stage.dialogue_history) == 0 and not is_completed and not stage.is_processing:
+                        socketio.emit('status', {'message': 'Starting conversation...'})
+                        try:
+                            # Use a small delay to make sure the client is ready
+                            import time
+                            time.sleep(1)
+                            stage.advance_turn()
+                        except Exception as e:
+                            socketio.emit('error', {'message': f'Error starting sequence: {str(e)}'})
                 else:
-                    socketio.emit('error', {'message': 'Failed to load chat history'})
+                    print(f"❌ Failed to load chat history for: {chat_id}")
+                    # Even if history fails to load, we should still create the stage
+                    active_stages[chat_id] = stage
+                    
+                    # Send status message
+                    socketio.emit('status', {'message': f'Created new chat session {chat_id}'})
+                    
+                    # Send objective status for the first objective
+                    socketio.emit('objective_status', {
+                        'current': stage.current_objective(),
+                        'index': stage.current_objective_index,
+                        'total': len(stage.plot_objectives),
+                        'completed': False,
+                        'story_completed': False,
+                        'final': False
+                    })
+                    
+                    # Start the conversation
+                    socketio.emit('status', {'message': 'Starting new conversation...'})
+                    try:
+                        import time
+                        time.sleep(1)
+                        stage.advance_turn()
+                    except Exception as e:
+                        socketio.emit('error', {'message': f'Error starting sequence: {str(e)}'})
             else:
+                print(f"❌ Chat not found in database: {chat_id}")
                 socketio.emit('error', {'message': 'Session not found'})
         except Exception as e:
+            print(f"❌ Error restoring session: {str(e)}")
             socketio.emit('error', {'message': f'Error restoring session: {str(e)}'})
+
+@socketio.on('ping')
+def handle_ping(data):
+    """Handle ping from client to keep connection alive"""
+    print(f"Received ping from client: {data}")
+    socketio.emit('pong', {'timestamp': time.time()})
+
+@socketio.on('get_dialogue_history')
+def handle_get_dialogue_history(data):
+    """Handle request for dialogue history"""
+    session_id = data.get('session_id')
+    print(f"🔍 Client requested dialogue history for session: {session_id}")
+    
+    if session_id in active_stages:
+        stage = active_stages[session_id]
+        print(f"✅ Found stage for session {session_id}, sending {len(stage.dialogue_history)} messages")
+        
+        # Send each message individually to ensure they're processed in order
+        for line in stage.dialogue_history:
+            socketio.emit('dialogue', line)
+        
+        # Also send current objective status
+        socketio.emit('objective_status', {
+            'current': stage.current_objective(),
+            'index': stage.current_objective_index,
+            'total': len(stage.plot_objectives),
+            'completed': stage.story_completed,
+            'story_completed': stage.story_completed
+        })
+        
+        return {'success': True, 'message_count': len(stage.dialogue_history)}
+    
+    # Try to find the chat in the database
+    try:
+        chat = db.get_chat(session_id)
+        if chat:
+            messages = db.get_messages(session_id)
+            print(f"✅ Found {len(messages)} messages in database for chat: {session_id}")
+            
+            # Send messages
+            for msg in messages:
+                socketio.emit('dialogue', {
+                    'role': msg['role'],
+                    'content': msg['content'],
+                    'type': msg['type']
+                })
+            
+            # Send objective status
+            episode = db.get_episode(chat['episode_id'])
+            if episode:
+                plot_objectives = json.loads(episode['plot_objectives']) if isinstance(episode['plot_objectives'], str) else episode['plot_objectives']
+                
+                socketio.emit('objective_status', {
+                    'current': plot_objectives[chat['current_objective_index']] if chat['current_objective_index'] < len(plot_objectives) else None,
+                    'index': chat['current_objective_index'],
+                    'total': len(plot_objectives),
+                    'completed': chat['completed'],
+                    'story_completed': chat['completed']
+                })
+            
+            return {'success': True, 'message_count': len(messages)}
+    except Exception as e:
+        print(f"❌ Error fetching dialogue history from database: {str(e)}")
+    
+    return {'success': False, 'error': 'Session not found'}
+
+@socketio.on('restart_stage')
+def handle_restart_stage(data):
+    """Handle request to restart a potentially stuck stage"""
+    session_id = data.get('session_id')
+    print(f"🔄 Client requested restart for session: {session_id}")
+    
+    if session_id in active_stages:
+        stage = active_stages[session_id]
+        
+        # Reset processing state to allow new actions
+        stage.reset_processing_state(force=True)
+        
+        # If the stage has dialogue, send it again
+        if stage.dialogue_history:
+            print(f"✅ Resending {len(stage.dialogue_history)} messages")
+            for line in stage.dialogue_history:
+                socketio.emit('dialogue', line)
+        
+        # If there's no dialogue and not completed, try to advance
+        elif not stage.story_completed:
+            print("✅ Starting conversation")
+            socketio.emit('status', {'message': 'Restarting conversation...'})
+            
+            # Start in a background thread
+            def start_in_background():
+                try:
+                    stage.advance_turn()
+                except Exception as e:
+                    socketio.emit('error', {'message': f"Error starting sequence: {str(e)}"})
+            
+            thread = threading.Thread(target=start_in_background)
+            thread.daemon = True
+            thread.start()
+        
+        return {'success': True, 'action': 'restarted'}
+    
+    return {'success': False, 'error': 'Session not found'}
 
 @app.after_request
 def after_request(response):

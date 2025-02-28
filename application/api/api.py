@@ -342,10 +342,16 @@ class ChatsResource(Resource):
         # Store the chat_id to link with database
         stage.chat_id = chat_id
         
-        # Store in active stages
+        # IMPORTANT: Explicitly store in active_stages with chat_id as key
         active_stages[chat_id] = stage
+        
+        # Print debug info to verify
+        print(f"🔵 Created new chat with ID: {chat_id}")
+        print(f"🔵 Active stages now contains keys: {list(active_stages.keys())}")
+        
         state = stage.get_state()
         print("📜 Stage state before return:", state)
+        
         # Start the stage sequence in a background thread to not block the response
         def start_sequence():
             try:
@@ -357,18 +363,21 @@ class ChatsResource(Resource):
                 result = stage.advance_turn()
                 
                 # Save the initial dialogue to the database
-                if result.get('dialogue'):
+                if result and result.get('dialogue'):
                     db.add_messages_batch(chat_id, result['dialogue'])
                 
             except Exception as e:
+                print(f"❌ Error starting sequence: {str(e)}")
                 if hasattr(self, 'socketio'):
                     self.socketio.emit('error', {'message': f'Error starting sequence: {str(e)}'})
             
         thread = threading.Thread(target=start_sequence)
         thread.daemon = True
         thread.start()
+        
         return {
             'chat_id': chat_id,
+            'session_id': chat_id,  # Add this line to provide both formats
             'message': 'Chat created and started automatically',
             'state': stage.get_state()
         }
@@ -568,6 +577,32 @@ class StageResource(Resource):
             'session_id': session_id,
             'state': stage.get_state()
         })
+    
+class ResetSessionResource(Resource):
+    def __init__(self, socketio):
+        self.socketio = socketio
+        
+    def post(self, session_id):
+        """Force reset a potentially stuck session"""
+        if session_id not in active_stages:
+            return {'error': 'Session not found'}, 404
+            
+        stage = active_stages[session_id]
+        was_reset = stage.reset_processing_state(force=True)
+        
+        if was_reset:
+            self.socketio.emit('status', {"message": "Session processing state has been reset"})
+            return {
+                'session_id': session_id,
+                'message': 'Processing state reset successfully',
+                'state': stage.get_state()
+            }
+        else:
+            return {
+                'session_id': session_id,
+                'message': 'Session was not in processing state, no reset needed',
+                'state': stage.get_state()
+            }
 
 
 class AdvanceTurnResource(Resource):
@@ -714,3 +749,5 @@ def setup_api(api, socketio):
                     resource_class_kwargs={'socketio': socketio})
     api.add_resource(PlayerInterruptResource, '/api/stage/<string:session_id>/interrupt',
                     resource_class_kwargs={'socketio': socketio})
+    api.add_resource(ResetSessionResource, '/api/stage/<string:session_id>/reset',
+                resource_class_kwargs={'socketio': socketio})

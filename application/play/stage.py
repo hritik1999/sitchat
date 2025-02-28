@@ -35,6 +35,8 @@ class Stage:
         self.story_completed = False  # Flag to track if the story is complete
         self.chat_id = None  # Database reference ID for persistence
         self.next_message_sequence = 0  # For tracking message sequence in the database
+        self.processing_start_time = None  # To track when processing started
+        self.processing_timeout = 60  # Timeout in seconds
 
     def add_to_chat_history(self, text):
         if self.context:
@@ -113,6 +115,7 @@ class Stage:
                 def schedule_next_turn():
                     with self.processing_lock:
                         self.is_processing = False
+                        self.processing_start_time = None
                     self.trigger_next_turn()
                     
                 schedule_next_turn()
@@ -131,6 +134,7 @@ class Stage:
                 })
                 with self.processing_lock:
                     self.is_processing = False
+                    self.processing_start_time = None
             
             return True, objective_status
         else:
@@ -307,29 +311,62 @@ class Stage:
         self.dialogue_history.extend(dialogue_lines)
         return dialogue_lines
 
+    def reset_processing_state(self, force=False):
+        """Reset the processing state safely"""
+        with self.processing_lock:
+            # Only reset if processing is active and either:
+            # 1. Force reset is requested, or
+            # 2. Processing timeout has been exceeded
+            if self.is_processing and (force or self.is_processing_timed_out()):
+                print(f"🔄 Resetting stuck processing state for chat: {self.chat_id}")
+                self.is_processing = False
+                self.processing_start_time = None
+                return True
+            return False
+
+    def is_processing_timed_out(self):
+        """Check if the current processing has timed out"""
+        if not self.is_processing or not self.processing_start_time:
+            return False
+        
+        elapsed = time.time() - self.processing_start_time
+        if elapsed > self.processing_timeout:
+            print(f"⚠️ Processing timeout after {elapsed:.1f}s for chat: {self.chat_id}")
+            return True
+        return False
+
     def advance_turn(self):
         """
         Advance the game turn based on the current objective.
         Returns dialogue lines generated during this turn.
         """
+        # First check if there's a stuck processing state
+        if self.is_processing:
+            self.reset_processing_state()
+        
         # Use a lock to ensure thread safety
         with self.processing_lock:
             if self.is_processing:
+                print(f"⚠️ Already processing a turn for chat: {self.chat_id}")
                 self.emit_event('status', {"message": "Already processing a turn. Please wait."})
                 return {"status": "waiting", "message": "Already processing a turn", "dialogue": []}
             
             # Don't proceed if the story is already completed
             if self.story_completed:
+                print(f"ℹ️ Story already completed for chat: {self.chat_id}")
                 self.emit_event('status', {"message": "Story is already complete. No more turns."})
                 return {"status": "complete", "message": "Story already complete", "dialogue": []}
                 
             self.is_processing = True
+            self.processing_start_time = time.time()
+            print(f"🔄 Starting advance_turn for chat: {self.chat_id}, objective_index: {self.current_objective_index}")
         
         try:
             objective = self.current_objective()
             if not objective:
                 # Mark the story as completed
                 self.story_completed = True
+                print(f"✅ No more objectives. Story complete for chat: {self.chat_id}")
                 self.emit_event('status', {"message": "No current objective. Story complete."})
                 # Send a clear completion event to the frontend
                 self.emit_event('objective_status', {
@@ -338,7 +375,7 @@ class Stage:
                     "index": self.current_objective_index,
                     "total": len(self.plot_objectives),
                     "final": True,
-                    "story_completed": True  # Add this flag to indicate story completion
+                    "story_completed": True
                 })
                 
                 # Update database if we have a chat_id
@@ -349,10 +386,11 @@ class Stage:
                             'completed': True
                         })
                     except Exception as e:
-                        print(f"Error updating chat completion in database: {str(e)}")
+                        print(f"❌ Error updating chat completion in database: {str(e)}")
                 
                 with self.processing_lock:
                     self.is_processing = False
+                    self.processing_start_time = None
                 return {"status": "complete", "message": "Story complete", "dialogue": []}
 
             # Emit event that director is working
@@ -390,6 +428,7 @@ class Stage:
                 self.emit_event('error', {"message": error_msg})
                 with self.processing_lock:
                     self.is_processing = False
+                    self.processing_start_time = None
                 return {"status": "error", "message": error_msg, "dialogue": []}
 
             # Check if the objective has been reached using the director's check_objective method
@@ -410,6 +449,7 @@ class Stage:
                 }
                 with self.processing_lock:
                     self.is_processing = False
+                    self.processing_start_time = None
                 
             result = {
                 "status": "success",
@@ -422,15 +462,26 @@ class Stage:
                 }
             }
             
-            # Note: Don't reset is_processing here if we're scheduling the next turn
-            # It will be reset in the scheduled function
+            # Reset is_processing if not being handled in check_objective_completion
+            if not completed:
+                with self.processing_lock:
+                    self.is_processing = False
+                    self.processing_start_time = None
+                    
             return result
             
         except Exception as e:
-            error_msg = f"Unexpected error in advance_turn: {str(e)}"
+            error_msg = f"❌ Unexpected error in advance_turn: {str(e)}"
+            print(error_msg)
+            import traceback
+            traceback.print_exc()  # Print the full traceback for debugging
             self.emit_event('error', {"message": error_msg})
+            
+            # Always reset processing state on exception
             with self.processing_lock:
                 self.is_processing = False
+                self.processing_start_time = None
+                
             return {"status": "error", "message": error_msg, "dialogue": []}
 
     def trigger_next_turn(self):
@@ -452,6 +503,10 @@ class Stage:
         """
         Handle a player interruption.
         """
+        # First check if there's a stuck processing state
+        if self.is_processing:
+            self.reset_processing_state()
+            
         with self.processing_lock:
             if self.is_processing:
                 self.emit_event('status', {"message": "Already processing. Please wait before interrupting."})
@@ -463,6 +518,7 @@ class Stage:
                 return {"status": "complete", "message": "Story already complete", "dialogue": []}
                 
             self.is_processing = True
+            self.processing_start_time = time.time()
             
         try:
             self.emit_event('status', {"message": "Player interrupts"})
@@ -515,6 +571,7 @@ class Stage:
                 
                 with self.processing_lock:
                     self.is_processing = False
+                    self.processing_start_time = None
                 return {"status": "error", "message": "No current objective", "dialogue": []}
                     
             outline_str = self.director.generate_outline(self.context, current_obj)
@@ -542,6 +599,7 @@ class Stage:
                 self.emit_event('error', {"message": f"Error checking objective: {str(e)}"})
                 with self.processing_lock:
                     self.is_processing = False
+                    self.processing_start_time = None
             
             result = {
                 "status": "success",
@@ -549,14 +607,25 @@ class Stage:
                 "player_input": player_input
             }
             
-            # Note: is_processing flag is reset in scheduled functions or above on error
+            # Reset processing state if not handled by check_objective_completion
+            if not completed:
+                with self.processing_lock:
+                    self.is_processing = False
+                    self.processing_start_time = None
+                    
             return result
             
         except Exception as e:
             error_msg = f"Error processing outline after interruption: {str(e)}"
+            print(error_msg)
+            import traceback
+            traceback.print_exc()
             self.emit_event('error', {"message": error_msg})
+            
             with self.processing_lock:
                 self.is_processing = False
+                self.processing_start_time = None
+                
             return {"status": "error", "message": error_msg, "dialogue": []}
 
     def get_state(self):
@@ -594,47 +663,89 @@ class Stage:
         Run through the entire sequence of plot objectives.
         This is an API-friendly version of run_stage.
         """
-        # We don't need to check is_processing here since advance_turn will do it
+        print(f"🎬 Starting run_sequence for chat_id: {self.chat_id}")
         
-        # Just start the first turn, the rest will be triggered automatically
-        result = self.advance_turn()
+        # Use a lock to ensure thread safety
+        with self.processing_lock:
+            if self.is_processing:
+                print(f"⚠️ Already processing in run_sequence for chat: {self.chat_id}")
+                return {
+                    "status": "waiting",
+                    "message": "Already processing"
+                }
+            
+            # Don't proceed if the story is already completed
+            if self.story_completed:
+                print(f"ℹ️ Story already completed in run_sequence for chat: {self.chat_id}")
+                return {
+                    "status": "complete",
+                    "message": "Story already complete"
+                }
+            
+            self.is_processing = True
+            self.processing_start_time = time.time()
         
-        # If we have a chat_id, ensure we save the initial dialogue
-        if self.chat_id and result.get('dialogue'):
-            try:
-                messages = []
-                for idx, msg in enumerate(result['dialogue']):
-                    messages.append({
-                        'chat_id': self.chat_id,
-                        'role': msg['role'],
-                        'content': msg['content'],
-                        'type': msg['type'],
-                        'sequence': idx
+        try:
+            # Start the first turn
+            print(f"🔄 Starting first turn in run_sequence for chat: {self.chat_id}")
+            result = self.advance_turn()
+            
+            # If we have a chat_id, ensure we save the initial dialogue
+            if self.chat_id and result.get('dialogue'):
+                try:
+                    print(f"💾 Saving initial dialogue for chat: {self.chat_id}")
+                    db.add_messages_batch(self.chat_id, result['dialogue'])
+                    
+                    # Also update chat progress in the database
+                    db.update_chat(self.chat_id, {
+                        'current_objective_index': self.current_objective_index,
+                        'completed': self.story_completed
                     })
-                
-                if messages:
-                    db.add_messages_batch(self.chat_id, messages)
-            except Exception as e:
-                print(f"Error saving initial dialogue to database: {str(e)}")
-        
-        return {
-            "status": "started",
-            "message": "Story sequence started"
-        }
+                except Exception as e:
+                    print(f"❌ Error saving initial dialogue to database: {str(e)}")
+            
+            # Mark processing as done - next steps will happen via events
+            with self.processing_lock:
+                self.is_processing = False
+                self.processing_start_time = None
+            
+            return {
+                "status": "started",
+                "message": "Story sequence started"
+            }
+        except Exception as e:
+            error_msg = f"❌ Error in run_sequence: {str(e)}"
+            print(error_msg)
+            import traceback
+            traceback.print_exc()
+            
+            with self.processing_lock:
+                self.is_processing = False
+                self.processing_start_time = None
+            
+            return {
+                "status": "error",
+                "message": error_msg
+            }
     
     def load_chat_history(self):
         """
         Load chat history from the database if a chat_id is available
         """
         if not self.chat_id:
+            print(f"⚠️ No chat_id available to load history")
             return False
         
         try:
             # Get the messages for this chat
+            print(f"🔄 Attempting to load messages for chat: {self.chat_id}")
             messages = db.get_messages(self.chat_id)
             
             if not messages:
+                print(f"ℹ️ No messages found for chat: {self.chat_id}")
                 return False
+            
+            print(f"✅ Found {len(messages)} messages for chat: {self.chat_id}")
             
             # Add messages to dialogue history
             self.dialogue_history = []
@@ -660,5 +771,26 @@ class Stage:
             return True
             
         except Exception as e:
-            print(f"Error loading chat history from database: {str(e)}")
+            print(f"❌ Error loading chat history from database: {str(e)}")
+            # Reset state to avoid half-loaded state
+            self.dialogue_history = []
+            self.context = ""
+            self.full_chat = ""
+            self.next_message_sequence = 0
             return False
+          
+    def debug_state(self):
+        """Print the current state of the stage for debugging"""
+        state = {
+            "chat_id": self.chat_id,
+            "current_objective_index": self.current_objective_index,
+            "total_objectives": len(self.plot_objectives),
+            "current_objective": self.current_objective(),
+            "is_processing": self.is_processing,
+            "processing_start_time": self.processing_start_time,
+            "story_completed": self.story_completed,
+            "dialogue_history_count": len(self.dialogue_history),
+            "next_message_sequence": self.next_message_sequence
+        }
+        print(f"🔍 Stage Debug State: {state}")
+        return state
