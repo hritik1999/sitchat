@@ -43,6 +43,63 @@ class AuthResource(Resource):
 
 # --- Show Resources ---
 
+class ImageUploadResource(Resource):
+    @authenticate_request
+    def post(self):
+        """Handle image upload to Supabase storage"""
+        user_id = get_current_user_id()
+        
+        if 'image' not in request.files:
+            return {"error": "No image file provided"}, 400
+        
+        file = request.files['image']
+        
+        if file.filename == '':
+            return {"error": "No selected file"}, 400
+        
+        # Validate file type (accept only images)
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
+        if '.' not in file.filename or \
+           file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
+            return {"error": "Invalid file type"}, 400
+        
+        try:
+            # Create a unique filename
+            file_ext = file.filename.rsplit('.', 1)[1].lower()
+            filename = secure_filename(f"{str(uuid.uuid4())}.{file_ext}")
+            
+            # Save file temporarily
+            temp_path = os.path.join('/tmp', filename)
+            file.save(temp_path)
+            
+            # Upload to Supabase storage
+            with open(temp_path, 'rb') as f:
+                file_content = f.read()
+            
+            # Upload to 'show-images' bucket
+            result = db.supabase.storage.from_('show-images').upload(
+                path=filename,
+                file=file_content,
+                file_options={"content-type": f"image/{file_ext}"}
+            )
+            
+            # Clean up temp file
+            os.remove(temp_path)
+            
+            if hasattr(result, 'error') and result.error:
+                return {"error": f"Upload failed: {result.error}"}, 500
+            
+            # Get public URL
+            public_url = db.supabase.storage.from_('show-images').get_public_url(filename)
+            
+            return {"url": public_url, "success": True}
+            
+        except Exception as e:
+            print(f"Upload error: {str(e)}")
+            return {"error": f"Upload failed: {str(e)}"}, 500
+
+
+# Update the ShowsResource class to handle image URLs
 class ShowsResource(Resource):
     def get(self):
         """Get a list of all shows"""
@@ -64,14 +121,13 @@ class ShowsResource(Resource):
             description=data.get('description'),
             characters=data.get('characters', {}),
             relations=data.get('relations', ''),
-            image_url=data.get('image_url')
+            image_url=data.get('image_url')  # Now we'll just use the URL provided by frontend
         )
         
         if not show:
             return {"error": "Failed to create show"}, 500
         
         return jsonify({"show": show})
-
 
 class ShowResource(Resource):
     def get(self, show_id):
@@ -636,6 +692,7 @@ class PlayerInterruptResource(Resource):
 def setup_api(api, socketio):
     # Authentication endpoints
     api.add_resource(AuthResource, '/api/auth/<string:action>')
+    api.add_resource(ImageUploadResource, '/api/upload-image')
     
     # Show endpoints
     api.add_resource(ShowsResource, '/api/shows')
