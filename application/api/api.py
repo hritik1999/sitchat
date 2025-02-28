@@ -3,6 +3,7 @@ from flask import request, jsonify, g, Response
 import threading
 import json
 import uuid
+import os
 from application.ai.llm import actor_llm, director_llm
 from application.play.actor import Actor
 from application.play.director import Director
@@ -343,7 +344,8 @@ class ChatsResource(Resource):
         
         # Store in active stages
         active_stages[chat_id] = stage
-        
+        state = stage.get_state()
+        print("📜 Stage state before return:", state)
         # Start the stage sequence in a background thread to not block the response
         def start_sequence():
             try:
@@ -365,11 +367,11 @@ class ChatsResource(Resource):
         thread = threading.Thread(target=start_sequence)
         thread.daemon = True
         thread.start()
-        return jsonify({
+        return {
             'chat_id': chat_id,
             'message': 'Chat created and started automatically',
             'state': stage.get_state()
-        })
+        }
 
 
 class ChatResource(Resource):
