@@ -6,7 +6,6 @@ const HomePage = () => import('@/views/HomePage.vue')
 const AuthPage = () => import('@/views/AuthPage.vue')
 const ShowsPage = () => import('@/views/ShowsPage.vue')
 const ShowDetailsPage = () => import('@/views/ShowDetailsPage.vue')
-const MyShowsPage = () => import('@/views/ShowsPage.vue')
 const EpisodePage = () => import('@/views/ShowDetailsPage.vue')
 const ChatPage = () => import('@/views/ChatPage.vue')
 
@@ -35,12 +34,6 @@ const routes = [
     component: ShowDetailsPage,
     meta: { title: 'Show Details' },
     props: true
-  },
-  {
-    path: '/my-shows',
-    name: 'my-shows',
-    component: MyShowsPage,
-    meta: { title: 'My Shows', requiresAuth: true }
   },
   {
     path: '/episode/:id',

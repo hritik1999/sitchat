@@ -365,7 +365,6 @@ class ChatsResource(Resource):
         thread = threading.Thread(target=start_sequence)
         thread.daemon = True
         thread.start()
-        
         return jsonify({
             'chat_id': chat_id,
             'message': 'Chat created and started automatically',

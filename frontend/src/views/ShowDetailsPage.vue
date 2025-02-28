@@ -177,7 +177,7 @@
   
       <!-- Create/Edit Episode Dialog -->
       <Dialog :open="episodeDialog" @update:open="closeEpisodeDialog">
-        <DialogContent class="sm:max-w-[600px]">
+        <DialogContent class="sm:max-w-[600px] h-[90vh] max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>{{ editingEpisode ? 'Edit Episode' : 'Create New Episode' }}</DialogTitle>
             <DialogDescription>
@@ -185,7 +185,7 @@
             </DialogDescription>
           </DialogHeader>
           
-          <form @submit.prevent="saveEpisode" class="space-y-4">
+          <form @submit.prevent="saveEpisode" class="space-y-4 flex-1 overflow-y-auto pr-1 -mr-1 pb-4">
             <div class="space-y-2">
               <Label for="episode-name">Episode Name</Label>
               <Input id="episode-name" v-model="episodeForm.name" placeholder="e.g. The One With the Reunion" required />
@@ -290,394 +290,431 @@
     </div>
   </template>
   
-  <script setup>
-  import { ref, computed, onMounted } from 'vue'
-  import { useRoute, useRouter } from 'vue-router'
-  import { useSupabase } from '@/composables/useSupabase'
-  import { useToast } from 'vue-toastification'
-  import { 
-    ArrowLeftIcon, EditIcon, PlusIcon, XIcon, ImageIcon, 
-    TrashIcon, PlayIcon, FolderIcon, AlertTriangleIcon, Loader2Icon 
-  } from 'lucide-vue-next'
-  import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-  import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-  import { 
-    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-    AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
-  } from '@/components/ui/alert-dialog'
-  import { Button } from '@/components/ui/button'
-  import { Input } from '@/components/ui/input'
-  import { Textarea } from '@/components/ui/textarea'
-  import { Label } from '@/components/ui/label'
-  import { Skeleton } from '@/components/ui/skeleton'
+
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useSupabase } from '@/composables/useSupabase'
+import { useToast } from 'vue-toastification'
+import { 
+  ArrowLeftIcon, EditIcon, PlusIcon, XIcon, ImageIcon, 
+  TrashIcon, PlayIcon, FolderIcon, AlertTriangleIcon, Loader2Icon 
+} from 'lucide-vue-next'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { 
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
+} from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
+
+const route = useRoute()
+const router = useRouter()
+const { supabase } = useSupabase()
+const toast = useToast()
+
+// State
+const show = ref(null)
+const episodes = ref([])
+const loading = ref(true)
+const loadingEpisodes = ref(false)
+const characters = ref([])
+const userSession = ref(null) // Changed from computed to ref
+
+// Dialog states
+const episodeDialog = ref(false)
+const playerDialog = ref(false)
+const deleteDialog = ref(false)
+const deleteType = ref('') // 'show' or 'episode'
+const itemToDelete = ref(null)
+
+// Form states
+const editingEpisode = ref(null)
+const selectedEpisode = ref(null)
+const isSaving = ref(false)
+const isStarting = ref(false)
+const isDeleting = ref(false)
+
+const episodeForm = ref({
+  name: '',
+  description: '',
+  background: '',
+  plot_objectives: []
+})
+
+const playerForm = ref({
+  player_name: '',
+  player_description: ''
+})
+
+// Check if user can edit this show
+const canEditShow = computed(() => {
+  if (!userSession.value || !show.value) return false
+  return show.value.creator_id === userSession.value.user.id
+})
+
+// Fetch show data on component mount
+onMounted(async () => {
+  const showId = route.params.id
+  if (!showId) {
+    router.push('/shows')
+    return
+  }
   
-  const route = useRoute()
-  const router = useRouter()
-  const { supabase } = useSupabase()
-  const toast = useToast()
+  // Properly get the user session
+  const { data } = await supabase.auth.getSession()
+  userSession.value = data.session
   
-  // State
-  const show = ref(null)
-  const episodes = ref([])
-  const loading = ref(true)
-  const loadingEpisodes = ref(false)
-  const characters = ref([])
+  // Set up listener for auth state changes
+  supabase.auth.onAuthStateChange((event, session) => {
+    userSession.value = session
+  })
   
-  // Dialog states
-  const episodeDialog = ref(false)
-  const playerDialog = ref(false)
-  const deleteDialog = ref(false)
-  const deleteType = ref('') // 'show' or 'episode'
-  const itemToDelete = ref(null)
+  await fetchShow(showId)
+  await fetchEpisodes(showId)
+})
+
+// Methods
+async function fetchShow(showId) {
+  loading.value = true
   
-  // Form states
-  const editingEpisode = ref(null)
-  const selectedEpisode = ref(null)
-  const isSaving = ref(false)
-  const isStarting = ref(false)
-  const isDeleting = ref(false)
+  try {
+    const { data, error } = await supabase
+      .from('shows')
+      .select('*, users:creator_id(username)')
+      .eq('id', showId)
+      .single()
+    
+    if (error) throw error
+    
+    show.value = data
+    
+    // Process characters
+    if (show.value.characters) {
+      const chars = typeof show.value.characters === 'string' 
+        ? JSON.parse(show.value.characters) 
+        : show.value.characters
+      
+      characters.value = Object.entries(chars).map(([name, description]) => ({
+        name,
+        description
+      }))
+    }
+    
+  } catch (error) {
+    console.error('Error fetching show:', error)
+    toast.error('Failed to load show details')
+    show.value = null
+  } finally {
+    loading.value = false
+  }
+}
+
+async function fetchEpisodes(showId) {
+  loadingEpisodes.value = true
   
-  const episodeForm = ref({
-    name: '',
+  try {
+    const { data, error } = await supabase
+      .from('episodes')
+      .select('*')
+      .eq('show_id', showId)
+      .order('created_at', { ascending: false })
+    
+    if (error) throw error
+    
+    episodes.value = data || []
+  } catch (error) {
+    console.error('Error fetching episodes:', error)
+    toast.error('Failed to load episodes')
+  } finally {
+    loadingEpisodes.value = false
+  }
+}
+
+function createEpisode() {
+  if (!userSession.value) {
+    toast.error('You must be signed in to add episodes')
+    router.push('/auth')
+    return
+  }
+  
+  if (!canEditShow.value) {
+    toast.error('You must be the creator of this show to add episodes')
+    return
+  }
+  
+  editingEpisode.value = null
+  episodeForm.value = {
+    name: `Episode ${episodes.value.length + 1}`,
     description: '',
     background: '',
-    plot_objectives: []
-  })
-  
-  const playerForm = ref({
-    player_name: '',
-    player_description: ''
-  })
-  
-  // Get current user session
-  const userSession = computed(() => {
-    return supabase.auth.getSession()?.data?.session
-  })
-  
-  // Check if user can edit this show
-  const canEditShow = computed(() => {
-    if (!userSession.value || !show.value) return false
-    return show.value.creator_id === userSession.value.user.id
-  })
-  
-  // Fetch show data on component mount
-  onMounted(async () => {
-    const showId = route.params.id
-    if (!showId) {
-      router.push('/shows')
-      return
-    }
-    
-    await fetchShow(showId)
-    await fetchEpisodes(showId)
-  })
-  
-  // Methods
-  async function fetchShow(showId) {
-    loading.value = true
-    
-    try {
-      const { data, error } = await supabase
-        .from('shows')
-        .select('*, users:creator_id(username)')
-        .eq('id', showId)
-        .single()
-      
-      if (error) throw error
-      
-      show.value = data
-      
-      // Process characters
-      if (show.value.characters) {
-        const chars = typeof show.value.characters === 'string' 
-          ? JSON.parse(show.value.characters) 
-          : show.value.characters
-        
-        characters.value = Object.entries(chars).map(([name, description]) => ({
-          name,
-          description
-        }))
-      }
-      
-    } catch (error) {
-      console.error('Error fetching show:', error)
-      toast.error('Failed to load show details')
-      show.value = null
-    } finally {
-      loading.value = false
-    }
+    plot_objectives: ['First objective']
   }
   
-  async function fetchEpisodes(showId) {
-    loadingEpisodes.value = true
+  episodeDialog.value = true
+}
+
+function editEpisode(episode) {
+  if (!userSession.value) {
+    toast.error('You must be signed in to edit episodes')
+    router.push('/auth')
+    return
+  }
+  
+  if (!canEditShow.value) return
+  
+  editingEpisode.value = episode
+  
+  // Parse plot objectives if needed
+  const objectives = typeof episode.plot_objectives === 'string'
+    ? JSON.parse(episode.plot_objectives)
+    : episode.plot_objectives || []
+  
+  episodeForm.value = {
+    name: episode.name,
+    description: episode.description || '',
+    background: episode.background || '',
+    plot_objectives: objectives
+  }
+  
+  episodeDialog.value = true
+}
+
+async function saveEpisode() {
+  if (!userSession.value) {
+    toast.error('You must be signed in to create an episode')
+    router.push('/auth')
+    return
+  }
+  
+  // Validate form
+  if (!episodeForm.value.name.trim()) {
+    toast.error('Episode name is required')
+    return
+  }
+  
+  if (episodeForm.value.plot_objectives.length === 0) {
+    toast.error('You must add at least one plot objective')
+    return
+  }
+  
+  isSaving.value = true
+  
+  try {
+    const formData = {
+      show_id: show.value.id,
+      creator_id: userSession.value.user.id,
+      name: episodeForm.value.name,
+      description: episodeForm.value.description,
+      background: episodeForm.value.background,
+      plot_objectives: episodeForm.value.plot_objectives
+    }
     
-    try {
+    let result
+    
+    if (editingEpisode.value) {
+      // Update existing episode
       const { data, error } = await supabase
         .from('episodes')
-        .select('*')
-        .eq('show_id', showId)
-        .order('created_at', { ascending: false })
+        .update(formData)
+        .eq('id', editingEpisode.value.id)
+        .select()
+      
+      if (error) throw error
+      result = data[0]
+      toast.success('Episode updated successfully')
+    } else {
+      // Create new episode
+      const { data, error } = await supabase
+        .from('episodes')
+        .insert([formData])
+        .select()
+      
+      if (error) throw error
+      result = data[0]
+      toast.success('Episode created successfully')
+    }
+    
+    // Refresh episodes list
+    await fetchEpisodes(show.value.id)
+    closeEpisodeDialog()
+    
+  } catch (error) {
+    console.error('Error saving episode:', error)
+    toast.error(error.message || 'Failed to save episode')
+  } finally {
+    isSaving.value = false
+  }
+}
+
+function startEpisode(episode) {
+  selectedEpisode.value = episode
+  playerDialog.value = true
+}
+
+async function startPlaying() {
+  if (!userSession.value) {
+    toast.error('You must be signed in to play episodes')
+    router.push('/auth')
+    return
+  }
+  
+  if (!selectedEpisode.value) return
+  
+  if (!playerForm.value.player_name.trim()) {
+    toast.error('Character name is required')
+    return
+  }
+  
+  isStarting.value = true
+  
+  try {
+    // Create a chat/session in the database
+    const response = await fetch('http://localhost:5001/api/chats', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${userSession.value?.access_token || ''}`
+      },
+      body: JSON.stringify({
+        episode_id: selectedEpisode.value.id,
+        player_name: playerForm.value.player_name,
+        player_description: playerForm.value.player_description
+      })
+    })
+    
+    const data = await response.json()
+    
+    if (!response.ok) throw new Error(data.error || 'Failed to start episode')
+    
+    // Navigate to the chat session
+    router.push(`/chat/${data.chat_id}`)
+    
+  } catch (error) {
+    console.error('Error starting episode:', error)
+    toast.error(error.message || 'Failed to start episode')
+  } finally {
+    isStarting.value = false
+    closePlayerDialog()
+  }
+}
+
+function confirmDeleteShow() {
+  if (!userSession.value) {
+    toast.error('You must be signed in to delete this show')
+    router.push('/auth')
+    return
+  }
+  
+  if (!canEditShow.value) return
+  
+  deleteType.value = 'show'
+  itemToDelete.value = show.value
+  deleteDialog.value = true
+}
+
+function confirmDeleteEpisode(episode) {
+  if (!userSession.value) {
+    toast.error('You must be signed in to delete episodes')
+    router.push('/auth')
+    return
+  }
+  
+  if (!canEditShow.value) return
+  
+  deleteType.value = 'episode'
+  itemToDelete.value = episode
+  deleteDialog.value = true
+}
+
+async function confirmDelete() {
+  if (!itemToDelete.value) return
+  
+  isDeleting.value = true
+  
+  try {
+    if (deleteType.value === 'show') {
+      // Delete show
+      const { error } = await supabase
+        .from('shows')
+        .delete()
+        .eq('id', itemToDelete.value.id)
       
       if (error) throw error
       
-      episodes.value = data || []
-    } catch (error) {
-      console.error('Error fetching episodes:', error)
-      toast.error('Failed to load episodes')
-    } finally {
-      loadingEpisodes.value = false
-    }
-  }
-  
-  function createEpisode() {
-    if (!canEditShow.value) {
-      toast.error('You must be the creator of this show to add episodes')
-      return
-    }
-    
-    editingEpisode.value = null
-    episodeForm.value = {
-      name: `Episode ${episodes.value.length + 1}`,
-      description: '',
-      background: '',
-      plot_objectives: ['First objective']
-    }
-    
-    episodeDialog.value = true
-  }
-  
-  function editEpisode(episode) {
-    if (!canEditShow.value) return
-    
-    editingEpisode.value = episode
-    
-    // Parse plot objectives if needed
-    const objectives = typeof episode.plot_objectives === 'string'
-      ? JSON.parse(episode.plot_objectives)
-      : episode.plot_objectives || []
-    
-    episodeForm.value = {
-      name: episode.name,
-      description: episode.description || '',
-      background: episode.background || '',
-      plot_objectives: objectives
-    }
-    
-    episodeDialog.value = true
-  }
-  
-  async function saveEpisode() {
-    if (!userSession.value || !show.value) {
-      toast.error('You must be signed in to create an episode')
-      return
-    }
-    
-    // Validate form
-    if (!episodeForm.value.name.trim()) {
-      toast.error('Episode name is required')
-      return
-    }
-    
-    if (episodeForm.value.plot_objectives.length === 0) {
-      toast.error('You must add at least one plot objective')
-      return
-    }
-    
-    isSaving.value = true
-    
-    try {
-      const formData = {
-        show_id: show.value.id,
-        creator_id: userSession.value.user.id,
-        name: episodeForm.value.name,
-        description: episodeForm.value.description,
-        background: episodeForm.value.background,
-        plot_objectives: episodeForm.value.plot_objectives
-      }
+      toast.success('Show deleted successfully')
+      router.push('/shows')
       
-      let result
+    } else if (deleteType.value === 'episode') {
+      // Delete episode
+      const { error } = await supabase
+        .from('episodes')
+        .delete()
+        .eq('id', itemToDelete.value.id)
       
-      if (editingEpisode.value) {
-        // Update existing episode
-        const { data, error } = await supabase
-          .from('episodes')
-          .update(formData)
-          .eq('id', editingEpisode.value.id)
-          .select()
-        
-        if (error) throw error
-        result = data[0]
-        toast.success('Episode updated successfully')
-      } else {
-        // Create new episode
-        const { data, error } = await supabase
-          .from('episodes')
-          .insert([formData])
-          .select()
-        
-        if (error) throw error
-        result = data[0]
-        toast.success('Episode created successfully')
-      }
+      if (error) throw error
       
-      // Refresh episodes list
+      toast.success('Episode deleted successfully')
       await fetchEpisodes(show.value.id)
-      closeEpisodeDialog()
-      
-    } catch (error) {
-      console.error('Error saving episode:', error)
-      toast.error(error.message || 'Failed to save episode')
-    } finally {
-      isSaving.value = false
-    }
-  }
-  
-  function startEpisode(episode) {
-    selectedEpisode.value = episode
-    playerDialog.value = true
-  }
-  
-  async function startPlaying() {
-    if (!selectedEpisode.value) return
-    
-    if (!playerForm.value.player_name.trim()) {
-      toast.error('Character name is required')
-      return
     }
     
-    isStarting.value = true
+    deleteDialog.value = false
     
-    try {
-      // Create a chat/session in the database
-      const response = await fetch('http://localhost:5001/api/chats', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${userSession.value?.access_token || ''}`
-        },
-        body: JSON.stringify({
-          episode_id: selectedEpisode.value.id,
-          player_name: playerForm.value.player_name,
-          player_description: playerForm.value.player_description
-        })
-      })
-      
-      const data = await response.json()
-      
-      if (!response.ok) throw new Error(data.error || 'Failed to start episode')
-      
-      // Navigate to the chat session
-      router.push(`/chat/${data.chat_id}`)
-      
-    } catch (error) {
-      console.error('Error starting episode:', error)
-      toast.error(error.message || 'Failed to start episode')
-    } finally {
-      isStarting.value = false
-      closePlayerDialog()
-    }
+  } catch (error) {
+    console.error('Error deleting:', error)
+    toast.error(error.message || `Failed to delete ${deleteType.value}`)
+  } finally {
+    isDeleting.value = false
   }
+}
+
+function editShow() {
+  router.push(`/edit-show/${show.value.id}`)
+}
+
+function goBack() {
+  router.go(-1)
+}
+
+function closeEpisodeDialog() {
+  episodeDialog.value = false
+  editingEpisode.value = null
+}
+
+function closePlayerDialog() {
+  playerDialog.value = false
+  selectedEpisode.value = null
+}
+
+function addObjective() {
+  episodeForm.value.plot_objectives.push('')
+}
+
+function removeObjective(index) {
+  if (episodeForm.value.plot_objectives.length === 1) {
+    toast.error('You must have at least one objective')
+    return
+  }
+  episodeForm.value.plot_objectives.splice(index, 1)
+}
+
+// Utility functions
+function getCreatorName(show) {
+  return show.users?.username || 'Unknown'
+}
+
+function getObjectivesCount(objectives) {
+  if (!objectives) return 'No objectives'
   
-  function confirmDeleteShow() {
-    if (!canEditShow.value) return
-    
-    deleteType.value = 'show'
-    itemToDelete.value = show.value
-    deleteDialog.value = true
+  try {
+    const objs = typeof objectives === 'string' ? JSON.parse(objectives) : objectives
+    return `${objs.length} objective${objs.length !== 1 ? 's' : ''}`
+  } catch (e) {
+    return 'Error parsing objectives'
   }
-  
-  function confirmDeleteEpisode(episode) {
-    if (!canEditShow.value) return
-    
-    deleteType.value = 'episode'
-    itemToDelete.value = episode
-    deleteDialog.value = true
-  }
-  
-  async function confirmDelete() {
-    if (!itemToDelete.value) return
-    
-    isDeleting.value = true
-    
-    try {
-      if (deleteType.value === 'show') {
-        // Delete show
-        const { error } = await supabase
-          .from('shows')
-          .delete()
-          .eq('id', itemToDelete.value.id)
-        
-        if (error) throw error
-        
-        toast.success('Show deleted successfully')
-        router.push('/shows')
-        
-      } else if (deleteType.value === 'episode') {
-        // Delete episode
-        const { error } = await supabase
-          .from('episodes')
-          .delete()
-          .eq('id', itemToDelete.value.id)
-        
-        if (error) throw error
-        
-        toast.success('Episode deleted successfully')
-        await fetchEpisodes(show.value.id)
-      }
-      
-      deleteDialog.value = false
-      
-    } catch (error) {
-      console.error('Error deleting:', error)
-      toast.error(error.message || `Failed to delete ${deleteType.value}`)
-    } finally {
-      isDeleting.value = false
-    }
-  }
-  
-  function editShow() {
-    router.push(`/edit-show/${show.value.id}`)
-  }
-  
-  function goBack() {
-    router.go(-1)
-  }
-  
-  function closeEpisodeDialog() {
-    episodeDialog.value = false
-    editingEpisode.value = null
-  }
-  
-  function closePlayerDialog() {
-    playerDialog.value = false
-    selectedEpisode.value = null
-  }
-  
-  function addObjective() {
-    episodeForm.value.plot_objectives.push('')
-  }
-  
-  function removeObjective(index) {
-    if (episodeForm.value.plot_objectives.length === 1) {
-      toast.error('You must have at least one objective')
-      return
-    }
-    episodeForm.value.plot_objectives.splice(index, 1)
-  }
-  
-  // Utility functions
-  function getCreatorName(show) {
-    return show.users?.username || 'Unknown'
-  }
-  
-  function getObjectivesCount(objectives) {
-    if (!objectives) return 'No objectives'
-    
-    try {
-      const objs = typeof objectives === 'string' ? JSON.parse(objectives) : objectives
-      return `${objs.length} objective${objs.length !== 1 ? 's' : ''}`
-    } catch (e) {
-      return 'Error parsing objectives'
-    }
-  }
-  </script>
+}
+</script>

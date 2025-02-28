@@ -9,7 +9,6 @@
           <nav class="flex items-center gap-6">
             <router-link to="/" class="text-sm font-medium">Home</router-link>
             <router-link to="/shows" class="text-sm font-medium">Shows</router-link>
-            <router-link v-if="user" to="/my-shows" class="text-sm font-medium">My Shows</router-link>
           </nav>
         </div>
         <div class="flex items-center gap-4">
