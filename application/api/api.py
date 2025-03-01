@@ -1,5 +1,5 @@
 from flask_restful import Resource, Api, marshal_with, fields, reqparse, marshal
-from flask import request, jsonify, g, Response
+from flask import request, jsonify, g
 import threading
 import json
 import uuid
@@ -12,7 +12,7 @@ from application.play.stage import Stage
 from application.database.db import db
 from application.auth.auth import authenticate_request, get_current_user_id
 
-# Store active stage sessions in memory (these aren't persisted yet)
+# Store active stage sessions in memory
 active_stages = {}
 
 # --- Authentication Resources ---
@@ -67,7 +67,7 @@ class ImageUploadResource(Resource):
         try:
             # Create a unique filename
             file_ext = file.filename.rsplit('.', 1)[1].lower()
-            filename = secure_filename(f"{str(uuid.uuid4())}.{file_ext}")
+            filename = f"{str(uuid.uuid4())}.{file_ext}"
             
             # Save file temporarily
             temp_path = os.path.join('/tmp', filename)
@@ -80,8 +80,7 @@ class ImageUploadResource(Resource):
             # Upload to 'show-images' bucket
             result = db.supabase.storage.from_('show-images').upload(
                 path=filename,
-                file=file_content,
-                file_options={"content-type": f"image/{file_ext}"}
+                file=file_content
             )
             
             # Clean up temp file
@@ -122,7 +121,7 @@ class ShowsResource(Resource):
             description=data.get('description'),
             characters=data.get('characters', {}),
             relations=data.get('relations', ''),
-            image_url=data.get('image_url')  # Now we'll just use the URL provided by frontend
+            image_url=data.get('image_url')
         )
         
         if not show:
@@ -259,6 +258,10 @@ class EpisodeResource(Resource):
 # --- Chat/Session Resources ---
 
 class ChatsResource(Resource):
+    def __init__(self, **kwargs):
+        self.socketio = kwargs.get('socketio')
+        super().__init__()
+        
     def get(self):
         """Get chats for the current user or by episode"""
         user_id = request.args.get('user_id')
@@ -336,7 +339,7 @@ class ChatsResource(Resource):
             director=director, 
             player=player, 
             plot_objectives=plot_objectives,
-            socketio=self.socketio if hasattr(self, 'socketio') else None
+            socketio=self.socketio
         )
         
         # Store the chat_id to link with database
@@ -349,8 +352,9 @@ class ChatsResource(Resource):
         print(f"🔵 Created new chat with ID: {chat_id}")
         print(f"🔵 Active stages now contains keys: {list(active_stages.keys())}")
         
-        state = stage.get_state()
-        print("📜 Stage state before return:", state)
+        # Immediately send the director status to show it's working
+        if self.socketio:
+            self.socketio.emit('director_status', {"status": "directing", "message": "Director is directing..."})
         
         # Start the stage sequence in a background thread to not block the response
         def start_sequence():
@@ -368,7 +372,7 @@ class ChatsResource(Resource):
                 
             except Exception as e:
                 print(f"❌ Error starting sequence: {str(e)}")
-                if hasattr(self, 'socketio'):
+                if self.socketio:
                     self.socketio.emit('error', {'message': f'Error starting sequence: {str(e)}'})
             
         thread = threading.Thread(target=start_sequence)
@@ -424,8 +428,9 @@ class ChatResource(Resource):
 # --- Stage Resources (for interactive chat) ---
 
 class StageResource(Resource):
-    def __init__(self, socketio):
-        self.socketio = socketio
+    def __init__(self, **kwargs):
+        self.socketio = kwargs.get('socketio')
+        super().__init__()
         
     def post(self):
         """Create a new stage session with database integration"""
@@ -462,7 +467,6 @@ class StageResource(Resource):
             player_description, 
             relations
         )
-        
         # Create actors
         actors = {}
         for name, desc in actors_data.items():
@@ -493,6 +497,10 @@ class StageResource(Resource):
         )
         
         active_stages[session_id] = stage
+        
+        # Immediately send director_status to update frontend
+        if self.socketio:
+            self.socketio.emit('director_status', {"status": "directing", "message": "Director is directing..."})
         
         # If a user is logged in, save this session to the database
         if user_id:
@@ -555,7 +563,8 @@ class StageResource(Resource):
                 time.sleep(1)
                 stage.run_sequence()
             except Exception as e:
-                self.socketio.emit('error', {'message': f'Error starting sequence: {str(e)}'})
+                if self.socketio:
+                    self.socketio.emit('error', {'message': f'Error starting sequence: {str(e)}'})
             
         thread = threading.Thread(target=start_sequence)
         thread.daemon = True
@@ -579,8 +588,9 @@ class StageResource(Resource):
         })
     
 class ResetSessionResource(Resource):
-    def __init__(self, socketio):
-        self.socketio = socketio
+    def __init__(self, **kwargs):
+        self.socketio = kwargs.get('socketio')
+        super().__init__()
         
     def post(self, session_id):
         """Force reset a potentially stuck session"""
@@ -591,7 +601,9 @@ class ResetSessionResource(Resource):
         was_reset = stage.reset_processing_state(force=True)
         
         if was_reset:
-            self.socketio.emit('status', {"message": "Session processing state has been reset"})
+            if self.socketio:
+                self.socketio.emit('status', {"message": "Session processing state has been reset"})
+                self.socketio.emit('director_status', {"status": "idle", "message": ""})
             return {
                 'session_id': session_id,
                 'message': 'Processing state reset successfully',
@@ -606,8 +618,9 @@ class ResetSessionResource(Resource):
 
 
 class AdvanceTurnResource(Resource):
-    def __init__(self, socketio):
-        self.socketio = socketio
+    def __init__(self, **kwargs):
+        self.socketio = kwargs.get('socketio')
+        super().__init__()
         
     def post(self, session_id):
         """
@@ -619,13 +632,17 @@ class AdvanceTurnResource(Resource):
             
         stage = active_stages[session_id]
         
+        # Immediately send director status to update frontend
+        if self.socketio:
+            self.socketio.emit('director_status', {"status": "directing", "message": "Director is directing..."})
+        
         # Start advance_turn in a background thread to not block the response
         def advance_in_background():
             try:
                 result = stage.advance_turn()
                 
                 # Save dialogue to database if chat_id is linked
-                if hasattr(stage, 'chat_id') and result.get('dialogue'):
+                if hasattr(stage, 'chat_id') and result and result.get('dialogue'):
                     db.add_messages_batch(stage.chat_id, result['dialogue'])
                     
                     # Update chat progress
@@ -635,7 +652,9 @@ class AdvanceTurnResource(Resource):
                     })
                     
             except Exception as e:
-                self.socketio.emit('error', {'message': f'Error advancing turn: {str(e)}'})
+                if self.socketio:
+                    self.socketio.emit('error', {'message': f'Error advancing turn: {str(e)}'})
+                    self.socketio.emit('director_status', {"status": "idle", "message": ""})
             
         thread = threading.Thread(target=advance_in_background)
         thread.daemon = True
@@ -649,8 +668,9 @@ class AdvanceTurnResource(Resource):
     
 
 class PlayerInterruptResource(Resource):
-    def __init__(self, socketio):
-        self.socketio = socketio
+    def __init__(self, **kwargs):
+        self.socketio = kwargs.get('socketio')
+        super().__init__()
         
     def post(self, session_id):
         """Handle a player interruption"""
@@ -665,30 +685,19 @@ class PlayerInterruptResource(Resource):
             
         stage = active_stages[session_id]
         
+        # Immediately send director status to update frontend
+        if self.socketio:
+            self.socketio.emit('director_status', {"status": "directing", "message": "Director is directing..."})
+        
         # Handle interrupt in a background thread to not block the response
         def interrupt_in_background():
             try:
                 result = stage.player_interrupt(player_input)
                 
                 # Save player input and resulting dialogue to database if chat_id is linked
-                if hasattr(stage, 'chat_id'):
-                    # First add the player input message
-                    player_message = {
-                        'role': stage.player.name,
-                        'content': player_input,
-                        'type': 'player_input',
-                        'sequence': len(db.get_messages(stage.chat_id))
-                    }
-                    db.add_message(
-                        chat_id=stage.chat_id,
-                        role=player_message['role'],
-                        content=player_message['content'],
-                        type=player_message['type'],
-                        sequence=player_message['sequence']
-                    )
-                    
-                    # Then add any resulting dialogue
-                    if result.get('dialogue'):
+                if hasattr(stage, 'chat_id') and stage.chat_id:
+                    # If there's dialogue in the result, save it to database
+                    if result and result.get('dialogue'):
                         # Get the latest sequence number
                         current_messages = db.get_messages(stage.chat_id)
                         start_sequence = len(current_messages)
@@ -703,7 +712,8 @@ class PlayerInterruptResource(Resource):
                                 'sequence': start_sequence + idx
                             })
                         
-                        db.add_messages_batch(stage.chat_id, dialogue_messages)
+                        if dialogue_messages:
+                            db.add_messages_batch(stage.chat_id, dialogue_messages)
                     
                     # Update chat progress
                     db.update_chat(stage.chat_id, {
@@ -712,7 +722,9 @@ class PlayerInterruptResource(Resource):
                     })
                     
             except Exception as e:
-                self.socketio.emit('error', {'message': f'Error processing interruption: {str(e)}'})
+                if self.socketio:
+                    self.socketio.emit('error', {'message': f'Error processing interruption: {str(e)}'})
+                    self.socketio.emit('director_status', {"status": "idle", "message": ""})
             
         thread = threading.Thread(target=interrupt_in_background)
         thread.daemon = True
@@ -739,10 +751,11 @@ def setup_api(api, socketio):
     api.add_resource(EpisodeResource, '/api/episodes/<string:episode_id>')
     
     # Chat endpoints
-    api.add_resource(ChatsResource, '/api/chats')
+    api.add_resource(ChatsResource, '/api/chats',
+                    resource_class_kwargs={'socketio': socketio})
     api.add_resource(ChatResource, '/api/chats/<string:chat_id>')
     
-    # Interactive stage endpoints (maintained for compatibility)
+    # Interactive stage endpoints
     api.add_resource(StageResource, '/api/stage', '/api/stage/<string:session_id>', 
                     resource_class_kwargs={'socketio': socketio})
     api.add_resource(AdvanceTurnResource, '/api/stage/<string:session_id>/advance',

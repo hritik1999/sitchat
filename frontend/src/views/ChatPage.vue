@@ -19,10 +19,10 @@
         </div>
         
         <div class="flex items-center gap-2">
-          <Badge v-if="currentStatus?.story_completed || isStoryCompleted" variant="success">
+          <Badge v-if="storyState.completed" variant="success">
             Story Completed 🎉
           </Badge>
-          <Badge v-else-if="currentStatus?.completed" variant="success">Completed</Badge>
+          <Badge v-else-if="storyState.objectiveCompleted" variant="success">Objective Completed</Badge>
           <Badge v-else>In Progress</Badge>
         </div>
       </div>
@@ -32,21 +32,21 @@
           <div class="flex justify-between items-center">
             <div>
               <!-- Show objective info -->
-              <CardTitle v-if="isStoryCompleted">
+              <CardTitle v-if="storyState.completed">
                 Story Completed 🎉
               </CardTitle>
-              <CardTitle v-else-if="currentStatus?.current">
-                Objective {{ (currentStatus?.index || 0) + 1 }} of {{ currentStatus?.total || objectives.length }}
+              <CardTitle v-else-if="storyState.currentObjective">
+                Objective {{ storyState.objectiveIndex + 1 }} of {{ storyState.totalObjectives }}
               </CardTitle>
-              <CardDescription v-if="isStoryCompleted">
+              <CardDescription v-if="storyState.completed">
                 All objectives have been completed!
               </CardDescription>
-              <CardDescription v-else-if="currentStatus?.current">
-                {{ currentStatus.current }}
+              <CardDescription v-else-if="storyState.currentObjective">
+                {{ storyState.currentObjective }}
               </CardDescription>
             </div>
             
-            <Badge v-if="isDirecting" variant="outline" class="bg-amber-100 dark:bg-amber-900 animate-pulse">
+            <Badge v-if="storyState.directing" variant="outline" class="bg-amber-100 dark:bg-amber-900 animate-pulse">
               Director is directing...
             </Badge>
           </div>
@@ -59,14 +59,18 @@
           <!-- Dialogue container -->
           <div id="dialogue-container" ref="dialogueContainer" class="h-96 overflow-y-auto p-4 bg-muted rounded-md space-y-3 mb-4 scroll-smooth">
             <!-- Empty state -->
-            <div v-if="dialogueHistory.length === 0" class="flex flex-col items-center justify-center h-full text-center">
+            <div v-if="storyState.dialogue.length === 0" class="flex flex-col items-center justify-center h-full text-center">
               <MessageSquareIcon class="h-12 w-12 text-muted-foreground/40 mb-2" />
-              <p class="text-muted-foreground">The story is about to begin...</p>
+              <p class="text-muted-foreground">{{ storyStarting ? "The story is starting..." : "The story is about to begin..." }}</p>
+              <div v-if="storyStarting" class="mt-4">
+                <Loader2Icon class="h-6 w-6 animate-spin mx-auto mb-2" />
+                <p class="text-sm text-muted-foreground">Loading conversation...</p>
+              </div>
             </div>
             
             <!-- Dialogue history -->
             <template v-else>
-              <div v-for="(line, index) in dialogueHistory" :key="index" 
+              <div v-for="(line, index) in storyState.dialogue" :key="`msg-${index}`" 
                   class="p-3 rounded-lg" 
                   :class="{
                     'bg-primary/10': line.type === 'actor_dialogue',
@@ -80,20 +84,20 @@
             </template>
             
             <!-- Typing indicators -->
-            <div v-for="(status, role) in typingIndicators" :key="`typing-${role}`"
+            <div v-for="(status, role) in storyState.typingIndicators" :key="`typing-${role}`"
               v-show="status === 'typing'"
               class="p-3 rounded-lg bg-muted-foreground/5 animate-pulse">
-            <div class="font-semibold">{{ role }}</div>
-            <div class="flex space-x-1">
-              <span class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 0ms"></span>
-              <span class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 150ms"></span>
-              <span class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 300ms"></span>
+              <div class="font-semibold">{{ role }}</div>
+              <div class="flex space-x-1">
+                <span class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 0ms"></span>
+                <span class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 150ms"></span>
+                <span class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 300ms"></span>
+              </div>
             </div>
-          </div>
           </div>
           
           <!-- Player input area (only if story not completed) -->
-          <div v-if="!isStoryCompleted">
+          <div v-if="!storyState.completed">
             <div class="space-y-2">
               <Label for="player-input">Your Response</Label>
               <Textarea 
@@ -101,8 +105,10 @@
                 v-model="playerInput" 
                 placeholder="Type your response..."
                 rows="3"
-                :disabled="isProcessing || isDirecting"
+                :disabled="isInputDisabled"
+                @keyup.enter.ctrl="sendPlayerInput"
               />
+              <p class="text-xs text-muted-foreground">Press Ctrl+Enter to send</p>
             </div>
           </div>
         </CardContent>
@@ -110,21 +116,21 @@
         <CardFooter>
           <!-- Send button (only if story not completed) -->
           <Button 
-            v-if="!isStoryCompleted" 
+            v-if="!storyState.completed" 
             @click="sendPlayerInput" 
-            :disabled="!playerInput.trim() || isProcessing || isDirecting" 
+            :disabled="isInputDisabled" 
             variant="default" 
             size="lg" 
             class="w-full"
           >
-            <SendIcon class="h-4 w-4 mr-2" />
-            Send
-            <span v-if="isProcessing || isDirecting" class="ml-2">(Please wait...)</span>
+            <SendIcon v-if="!isInputDisabled" class="h-4 w-4 mr-2" />
+            <Loader2Icon v-else class="h-4 w-4 mr-2 animate-spin" />
+            {{ isInputDisabled ? 'Please wait...' : 'Send' }}
           </Button>
           
           <!-- Start new story button if completed -->
           <Button 
-            v-if="isStoryCompleted" 
+            v-if="storyState.completed" 
             @click="finishStory" 
             variant="default" 
             size="lg" 
@@ -137,57 +143,66 @@
       </Card>
       
       <!-- Story complete alert -->
-      <Alert v-if="isStoryCompleted" variant="success">
+      <Alert v-if="storyState.completed" variant="success">
         <AlertTitle>Story Complete! 🎉</AlertTitle>
         <AlertDescription>
           All objectives have been fulfilled. You can start a new story or review the dialogue above.
         </AlertDescription>
       </Alert>
 
-      <!-- Connection status for debugging -->
-      <div class="text-xs text-muted-foreground mt-2 flex flex-col gap-1">
-  <p>Socket Status: {{ socketStatus }}</p>
-  <p>Messages: {{ dialogueHistory.length }} | Typing Indicators: {{ Object.keys(typingIndicators).length }}</p>
-  <div class="flex gap-2">
-    <Button 
-      @click="manuallyRefreshMessages" 
-      variant="outline" 
-      size="sm" 
-      class="text-xs"
-    >
-      Refresh Messages
-    </Button>
-    <Button 
-      @click="setupSocket" 
-      variant="outline" 
-      size="sm" 
-      class="text-xs"
-    >
-      Reconnect Socket
-    </Button>
-    <Button 
-      @click="resetTypingIndicators" 
-      variant="outline" 
-      size="sm" 
-      class="text-xs"
-    >
-      Reset Indicators
-    </Button>
-  </div>
-</div>
-      
+      <!-- Connection status -->
+      <Alert v-if="socketStatus !== 'Connected'" variant="warning" class="animate-pulse">
+        <AlertCircleIcon class="h-4 w-4 mr-2" />
+        <AlertTitle>Connection Status: {{ socketStatus }}</AlertTitle>
+        <AlertDescription>
+          <Button 
+            @click="reconnectSocket" 
+            variant="outline" 
+            size="sm" 
+            class="mt-2"
+          >
+            <RefreshCwIcon class="h-4 w-4 mr-2" />
+            Reconnect
+          </Button>
+        </AlertDescription>
+      </Alert>
+
+      <!-- Debug panel (hidden in production) -->
+      <div class="text-xs text-muted-foreground mt-2 flex flex-col gap-1" v-if="isDebugMode">
+        <p>Socket Status: {{ socketStatus }}</p>
+        <p>Messages: {{ storyState.dialogue.length }} | Typing: {{ Object.keys(storyState.typingIndicators).filter(k => storyState.typingIndicators[k] === 'typing').length }}</p>
+        <div class="flex gap-2">
+          <Button 
+            @click="refreshSession" 
+            variant="outline" 
+            size="sm" 
+            class="text-xs"
+          >
+            Refresh Session
+          </Button>
+          <Button 
+            @click="testTypingIndicator" 
+            variant="outline" 
+            size="sm" 
+            class="text-xs"
+          >
+            Test Typing
+          </Button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSupabase } from '@/composables/useSupabase'
 import { useToast } from 'vue-toastification'
 import { io } from 'socket.io-client'
 import { 
-  HomeIcon, SendIcon, MessageSquareIcon, Loader2Icon
+  HomeIcon, SendIcon, MessageSquareIcon, Loader2Icon, 
+  AlertCircleIcon, RefreshCwIcon
 } from 'lucide-vue-next'
 import { 
   Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle 
@@ -205,181 +220,224 @@ const router = useRouter()
 const { supabase } = useSupabase()
 const toast = useToast()
 
-// State
+// Environment settings
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
+const isDebugMode = import.meta.env.DEV // Only show debug in development mode
+
+// Centralized story state management
+const storyState = reactive({
+  dialogue: [],
+  typingIndicators: {},
+  processing: false,
+  directing: false,
+  objectiveIndex: 0,
+  totalObjectives: 0,
+  currentObjective: null,
+  objectiveCompleted: false,
+  completed: false,
+  objectives: []
+})
+
+// UI state
 const loading = ref(true)
 const chat = ref(null)
-const dialogueHistory = ref([])
 const playerInput = ref('')
 const socket = ref(null)
-const typingIndicators = ref({})
-const isProcessing = ref(false)
-const isDirecting = ref(false)
+const socketStatus = ref('Disconnected')
 const dialogueContainer = ref(null)
-const currentStatus = ref(null)
-const objectives = ref([])
-const socketStatus = ref('Disconnected') // Track socket status for debugging
-const connectionAttempts = ref(0)
-const maxConnectionAttempts = 5
+const storyStarting = ref(false)
+const socketKeepAliveInterval = ref(null)
+const lastMessageTimestamp = ref(Date.now())
+const socketReconnectAttempts = ref(0)
 
 // Computed properties
-const isStoryCompleted = computed(() => {
-  if (currentStatus.value?.story_completed) return true
-  if (!currentStatus.value || !objectives.value.length) return false
-  
-  return currentStatus.value.index >= currentStatus.value.total
-})
-
 const progressPercentage = computed(() => {
-  if (!currentStatus.value || !currentStatus.value.total) return 0
-  return (currentStatus.value.index / currentStatus.value.total) * 100
+  if (!storyState.totalObjectives) return 0
+  return (storyState.objectiveIndex / storyState.totalObjectives) * 100
 })
 
-  // Watch for dialogue changes to scroll and ensure reactivity
-watch(dialogueHistory, (newMessages, oldMessages) => {
-  console.log(`Dialogue history changed: ${oldMessages.length} -> ${newMessages.length} messages`)
-  if (newMessages.length > oldMessages.length) {
-    // New messages have been added - scroll to bottom
-    scrollToBottom()
+const isInputDisabled = computed(() => {
+  return !playerInput.value.trim() || 
+         storyState.processing || 
+         storyState.directing || 
+         socketStatus.value !== 'Connected'
+})
+
+// Watch for dialogue changes to scroll
+watch(() => storyState.dialogue.length, (newLength, oldLength) => {
+  if (newLength > oldLength) {
+    // Update timestamp to track activity
+    lastMessageTimestamp.value = Date.now()
+    nextTick(scrollToBottom)
   }
-  
-  // Force reactivity update for the component
+})
+
+// Watch for typing indicators changes
+watch(() => Object.keys(storyState.typingIndicators).filter(k => storyState.typingIndicators[k] === 'typing').length, 
+  (newCount) => {
+    if (newCount > 0) {
+      // Someone is typing, update timestamp to track activity
+      lastMessageTimestamp.value = Date.now()
+      // Make sure we're scrolled to the bottom to see typing indicators
+      nextTick(scrollToBottom)
+    }
+  }
+)
+
+// Watch for socket status changes to update UI
+watch(socketStatus, (newStatus, oldStatus) => {
+  if (newStatus === 'Connected' && oldStatus !== 'Connected') {
+    // If we were reconnected, request the latest data
+    refreshSession()
+  }
+})
+
+function scrollToBottom() {
   nextTick(() => {
-    if (newMessages.length > 0 && dialogueContainer.value) {
-      console.log('Forcing dialogue container update')
-      // This forces a DOM update in Vue
-      const temp = dialogueContainer.value.className
-      dialogueContainer.value.className = temp + ' '
+    const container = dialogueContainer.value
+    if (container) {
+      container.scrollTop = container.scrollHeight
+      
+      // Double-check scroll position after a short delay
       setTimeout(() => {
-        dialogueContainer.value.className = temp
-      }, 0)
+        if (container) {
+          container.scrollTop = container.scrollHeight
+        }
+      }, 100)
     }
   })
-}, { deep: true })
+}
 
-  // Socket setup with reconnection logic
-  function setupSocket() {
+function setupSocket() {
   const chatId = route.params.id
   if (!chatId) return
   
+  // Clean up existing connection if any
   if (socket.value) {
-    // Clean up existing connection if any
     socket.value.disconnect()
     socket.value = null
   }
 
   socketStatus.value = 'Connecting...'
-  console.log(`Setting up socket connection to http://localhost:5001 for chat: ${chatId}`)
   
-  // Initialize Socket.IO with more robust options
-  socket.value = io("http://localhost:5001", {
-    transports: ['polling', 'websocket'], // Try polling first for better compatibility
+  // Initialize Socket.IO with better connection options
+  socket.value = io(API_URL, {
+    transports: ['websocket', 'polling'],
+    reconnection: true,
+    reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
-    reconnectionAttempts: 10,
-    timeout: 20000, // Longer timeout
-    forceNew: true, // Force new connection
-    query: { session_id: chatId } // Pass chatId as query parameter
+    timeout: 20000,
+    autoConnect: true,
+    forceNew: true
   })
   
   // Socket event listeners
   socket.value.on('connect', () => {
-    console.log('✅ Connected to Socket.IO server')
+    console.log("Socket connected")
     socketStatus.value = 'Connected'
-    connectionAttempts.value = 0
+    socketReconnectAttempts.value = 0 // Reset reconnect attempts counter
     
-    // Join the chat room explicitly
-    console.log(`Joining session with ID: ${chatId}`)
+    // Join the session immediately
     socket.value.emit('join_session', { session_id: chatId })
     
-    // Ping the server to keep connection alive
-    socket.value.emit('ping', { message: 'Client ping' })
+    // Set up a keep-alive interval
+    if (socketKeepAliveInterval.value) {
+      clearInterval(socketKeepAliveInterval.value)
+    }
     
-    // Set up a ping interval to prevent timeouts
-    const pingInterval = setInterval(() => {
+    socketKeepAliveInterval.value = setInterval(() => {
       if (socket.value && socket.value.connected) {
-        socket.value.emit('ping', { message: 'Keep alive ping' })
-      } else {
-        clearInterval(pingInterval)
+        socket.value.emit('ping', { timestamp: Date.now() })
+        
+        // Check for inactivity (no messages or typing for 30 seconds)
+        const inactiveTime = Date.now() - lastMessageTimestamp.value
+        if (inactiveTime > 30000 && !storyState.completed) {
+          // Request dialogue history to ensure we're up to date
+          socket.value.emit('get_dialogue_history', { session_id: chatId })
+        }
       }
-    }, 25000)
-    
-    // Clear interval when component unmounts
-    onBeforeUnmount(() => {
-      clearInterval(pingInterval)
-    })
-  })
-  
-  socket.value.on('pong', (data) => {
-    console.log('Received pong from server:', data)
-    // Update socket status to confirm active connection
-    socketStatus.value = `Connected (last ping: ${new Date().toLocaleTimeString()})`
+    }, 15000) // Send ping every 15 seconds
   })
   
   socket.value.on('connect_error', (error) => {
-    console.error('❌ Socket.IO connection error:', error)
-    socketStatus.value = `Connection Error: ${error.message}`
+    console.error("Socket connect error:", error)
+    socketStatus.value = `Connection Error`
     handleReconnect()
   })
   
   socket.value.on('disconnect', (reason) => {
-    console.log('⚠️ Disconnected from Socket.IO server:', reason)
-    socketStatus.value = `Disconnected: ${reason}`
+    console.warn("Socket disconnected:", reason)
+    socketStatus.value = `Disconnected`
     handleReconnect()
   })
   
+  socket.value.on('pong', () => {
+    socketStatus.value = 'Connected'
+  })
+  
+  // Story state event handlers
   socket.value.on('dialogue', (data) => {
-    console.log('📩 Received dialogue event:', data)
-    // Check if the message already exists
-    const messageExists = dialogueHistory.value.some(msg => 
+    console.log("Received dialogue:", data)
+    // Check if the message already exists to avoid duplicates
+    const messageExists = storyState.dialogue.some(msg => 
       msg.role === data.role && 
       msg.content === data.content && 
       msg.type === data.type
     )
     
     if (!messageExists) {
-      console.log('Adding new message to dialogue history')
-      // Use Vue's reactivity system properly
-      dialogueHistory.value = [...dialogueHistory.value, data]
-      // Force UI update and scroll
-      nextTick(() => {
-        scrollToBottom()
-      })
-    } else {
-      console.log('Message already exists in dialogue history')
+      storyState.dialogue.push(data)
+      lastMessageTimestamp.value = Date.now()
+      
+      // When we get actual dialogue, we can consider the story started
+      storyStarting.value = false
     }
   })
   
   socket.value.on('typing_indicator', (data) => {
-    console.log('⌨️ Typing indicator event received:', data)
     const { role, status } = data
+    console.log(`Typing indicator received: ${role} is ${status}`)
     
-    // Create a new object to ensure reactivity
-    const updatedIndicators = { ...typingIndicators.value }
-    updatedIndicators[role] = status
-    typingIndicators.value = updatedIndicators
+    // Update the typing indicators in a reactive way
+    storyState.typingIndicators = { ...storyState.typingIndicators, [role]: status }
     
-    // If typing, make sure it clears after a timeout (failsafe)
+    // Auto-clear typing indicator after timeout as a failsafe
     if (status === 'typing') {
       setTimeout(() => {
-        // Only clear if it's still showing typing
-        if (typingIndicators.value[role] === 'typing') {
-          const updated = { ...typingIndicators.value }
-          updated[role] = 'idle'
-          typingIndicators.value = updated
+        if (storyState.typingIndicators[role] === 'typing') {
+          storyState.typingIndicators = { ...storyState.typingIndicators, [role]: 'idle' }
         }
-      }, 10000) // Clear after 10 seconds if no update
+      }, 10000)
     }
   })
   
   socket.value.on('director_status', (data) => {
-    console.log('🎬 Director status event received:', data)
-    isDirecting.value = data.status === 'directing'
-    isProcessing.value = data.status === 'directing'
+    console.log('Director status event received:', data)
+    storyState.directing = data.status === 'directing'
+    storyState.processing = data.status === 'directing'
+    
+    if (data.status === 'directing') {
+      // When director is working, mark story as starting if no messages yet
+      if (storyState.dialogue.length === 0) {
+        storyStarting.value = true
+      }
+      
+      // Update timestamp to track activity
+      lastMessageTimestamp.value = Date.now()
+      console.log("Director is now directing...")
+    } else {
+      console.log("Director is now idle")
+    }
   })
   
   socket.value.on('objective_status', (data) => {
-    console.log('🎯 Objective status update received:', data)
-    currentStatus.value = { ...data } // Create new object to ensure reactivity
+    console.log('Objective status update received:', data)
+    storyState.objectiveIndex = data.index || 0
+    storyState.totalObjectives = data.total || 0
+    storyState.currentObjective = data.current || null
+    storyState.objectiveCompleted = data.completed || false
+    storyState.completed = data.story_completed || data.final || false
     
     if (data.completed && data.message) {
       toast.success(data.message)
@@ -391,202 +449,63 @@ watch(dialogueHistory, (newMessages, oldMessages) => {
   })
   
   socket.value.on('status', (data) => {
-    console.log('ℹ️ Status event received:', data.message)
+    console.log("Status message:", data.message)
     if (!data.message.includes('Already processing')) {
       toast.info(data.message)
+    }
+    
+    // If starting a message is received, set storyStarting
+    if (data.message.includes('Starting conversation')) {
+      storyStarting.value = true
+      lastMessageTimestamp.value = Date.now()
     }
   })
   
   socket.value.on('error', (data) => {
-    console.error('❌ Socket error event received:', data.message)
+    console.error("Socket error:", data)
     toast.error(data.message)
   })
-  
-  // Add socket reconnection logic
-  function handleReconnect() {
-    if (connectionAttempts.value < maxConnectionAttempts) {
-      connectionAttempts.value++
-      console.log(`🔄 Attempting to reconnect (${connectionAttempts.value}/${maxConnectionAttempts})...`)
-      socketStatus.value = `Reconnecting... (${connectionAttempts.value}/${maxConnectionAttempts})`
-      
-      // Let Socket.IO handle reconnection but also implement our own fallback
-      setTimeout(() => {
-        if (socket.value && !socket.value.connected) {
-          console.log('Socket still not connected, manually reconnecting...')
-          setupSocket() // Recreate the socket connection
-        }
-      }, 5000)
-    } else {
-      socketStatus.value = 'Failed to connect. Try refreshing the page.'
-      toast.error('Connection lost. Please click "Refresh Messages" or reload the page.')
-    }
-  }
 }
 
-function setupRealTimeSupport() {
-  // Request message history explicitly 1 second after socket setup
-  setTimeout(() => {
-    if (socket.value && socket.value.connected) {
-      console.log("Requesting dialogue history explicitly")
-      socket.value.emit('get_dialogue_history', { session_id: route.params.id })
-    }
-  }, 1000)
+// Reconnect logic
+function handleReconnect() {
+  socketReconnectAttempts.value++
   
-  // Set up a reconnection checker that runs every 5 seconds
-  const connectionChecker = setInterval(() => {
-    if (socket.value && !socket.value.connected) {
-      console.log("Connection checker: Socket is disconnected, attempting to reconnect")
-      socketStatus.value = "Disconnected - attempting to reconnect..."
-      setupSocket()
-    }
-  }, 5000)
-  
-  // Clear interval when component unmounts
-  onBeforeUnmount(() => {
-    clearInterval(connectionChecker)
-  })
-}
-
-// Enhanced manual refresh function with more options
-async function manuallyRefreshMessages() {
-  const chatId = route.params.id
-  if (!chatId) return
-  
-  toast.info('Manually refreshing...')
-  
-  // First try to get messages through socket if connected
-  if (socket.value && socket.value.connected) {
-    console.log("Requesting dialogue history through socket")
-    socket.value.emit('get_dialogue_history', { session_id: chatId })
-    
-    // Wait a bit to see if messages arrive through socket
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    // If we still don't have messages, try database
-    if (dialogueHistory.value.length === 0) {
-      console.log("No messages received through socket, trying database")
-      const hadMessages = await pollMessagesFromDatabase(chatId)
-      
-      if (hadMessages) {
-        toast.success(`Loaded ${dialogueHistory.value.length} messages from database`)
-      } else {
-        toast.info('No messages found. Attempting to restart...')
-        
-        // Try to restart the stage
-        if (socket.value && socket.value.connected) {
-          socket.value.emit('restart_stage', { session_id: chatId })
-        }
+  if (socketReconnectAttempts.value <= 3) {
+    console.log(`Attempting automatic reconnect (${socketReconnectAttempts.value}/3)`)
+    // Let Socket.IO's built-in reconnection handle it
+  } else if (socketReconnectAttempts.value <= 5) {
+    // After 3 attempts, try a more aggressive approach
+    console.log(`Trying manual reconnect (${socketReconnectAttempts.value}/5)`)
+    setTimeout(() => {
+      if (socketStatus.value !== 'Connected') {
+        reconnectSocket()
       }
-    } else {
-      toast.success(`Loaded ${dialogueHistory.value.length} messages`)
-    }
+    }, 3000)
   } else {
-    // Socket not connected, try database directly
-    console.log("Socket not connected, fetching from database directly")
-    const hadMessages = await pollMessagesFromDatabase(chatId)
+    // After 5 attempts, show manual reconnect UI
+    console.log('Maximum reconnection attempts reached')
+    socketStatus.value = 'Connection failed - please refresh page'
+    toast.error('Connection to server lost. Please try reconnecting or refresh the page.')
     
-    if (hadMessages) {
-      toast.success(`Loaded ${dialogueHistory.value.length} messages from database`)
-    } else {
-      toast.error('No messages found and socket disconnected')
-      
-      // Try to reconnect socket
-      setupSocket()
+    // Clear any keep-alive interval
+    if (socketKeepAliveInterval.value) {
+      clearInterval(socketKeepAliveInterval.value)
     }
   }
 }
 
-// Helper to force refresh typing indicators
-function resetTypingIndicators() {
-  console.log("Resetting typing indicators")
-  typingIndicators.value = {}
+// Manually reconnect socket
+function reconnectSocket() {
+  toast.info('Reconnecting to server...')
+  setupSocket()
 }
 
-onMounted(async () => {
-  console.log('ChatPage mounted')
-  const chatId = route.params.id
-  if (!chatId) {
-    console.error('No chat ID provided')
-    router.push('/shows')
-    return
-  }
-  
-  try {
-    await fetchChatData(chatId)
-    setupSocket()
-    setupRealTimeSupport() // Add this new function call
-    
-    // Set up polling for messages as a fallback
-    const pollInterval = setInterval(async () => {
-      if (dialogueHistory.value.length === 0) {
-        console.log("No messages yet, polling database...")
-        await pollMessagesFromDatabase(chatId)
-      } else {
-        clearInterval(pollInterval)
-      }
-    }, 3000)
-    
-    // Clear the interval after 30 seconds regardless
-    setTimeout(() => {
-      clearInterval(pollInterval)
-    }, 30000)
-    
-  } catch (error) {
-    console.error('Error during chat initialization:', error)
-    toast.error('Failed to initialize chat. Please try again.')
-  }
-})
-
-// Lifecycle hooks
-onMounted(async () => {
-  console.log('ChatPage mounted')
-  const chatId = route.params.id
-  if (!chatId) {
-    console.error('No chat ID provided')
-    router.push('/shows')
-    return
-  }
-  
-  try {
-    await fetchChatData(chatId)
-    setupSocket() 
-    
-    // Set up polling for messages as a fallback
-    const pollInterval = setInterval(async () => {
-      if (dialogueHistory.value.length === 0) {
-        console.log("No messages yet, polling database...")
-        await pollMessagesFromDatabase(chatId)
-      } else {
-        clearInterval(pollInterval)
-      }
-    }, 3000)
-    
-    // Clear the interval after 30 seconds regardless
-    setTimeout(() => {
-      clearInterval(pollInterval)
-    }, 30000)
-    
-  } catch (error) {
-    console.error('Error during chat initialization:', error)
-    toast.error('Failed to initialize chat. Please try again.')
-  }
-})
-
-onBeforeUnmount(() => {
-  console.log('ChatPage unmounting, disconnecting socket')
-  if (socket.value) {
-    socket.value.disconnect()
-    socket.value = null
-  }
-})
-
-// Methods
 async function fetchChatData(chatId) {
   loading.value = true
-  console.log(`Fetching chat data for ID: ${chatId}`)
   
   try {
-    // Fetch chat data from the backend
+    // Fetch chat data from Supabase
     const { data, error } = await supabase
       .from('chats')
       .select('*, episodes(*), users(*)')
@@ -595,38 +514,30 @@ async function fetchChatData(chatId) {
     
     if (error) throw error
     
-    console.log('Chat data fetched:', data)
     chat.value = data
     
-    // Parse objectives
+    // Parse objectives from episode data
     if (chat.value.episodes.plot_objectives) {
-      objectives.value = typeof chat.value.episodes.plot_objectives === 'string'
+      const objectives = typeof chat.value.episodes.plot_objectives === 'string'
         ? JSON.parse(chat.value.episodes.plot_objectives)
         : chat.value.episodes.plot_objectives
-      console.log('Parsed objectives:', objectives.value)
+      
+      storyState.objectives = objectives
+      storyState.totalObjectives = objectives.length
     }
     
-    // Fetch messages directly from database to ensure we have initial state
-    await fetchMessagesFromDatabase(chatId)
+    // Set initial objective status
+    storyState.objectiveIndex = chat.value.current_objective_index
+    storyState.currentObjective = storyState.objectives[chat.value.current_objective_index]
+    storyState.completed = chat.value.completed
     
-    // Set current objective status
-    currentStatus.value = {
-      index: chat.value.current_objective_index,
-      total: objectives.value.length,
-      current: objectives.value[chat.value.current_objective_index],
-      completed: chat.value.completed,
-      story_completed: chat.value.completed
+    // Fetch initial messages directly from database
+    const hasMessages = await fetchMessagesFromDatabase(chatId)
+    
+    // If we have messages, the story has started
+    if (hasMessages) {
+      storyStarting.value = false
     }
-    
-    console.log('Initial current status:', currentStatus.value)
-    
-    // Wait for component to finish rendering before scrolling
-    await nextTick()
-    
-    // Don't try to scroll immediately, wait for the container to be available
-    setTimeout(() => {
-      scrollToBottom()
-    }, 100)
     
   } catch (error) {
     console.error('Error fetching chat data:', error)
@@ -636,23 +547,19 @@ async function fetchChatData(chatId) {
   }
 }
 
-// Separate function to fetch messages from database
 async function fetchMessagesFromDatabase(chatId) {
-  console.log('Fetching messages from database')
   try {
-    const { data: messages, error: messagesError } = await supabase
+    const { data: messages, error } = await supabase
       .from('messages')
       .select('*')
       .eq('chat_id', chatId)
       .order('sequence', { ascending: true })
     
-    if (messagesError) throw messagesError
+    if (error) throw error
     
-    console.log(`Found ${messages.length} messages in database`)
-    
-    if (messages.length > 0) {
-      // Format messages for display and ensure they're reactive
-      dialogueHistory.value = messages.map(msg => ({
+    if (messages && messages.length > 0) {
+      // Update the dialogue state with database messages
+      storyState.dialogue = messages.map(msg => ({
         role: msg.role,
         content: msg.content,
         type: msg.type
@@ -666,49 +573,38 @@ async function fetchMessagesFromDatabase(chatId) {
   }
 }
 
-// Function to poll for messages if socket fails
-async function pollMessagesFromDatabase(chatId) {
-  const hadMessages = await fetchMessagesFromDatabase(chatId)
-  
-  if (hadMessages) {
-    console.log("Successfully polled messages from database")
-    // If we found messages, try manually triggering a check for completed objectives
-    if (socket.value && socket.value.connected) {
-      console.log("Manually triggering objective status update")
-      // Request an objective status update from the server
-      socket.value.emit('get_objective_status', { session_id: chatId })
-    }
+async function sendPlayerInput() {
+  if (isInputDisabled.value) {
+    return
   }
   
-  return hadMessages
-}
-
-async function sendPlayerInput() {
-  if (!playerInput.value.trim()) return
-  if (isProcessing.value || isDirecting.value) return
-  
-  isProcessing.value = true
+  storyState.processing = true
   const chatId = route.params.id
-  console.log(`Sending player input to chat ${chatId}:`, playerInput.value)
+  const messageText = playerInput.value.trim()
   
   try {
-    // Add the player's message to the local dialogue history immediately
-    // This gives instant feedback to the user
+    // Add player's message to local state immediately for better UX
     const playerMsg = {
       role: chat.value?.player_name || 'Player',
-      content: playerInput.value,
+      content: messageText,
       type: "player_input"
     }
-    dialogueHistory.value = [...dialogueHistory.value, playerMsg]
+    storyState.dialogue.push(playerMsg)
+    
+    // Clear input field right away to show the input was accepted
+    playerInput.value = ''
+    
+    // Force scroll to bottom to show the sent message
+    scrollToBottom()
     
     // Send player input to the backend
-    const response = await fetch(`http://localhost:5001/api/stage/${chatId}/interrupt`, {
+    const response = await fetch(`${API_URL}/api/stage/${chatId}/interrupt`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        player_input: playerInput.value
+        player_input: messageText
       })
     })
     
@@ -717,55 +613,137 @@ async function sendPlayerInput() {
       throw new Error(data.error || 'Failed to send input')
     }
     
-    // Clear input
-    playerInput.value = ''
-    
   } catch (error) {
     console.error('Error sending player input:', error)
-    toast.error(error.message || 'Failed to send input')
-  } finally {
-    isProcessing.value = false
+    toast.error(error.message || 'Failed to send your message. Please try again.')
+    
+    // If there was an error, reset the processing state so user can try again
+    storyState.processing = false
   }
 }
 
-function scrollToBottom() {
-  nextTick(() => {
-    // Use both the ref and querySelector as fallback
-    const container = dialogueContainer.value || document.querySelector('#dialogue-container')
-    if (container) {
-      // Log to debug scrolling
-      console.log(`Scrolling to bottom: ${container.scrollHeight}px`)
-      container.scrollTop = container.scrollHeight
-      
-      // Sometimes a single scroll isn't enough due to image loading or other factors
-      // So we schedule another scroll after a small delay
-      setTimeout(() => {
-        if (container) {
-          container.scrollTop = container.scrollHeight
-        }
-      }, 100)
+function refreshSession() {
+  const chatId = route.params.id
+  if (!chatId) return
+  
+  // Only show toast if manually triggered (not automatic)
+  toast.info('Refreshing story data...')
+  
+  if (socket.value && socket.value.connected) {
+    // Request the latest dialogue and status
+    socket.value.emit('get_dialogue_history', { session_id: chatId })
+    
+    // If the session appears stuck, try to restart it
+    if ((storyState.dialogue.length === 0 && !storyStarting.value) || 
+        (storyState.processing && Date.now() - lastMessageTimestamp.value > 30000)) {
+      storyStarting.value = true
+      socket.value.emit('restart_stage', { session_id: chatId })
+      toast.info('Restarting conversation...')
     }
-  })
+  } else {
+    // If socket is disconnected, try to reconnect and fetch from database
+    reconnectSocket()
+    fetchMessagesFromDatabase(chatId).then(success => {
+      if (success) {
+        toast.success(`Loaded ${storyState.dialogue.length} messages from database`)
+      } else {
+        toast.error('Could not load messages')
+      }
+    })
+  }
+}
+
+function testTypingIndicator() {
+  if (!isDebugMode) return
+  
+  // For testing typing indicators
+  const testCharacter = 'Test Character'
+  storyState.typingIndicators = { ...storyState.typingIndicators, [testCharacter]: 'typing' }
+  
+  // Clear after 5 seconds
+  setTimeout(() => {
+    storyState.typingIndicators = { ...storyState.typingIndicators, [testCharacter]: 'idle' }
+  }, 5000)
 }
 
 function finishStory() {
   router.push('/shows')
 }
 
-// Utility functions
 function getShowName(chat) {
   try {
-    // Navigate from episode to show
     const showId = chat.episodes.show_id
     return showId ? 'Show #' + showId : 'Unknown Show'
   } catch (e) {
     return 'Unknown Show'
   }
 }
+
+// Lifecycle hooks
+onMounted(async () => {
+  const chatId = route.params.id
+  if (!chatId) {
+    router.push('/shows')
+    return
+  }
+  
+  try {
+    // Fetch initial data and setup socket
+    await fetchChatData(chatId)
+    setupSocket()
+    
+    // Set up inactivity checker to handle potentially missed events
+    const inactivityChecker = setInterval(() => {
+      const inactiveTime = Date.now() - lastMessageTimestamp.value
+      
+      // If nothing has happened for 60 seconds but the story isn't completed
+      // and we have an active socket, check for updates
+      if (inactiveTime > 60000 && !storyState.completed && socket.value && socket.value.connected) {
+        console.log("Inactivity detected, requesting updates")
+        socket.value.emit('get_dialogue_history', { session_id: chatId })
+        
+        // If there are still no messages after inactivity and the story should be starting
+        if (storyState.dialogue.length === 0 && storyStarting.value) {
+          // Try to restart the conversation
+          socket.value.emit('restart_stage', { session_id: chatId })
+        }
+      }
+    }, 15000)
+    
+    // Cleanup function
+    onBeforeUnmount(() => {
+      clearInterval(inactivityChecker)
+      
+      if (socketKeepAliveInterval.value) {
+        clearInterval(socketKeepAliveInterval.value)
+      }
+      
+      if (socket.value) {
+        socket.value.disconnect()
+        socket.value = null
+      }
+    })
+    
+  } catch (error) {
+    console.error('Error during chat initialization:', error)
+    toast.error('Failed to initialize chat')
+    loading.value = false
+  }
+})
 </script>
 
 <style scoped>
 .scroll-smooth {
   scroll-behavior: smooth;
+}
+
+/* Improve typing indicator animation */
+@keyframes typing-bounce {
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-5px); }
+}
+
+.animate-bounce {
+  animation: typing-bounce 1.4s infinite ease-in-out;
 }
 </style>

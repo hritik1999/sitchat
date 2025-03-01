@@ -4,14 +4,14 @@ from flask import Flask
 from flask_cors import CORS
 from flask_restful import Api
 from flask_socketio import SocketIO
-import threading  # Add this import here
+import threading
 from application.api.api import setup_api, active_stages
+from application.database.db import db
 from application.ai.llm import actor_llm, director_llm
 from application.play.actor import Actor
 from application.play.director import Director
 from application.play.player import Player
 from application.play.stage import Stage
-from application.database.db import db
 from dotenv import load_dotenv
 import os
 import json 
@@ -41,20 +41,26 @@ CORS(app,
 # Initialize Socket.IO with more compatible settings
 socketio = SocketIO(
     app, 
-    cors_allowed_origins="*",  # Allow all origins for simplicity
-    async_mode="eventlet",     # Use eventlet for better websocket support
-    logger=True,               # Enable logging
-    engineio_logger=True       # Enable engine.io logging
+    cors_allowed_origins="*",
+    async_mode="eventlet",
+    logger=True,
+    engineio_logger=True
 )
 
 # Socket.IO events
 @socketio.on('connect')
 def handle_connect():
+    print("⚡ Client connected")
     socketio.emit('status', {'message': 'Connected to server'})
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    print("Client disconnected")
+    print("💤 Client disconnected")
+
+@socketio.on('ping')
+def handle_ping(data):
+    """Handle ping from client to keep connection alive"""
+    socketio.emit('pong', {'timestamp': time.time()})
 
 @socketio.on('join_session')
 def handle_join(data):
@@ -90,11 +96,11 @@ def handle_join(data):
         
         # Check if dialogue history is empty and we need to start the chat
         if len(stage.dialogue_history) == 0 and not stage.story_completed and not stage.is_processing:
-            # Directly call advance_turn without creating a new thread to keep it simple
             socketio.emit('status', {'message': 'Starting conversation...'})
+            # Set the processing state immediately for better UI feedback
+            socketio.emit('director_status', {"status": "directing", "message": "Director is directing..."})
             try:
                 # Use a small delay to make sure the client is ready
-                import time
                 time.sleep(1)
                 stage.advance_turn()
             except Exception as e:
@@ -185,6 +191,7 @@ def handle_join(data):
                     # Determine completion status
                     is_completed = (chat['completed'] or 
                                    stage.current_objective_index >= len(stage.plot_objectives))
+                    stage.story_completed = is_completed
                     
                     # Send objective status
                     socketio.emit('objective_status', {
@@ -199,9 +206,9 @@ def handle_join(data):
                     # If there's no dialogue yet, start the conversation
                     if len(stage.dialogue_history) == 0 and not is_completed and not stage.is_processing:
                         socketio.emit('status', {'message': 'Starting conversation...'})
+                        socketio.emit('director_status', {"status": "directing", "message": "Director is directing..."})
                         try:
                             # Use a small delay to make sure the client is ready
-                            import time
                             time.sleep(1)
                             stage.advance_turn()
                         except Exception as e:
@@ -226,8 +233,8 @@ def handle_join(data):
                     
                     # Start the conversation
                     socketio.emit('status', {'message': 'Starting new conversation...'})
+                    socketio.emit('director_status', {"status": "directing", "message": "Director is directing..."})
                     try:
-                        import time
                         time.sleep(1)
                         stage.advance_turn()
                     except Exception as e:
@@ -238,12 +245,6 @@ def handle_join(data):
         except Exception as e:
             print(f"❌ Error restoring session: {str(e)}")
             socketio.emit('error', {'message': f'Error restoring session: {str(e)}'})
-
-@socketio.on('ping')
-def handle_ping(data):
-    """Handle ping from client to keep connection alive"""
-    print(f"Received ping from client: {data}")
-    socketio.emit('pong', {'timestamp': time.time()})
 
 @socketio.on('get_dialogue_history')
 def handle_get_dialogue_history(data):
@@ -260,13 +261,22 @@ def handle_get_dialogue_history(data):
             socketio.emit('dialogue', line)
         
         # Also send current objective status
+        is_completed = (stage.current_objective_index >= len(stage.plot_objectives) or 
+                       stage.story_completed)
+                       
         socketio.emit('objective_status', {
             'current': stage.current_objective(),
             'index': stage.current_objective_index,
             'total': len(stage.plot_objectives),
-            'completed': stage.story_completed,
-            'story_completed': stage.story_completed
+            'completed': is_completed,
+            'story_completed': is_completed
         })
+        
+        # Also send current directing status if processing
+        if stage.is_processing:
+            socketio.emit('director_status', {"status": "directing", "message": "Director is directing..."})
+        else:
+            socketio.emit('director_status', {"status": "idle", "message": ""})
         
         return {'success': True, 'message_count': len(stage.dialogue_history)}
     
@@ -326,13 +336,14 @@ def handle_restart_stage(data):
         elif not stage.story_completed:
             print("✅ Starting conversation")
             socketio.emit('status', {'message': 'Restarting conversation...'})
+            socketio.emit('director_status', {"status": "directing", "message": "Director is directing..."})
             
             # Start in a background thread
             def start_in_background():
                 try:
                     stage.advance_turn()
                 except Exception as e:
-                    socketio.emit('error', {'message': f"Error starting sequence: {str(e)}"})
+                    socketio.emit('error', {"message": f"Error starting sequence: {str(e)}"})
             
             thread = threading.Thread(target=start_in_background)
             thread.daemon = True
