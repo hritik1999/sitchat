@@ -17,76 +17,78 @@ class StageResource(Resource):
         
     def post(self):
         """Create a new stage session"""
-        data = request.get_json()
-        
-        show = data.get('show')
-        description = data.get('description')
-        background = data.get('background')
-        actors_data = data.get('actors_data')
-        relations = data.get('relations')
-        player_name = data.get('player_name', 'Player')
-        player_description = data.get('player_description')
-        plot_objectives = data.get('plot_objectives')
-        
-        # Create director
-        director = Director(
-            director_llm,
-            show,
-            description, 
-            background, 
-            actors_data, 
-            player_description, 
-            relations
-        )
-        
-        # Create actors
-        actors = {}
-        for name, desc in actors_data.items():
-            actors[name] = Actor(
-                name=name,
-                description=desc,
-                relations=relations,  # You may want to filter relations per actor
-                background=background,
-                llm=actor_llm
-            )
-        
-        # Create player
-        player = Player(
-            name=player_name,
-            description=player_description
-        )
-        
-        # Create and store the stage
-        session_id = str(len(active_stages) + 1)  # Simple ID generation
-        stage = Stage(
-            actors=actors, 
-            director=director, 
-            player=player, 
-            plot_objectives=plot_objectives,
-            socketio=self.socketio
-        )
-        
-        active_stages[session_id] = stage
-        
-        # Start the stage sequence in a background thread to not block the response
-        def start_sequence():
-            # Give the frontend a moment to connect to the socket before starting
-            try:
-                import time
-                time.sleep(1)  # Simpler than using socketio.sleep which might have event loop issues
-                stage.advance_turn()  # Just start the first turn, rest is automatic
-            except Exception as e:
-                self.socketio.emit('error', {'message': f'Error starting sequence: {str(e)}'})
+        try:
+            data = request.get_json()
+            show = data.get('show')
+            description = data.get('description')
+            background = data.get('background')
+            actors_data = data.get('actors_data')
+            relations = data.get('relations')
+            player_name = data.get('player_name', 'Player')
+            player_description = data.get('player_description')
+            plot_objectives = data.get('plot_objectives')
             
-        thread = threading.Thread(target=start_sequence)
-        thread.daemon = True  # Make thread a daemon so it won't block app shutdown
-        thread.start()
-        
-        return jsonify({
-            'session_id': session_id,
-            'message': 'Stage created and started automatically',
-            'state': stage.get_state()
-        })
+            # Create director
+            director = Director(
+                director_llm,
+                show,
+                description, 
+                background, 
+                actors_data, 
+                player_description, 
+                relations
+            )
+            
+            # Create actors
+            actors = {}
+            for name, desc in actors_data.items():
+                actors[name] = Actor(
+                    name=name,
+                    description=desc,
+                    relations=relations,  # You may want to filter relations per actor
+                    background=background,
+                    llm=actor_llm
+                )
+            
+            # Create player
+            player = Player(
+                name=player_name,
+                description=player_description
+            )
+            
+            # Create and store the stage
+            session_id = str(len(active_stages) + 1)  # Simple ID generation
+            stage = Stage(
+                actors=actors, 
+                director=director, 
+                player=player, 
+                plot_objectives=plot_objectives,
+                socketio=self.socketio
+            )
+            
+            active_stages[session_id] = stage
+            # Start the stage sequence in a background thread to not block the response
+            def start_sequence():
+                # Give the frontend a moment to connect to the socket before starting
+                try:
+                    import time
+                    time.sleep(1)  # Simpler than using socketio.sleep which might have event loop issues
+                    stage.advance_turn()  # Just start the first turn, rest is automatic
+                except Exception as e:
+                    self.socketio.emit('error', {'message': f'Error starting sequence: {str(e)}'})
+                
+            thread = threading.Thread(target=start_sequence)
+            thread.daemon = True  # Make thread a daemon so it won't block app shutdown
+            thread.start()
+            
+            return jsonify({
+                'session_id': session_id,
+                'message': 'Stage created and started automatically',
+                'state': stage.get_state()
+            })
+        except Exception as e:
+            print(e)
+            return {'error': str(e)}, 400
     
     def get(self, session_id):
         """Get the state of a stage session"""

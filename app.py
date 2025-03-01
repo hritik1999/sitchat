@@ -17,7 +17,7 @@ app = Flask(__name__)
 web_api = Api(app)
 
 CORS(app, 
-     resources={r"/*": {"origins": ["http://localhost:5173"]}},
+     resources={r"/*": {"origins": ["*"]}},
      supports_credentials=True)
 
 # Initialize Socket.IO with more compatible settings
@@ -92,13 +92,13 @@ def auth_verify():
     return jsonify({"message": "Login successful", "user": user_data})
 
 
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', 'http://localhost:5173')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
-    return response
+# @app.after_request
+# def after_request(response):
+#     response.headers.add('Access-Control-Allow-Origin', 'http://localhost:5173')
+#     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+#     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+#     response.headers.add('Access-Control-Allow-Credentials', 'true')
+#     return response
 
 # Configure API routes with socketio
 setup_api(web_api, socketio)
