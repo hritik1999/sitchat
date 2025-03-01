@@ -1,6 +1,7 @@
 import eventlet
 eventlet.monkey_patch()
-from flask import Flask
+from flask import Flask, request, jsonify
+from application.auth.auth import supabase
 from flask_cors import CORS
 from flask_restful import Api
 from flask_socketio import SocketIO
@@ -66,6 +67,30 @@ def handle_join(data):
         })
     else:
         socketio.emit('error', {'message': 'Session not found'})
+
+
+@app.route("/auth/verify", methods=["POST"])
+def auth_verify():
+    data = request.get_json()
+    token = data.get("access_token")
+    if not token:
+        return jsonify({"error": "Missing access token"}), 400
+
+    user_response = supabase.auth.get_user(token)
+    if not user_response:
+        return jsonify({"error": "Invalid token"}), 401
+
+    # If the response has a nested 'user' attribute, use that
+    try:
+        user = user_response.user
+    except AttributeError:
+        user = user_response
+
+    # Convert to a dict (if it's a Pydantic model)
+    user_data = user.dict() if hasattr(user, "dict") else user
+
+    return jsonify({"message": "Login successful", "user": user_data})
+
 
 @app.after_request
 def after_request(response):
