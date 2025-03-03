@@ -5,12 +5,6 @@ from application.auth.auth import supabase
 from flask_cors import CORS
 from flask_restful import Api
 from flask_socketio import SocketIO
-from application.api.api import setup_api, active_stages
-from application.ai.llm import actor_llm, director_llm
-from application.play.actor import Actor
-from application.play.director import Director
-from application.play.player import Player
-from application.play.stage import Stage 
 
 # instantiate the app
 app = Flask(__name__)
@@ -30,43 +24,43 @@ socketio = SocketIO(
 )
 
 # Socket.IO events
-@socketio.on('connect')
-def handle_connect():
-    socketio.emit('status', {'message': 'Connected to server'})
+# @socketio.on('connect')
+# def handle_connect():
+#     socketio.emit('status', {'message': 'Connected to server'})
 
-@socketio.on('disconnect')
-def handle_disconnect():
-    print("Client disconnected")
+# @socketio.on('disconnect')
+# def handle_disconnect():
+#     print("Client disconnected")
 
-socketio.on('join_session')
-def handle_join(data):
-    session_id = data.get('session_id')
-    if session_id in active_stages:
-        socketio.emit('status', {'message': f'Joined session {session_id}'})
+# socketio.on('join_session')
+# def handle_join(data):
+#     session_id = data.get('session_id')
+#     if session_id in active_stages:
+#         socketio.emit('status', {'message': f'Joined session {session_id}'})
         
-        # Send the current dialogue history to catch up the client
-        stage = active_stages[session_id]
-        for line in stage.dialogue_history:
-            socketio.emit('dialogue', line)
+#         # Send the current dialogue history to catch up the client
+#         stage = active_stages[session_id]
+#         for line in stage.dialogue_history:
+#             socketio.emit('dialogue', line)
             
-        # Ensure story completion is properly detected
-        is_completed = (stage.current_objective_index >= len(stage.plot_objectives) or stage.story_completed)
+#         # Ensure story completion is properly detected
+#         is_completed = (stage.current_objective_index >= len(stage.plot_objectives) or stage.story_completed)
         
-        # If index exceeds or equals objectives count, mark story as complete
-        if stage.current_objective_index >= len(stage.plot_objectives):
-            stage.story_completed = True
+#         # If index exceeds or equals objectives count, mark story as complete
+#         if stage.current_objective_index >= len(stage.plot_objectives):
+#             stage.story_completed = True
         
-        # Send the current objective info with story_completed flag
-        socketio.emit('objective_status', {
-            'current': stage.current_objective(),
-            'index': stage.current_objective_index,
-            'total': len(stage.plot_objectives),
-            'completed': is_completed,
-            'story_completed': is_completed,
-            'final': is_completed
-        })
-    else:
-        socketio.emit('error', {'message': 'Session not found'})
+#         # Send the current objective info with story_completed flag
+#         socketio.emit('objective_status', {
+#             'current': stage.current_objective(),
+#             'index': stage.current_objective_index,
+#             'total': len(stage.plot_objectives),
+#             'completed': is_completed,
+#             'story_completed': is_completed,
+#             'final': is_completed
+#         })
+#     else:
+#         socketio.emit('error', {'message': 'Session not found'})
 
 
 @app.route("/auth/verify", methods=["POST"])
@@ -101,7 +95,7 @@ def auth_verify():
 #     return response
 
 # Configure API routes with socketio
-setup_api(web_api, socketio)
+# setup_api(web_api, socketio)
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, port=5001, host='0.0.0.0')

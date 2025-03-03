@@ -1,28 +1,76 @@
+// src/router/index.js
 import { createRouter, createWebHistory } from 'vue-router';
+import { supabase } from '@/composables/useSupabase';
 import AuthPage from '@/views/AuthPage.vue';
 import AuthCallback from '@/views/AuthCallback.vue';
 import ChatPage from '@/views/ChatPage.vue';
 import ShowPage from '@/views/ShowPage.vue';
 
+// Define routes with meta for layout and auth requirements
 const routes = [
   {
     path: '/login',
-    component: AuthPage
+    name: 'Login',
+    component: AuthPage,
+    meta: { requiresAuth: false, layout: 'none' }
   },
   {
     path: '/auth/callback',
     name: 'AuthCallback',
     component: AuthCallback,
+    meta: { requiresAuth: false, layout: 'none' }
   },
   {
     path: '/',
-    component: ShowPage
+    name: 'Home',
+    component: ShowPage,
+    meta: { requiresAuth: true, layout: 'main' }
   },
+  {
+    path: '/shows',
+    name: 'Shows',
+    component: ShowPage,
+    meta: { requiresAuth: true, layout: 'main' }
+  },
+  {
+    path: '/chat/:id',
+    name: 'Chat',
+    component: ChatPage,
+    meta: { requiresAuth: true, layout: 'none' }
+  },
+  // Add more routes as needed
 ];
 
 const router = createRouter({
   history: createWebHistory(),
   routes
+});
+
+// Global navigation guard for authentication
+router.beforeEach(async (to, from, next) => {
+  // Check if the route requires authentication
+  const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
+  
+  // Get current session
+  const { data, error } = await supabase.auth.getSession();
+  const session = data?.session;
+  
+  // For debugging
+  console.log('Route:', to.path, 'Auth required:', requiresAuth, 'Session exists:', !!session);
+  
+  if (requiresAuth && !session) {
+    // Redirect to login if authentication is required but user is not logged in
+    console.log('Redirecting to login, auth required but no session');
+    return next('/login');
+  } else if (to.path === '/login' && session) {
+    // Redirect to home if user is already logged in and tries to access login page
+    console.log('Redirecting to home, user is logged in but trying to access login');
+    return next('/');
+  } else {
+    // Proceed as normal
+    console.log('Proceeding to route:', to.path);
+    return next();
+  }
 });
 
 export default router;
