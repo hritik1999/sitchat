@@ -100,7 +100,7 @@ def auth_verify():
 # setup_api(web_api, socketio)
 
 web_api.add_resource(ShowsResource, '/api/shows')
-web_api.add_resource(ShowResource, '/api/shows/<int:show_id>')
+web_api.add_resource(ShowResource, '/api/shows/<show_id>')
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, port=5001, host='0.0.0.0')

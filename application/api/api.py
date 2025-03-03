@@ -102,7 +102,7 @@ class ShowResource(Resource):
     def get(self, show_id):
         """Get a specific show by ID"""
         show = db.get_show(show_id)
-        
+        print(show)
         if not show:
             return {"error": "Show not found"}, 404
         
