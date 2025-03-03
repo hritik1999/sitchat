@@ -8,6 +8,7 @@ import ShowPage from '@/views/ShowPage.vue';
 import CreateShow from '@/views/CreateShow.vue';
 import ShowDetailsPage from '@/views/ShowDetailsPage.vue';
 import CreateEpisode from '@/views/CreateEpisode.vue';
+import Profile from '@/views/Profile.vue';
 
 // Define routes with meta for layout and auth requirements
 const routes = [
@@ -57,6 +58,12 @@ const routes = [
     path: '/create/episode/:id',
     name:'CreateEpisode',
     component:CreateEpisode,
+    meta: {requiresAuth:true,layout:'main'}
+  },
+  {
+    path: '/profile',
+    name:'Profile',
+    component:Profile,
     meta: {requiresAuth:true,layout:'main'}
   }
   // Add more routes as needed

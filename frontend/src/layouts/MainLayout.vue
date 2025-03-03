@@ -42,7 +42,7 @@
             <DropdownMenuContent>
               <DropdownMenuItem>
                 <UserIcon class="mr-2 h-4 w-4" />
-                Profile
+                <Router-link to="/profile">Profile</Router-link>
               </DropdownMenuItem>
               <DropdownMenuItem @click="logout">
                 <LogOutIcon class="mr-2 h-4 w-4" />
@@ -82,14 +82,6 @@
           <span>Profile</span>
         </router-link>
         <!-- Theme toggle in mobile nav -->
-        <button 
-          @click="toggleTheme"
-          class="flex flex-col items-center gap-1 text-xs font-medium text-slate-900 dark:text-slate-50 hover:text-primary transition-colors"
-        >
-          <SunIcon v-if="isDarkTheme" class="h-5 w-5" />
-          <MoonIcon v-else class="h-5 w-5" />
-          <span>Theme</span>
-        </button>
       </div>
     </div>
 

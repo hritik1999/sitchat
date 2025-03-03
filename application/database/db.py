@@ -143,6 +143,16 @@ class SupabaseDB:
         
         return response.data[0]
     
+    def get_episodes_by_creator(self, creator_id: str) -> List[dict]:
+        """Get episodes created by a specific user"""
+        response = self.supabase.table('episodes') \
+            .select('*') \
+            .eq('creator_id', creator_id) \
+            .order('created_at', desc=True) \
+            .execute()
+        
+        return response.data[0]
+    
     def create_episode(self, show_id: str, creator_id: str, name: str, 
                       description: str, background: str, plot_objectives: list) -> dict:
         """Create a new episode"""

@@ -7,6 +7,49 @@ import os
 import uuid
 import json
 
+class UserResource(Resource):
+
+    def get(self):
+        # Get current user from the token
+        user_id = get_current_user()
+        if not user_id:
+            return {"error": "Unauthorized"}, 401
+
+        # Get user data from the database
+        user = db.get_user(user_id)
+        if not user:
+            return {"error": "User not found"}, 404
+        
+        user_shows = db.get_shows_by_creator(user_id)
+        user_episodes = db.get_episodes_by_creator(user_id)
+        print({"user": user, "user_shows": user_shows, "user_episodes": user_episodes})
+        # Return the user data as a JSON response
+        return jsonify({"user": user, "user_shows": user_shows, "user_episodes": user_episodes})
+    
+    def put(self):
+        # Get current user from the token
+        user_id = get_current_user()
+        if not user_id:
+            return {"error": "Unauthorized"}, 401
+            
+        # Get form data from the 'data' field
+        form_data = request.form.get('data')
+        if not form_data:
+            return {"error": "No form data provided"}, 400
+            
+        # Parse the JSON data
+        try:
+            data = json.loads(form_data)
+        except json.JSONDecodeError:
+            return {"error": "Invalid form data format"}, 400
+            
+        # Update user data in the database
+        updated_user = db.update_user_profile(user_id, data)
+        if not updated_user:
+            return {"error": "Failed to update user"}, 500
+            
+        return jsonify({"user": updated_user})
+
 class ShowsResource(Resource):
     def get(self):
         """Get a list of all shows"""
