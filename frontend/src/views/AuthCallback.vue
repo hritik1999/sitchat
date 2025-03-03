@@ -5,6 +5,11 @@
   <script>
   export default {
     name: "AuthCallback",
+    data() {
+      return {
+        API_BASE_URL: import.meta.env.VITE_API_URL || 'http://localhost:5001'
+      };
+    },
     created() {
       // Extract the access token from the URL fragment
       const hash = window.location.hash.slice(1);
@@ -16,7 +21,7 @@
         localStorage.setItem("supabase_session", JSON.stringify({ access_token: accessToken }));
         
         // Optionally, verify the token on the backend:
-        fetch("http://localhost:5001/auth/verify", {
+        fetch("" + this.API_BASE_URL + "/auth/verify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ access_token: accessToken }),

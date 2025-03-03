@@ -13,7 +13,7 @@
     </div>
 
     <!-- Shows Grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" v-if="shows">
       <Card 
         v-for="show in shows" 
         :key="show.id" 
@@ -61,7 +61,7 @@ export default {
     const router = useRouter()
 
     const navigateToCreate = () => {
-      router.push('/create')
+      router.push('/create/show')
     }
 
     return {
@@ -71,11 +71,12 @@ export default {
   data() {
     return {
       user: null,
+      API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001',
       shows: [...Array(8)].map((_, i) => ({
-        id: i + 1,
-        name: `Show ${i + 1}`,
-        description: 'An amazing interactive show with multiple characters and storylines',
-        imageUrl: `https://picsum.photos/300/200?random=${i}`,
+        id:'',
+        name: '',
+        description:'',
+        imageUrl:'',
       })),
     }
   },
@@ -83,6 +84,10 @@ export default {
     // Get current user
     const { data } = await supabase.auth.getSession()
     this.user = data.session?.user || null
+
+    // Fetch shows
+    const response = await fetch(`${this.API_BASE_URL}/api/shows`)
+    this.shows = await response.json()
   }
 }
 </script>

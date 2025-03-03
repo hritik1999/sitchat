@@ -2,6 +2,7 @@ import eventlet
 eventlet.monkey_patch()
 from flask import Flask, request, jsonify
 from application.auth.auth import supabase
+from application.api.api import ShowsResource, ShowResource
 from flask_cors import CORS
 from flask_restful import Api
 from flask_socketio import SocketIO
@@ -82,6 +83,7 @@ def auth_verify():
 
     # Convert to a dict (if it's a Pydantic model)
     user_data = user.dict() if hasattr(user, "dict") else user
+    print(user_data)
 
     return jsonify({"message": "Login successful", "user": user_data})
 
@@ -96,6 +98,9 @@ def auth_verify():
 
 # Configure API routes with socketio
 # setup_api(web_api, socketio)
+
+web_api.add_resource(ShowsResource, '/api/shows')
+web_api.add_resource(ShowResource, '/api/shows/<int:show_id>')
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, port=5001, host='0.0.0.0')

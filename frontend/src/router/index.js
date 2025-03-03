@@ -5,6 +5,7 @@ import AuthPage from '@/views/AuthPage.vue';
 import AuthCallback from '@/views/AuthCallback.vue';
 import ChatPage from '@/views/ChatPage.vue';
 import ShowPage from '@/views/ShowPage.vue';
+import CreateShow from '@/views/CreateShow.vue';
 
 // Define routes with meta for layout and auth requirements
 const routes = [
@@ -38,6 +39,12 @@ const routes = [
     component: ChatPage,
     meta: { requiresAuth: true, layout: 'none' }
   },
+  {
+    path: '/create/show',
+    name: 'CreateShow',
+    component: CreateShow,
+    meta: { requiresAuth: true, layout: 'main' }
+  }
   // Add more routes as needed
 ];
 
