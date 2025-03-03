@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import AuthPage from '@/views/AuthPage.vue';
 import AuthCallback from '@/views/AuthCallback.vue';
 import ChatPage from '@/views/ChatPage.vue';
+import ShowPage from '@/views/ShowPage.vue';
 
 const routes = [
   {
@@ -15,8 +16,8 @@ const routes = [
   },
   {
     path: '/',
-    component: ChatPage
-  }
+    component: ShowPage
+  },
 ];
 
 const router = createRouter({

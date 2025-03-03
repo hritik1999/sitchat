@@ -9,7 +9,7 @@
               <span class="text-4xl font-bold text-black tracking-wider">SitChat</span>
             </div>
             <h1 class="text-2xl font-bold text-black">Begin Your Story</h1>
-            <p class="text-sm text-gray-500">Experience your your Favourite Sitcoms!</p>
+            <p class="text-sm text-gray-500">Experience your Favourite Sitcoms!</p>
           </div>
   
           <div class="space-y-3">
@@ -76,13 +76,6 @@
                 <h3 class="text-lg font-medium text-white mt-4">Participate</h3>
                 <p class="text-sm text-gray-300 mt-2">Join the conversation as an interactive character, influencing the story's direction.</p>
               </div>
-            </div>
-    
-            <div class="mt-16 flex justify-center gap-4 animate-slide-up">
-              <Button variant="secondary" class="rounded-full px-8 py-5 shadow-lg bg-white text-black">
-                <PlayIcon class="h-4 w-4 mr-2 text-black" />
-                Demo Preview
-              </Button>
             </div>
           </div>
         </div>
