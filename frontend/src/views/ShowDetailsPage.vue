@@ -41,30 +41,42 @@
       <div class="container mx-auto px-4 py-8">
         <!-- Episodes Section -->
         <section class="mb-12">
-          <div class="flex justify-between items-center mb-6">
-            <h2 class="text-3xl font-bold">Episodes</h2>
-            <Button v-if="canEditShow" @click="createEpisode" variant="ghost" class="gap-2">
-              View All
-              <ChevronRightIcon class="h-4 w-4" />
-            </Button>
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-3xl font-bold">Episodes</h2>
+      <Button v-if="canEditShow" @click="createEpisode" variant="ghost" class="gap-2">
+        View All
+        <ChevronRightIcon class="h-4 w-4" />
+      </Button>
+    </div>
+    <div v-if="episodes.length" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+      <Card
+        v-for="episode in episodes"
+        :key="episode.id"
+        class="group relative overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
+        @click="startEpisode(episode)"
+      >
+        <div class="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+        
+        <!-- Play Button Overlay -->
+        <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+          <div class="bg-background/90 p-4 rounded-full shadow-lg">
+            <PlayIcon class="h-8 w-8 text-primary translate-x-[1px]" />
           </div>
-          <div v-if="episodes.length" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            <Card
-              v-for="episode in episodes"
-              :key="episode.id"
-              class="group relative overflow-hidden cursor-pointer hover:bg-accent/10 transition-all"
-              @click="startEpisode(episode)"
-            >
-              <CardHeader>
-                <CardTitle class="line-clamp-1">{{ episode.name }}</CardTitle>
-                <CardDescription class="line-clamp-2">{{ episode.description }}</CardDescription>
-              </CardHeader>
-            </Card>
+        </div>
+
+        <CardHeader class="relative">
+          <div class="absolute top-2 right-2 bg-primary/80 text-primary-foreground rounded-full p-2">
+            <PlayIcon class="h-4 w-4" />
           </div>
-          <div v-else class="text-center py-12 text-muted-foreground">
-            No episodes yet. Click "Add Episode" to create one.
-          </div>
-        </section>
+          <CardTitle class="line-clamp-1 text-lg">{{ episode.name }}</CardTitle>
+          <CardDescription class="line-clamp-2 text-sm mt-2">{{ episode.description }}</CardDescription>
+        </CardHeader>
+      </Card>
+    </div>
+    <div v-else class="text-center py-12 text-muted-foreground">
+      No episodes yet. Click "Add Episode" to create one.
+    </div>
+  </section>
         
         <!-- Characters Section -->
         <section class="mb-12">
@@ -131,6 +143,7 @@
   import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
   import { Badge } from '@/components/ui/badge'
   import { PlayIcon, PlusIcon, ChevronRightIcon } from 'lucide-vue-next'
+  import { useToast } from 'vue-toastification'
   
   export default {
     components: {
@@ -211,16 +224,19 @@
       },
       createEpisode() {
         // Redirect to create episode page or show modal
-        alert('Redirect to create episode page')
+        this.$router.push('/create/episode/' + this.show_id)
       },
       async getShow() {
         try {
           this.loading = true
           this.error = null
-          
+          const toast = useToast(); // Get the toast instance
           // Check if we have a session token
           if (!this.session_token) {
-            throw new Error('No authentication token available')
+            this.error = 'Authentication required'
+            this.loading = false
+            toast.error('Authentication required')
+            return
           }
           
           const response = await fetch(`${this.API_BASE_URL}/api/shows/${this.show_id}`, {
@@ -230,7 +246,7 @@
           })
           
           if (!response.ok) {
-            throw new Error(`API responded with status: ${response.status}`)
+            throw new Error(`Failed to fetch show: ${response.status} ${response.statusText}`)
           }
           
           const data = await response.json()
@@ -247,11 +263,12 @@
           console.error('Error fetching show:', error)
           this.error = `Failed to load show: ${error.message}`
           this.loading = false
+          toast.error(`Failed to load show: ${error.message}`)
         }
       },
       async getEpisodes() {
         try {
-          const response = await fetch(`${this.API_BASE_URL}/api/shows/${this.show_id}/episodes`, {
+          const response = await fetch(`${this.API_BASE_URL}/api/show/${this.show_id}/episodes`, {
             headers: {
               'Authorization': `Bearer ${this.session_token}`
             }
@@ -259,7 +276,8 @@
           
           if (response.ok) {
             const data = await response.json()
-            this.episodes = data
+            console.log('Fetched episodes:', data)
+            this.episodes = data.episodes
           } else {
             console.warn(`Could not fetch episodes: ${response.status}`)
             this.episodes = []

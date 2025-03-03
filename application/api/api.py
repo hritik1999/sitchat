@@ -143,6 +143,84 @@ class ShowResource(Resource):
             return {"error": "Failed to delete show"}, 500
         
         return {"success": True}
+    
+class EpisodesResource(Resource):
+    def get(self, show_id):
+        """Get all episodes for a show"""
+        episodes = db.get_episodes(show_id)
+        return jsonify({"episodes": episodes})
+
+    def post(self, show_id):
+        """Create a new episode for a show"""
+        user_id = get_current_user()
+        data = request.get_json()
+        print(data)
+        # Verify authentication
+        if not user_id:
+            return {"error": "Unauthorized"}, 401
+        
+        # Verify ownership of the show
+        show = db.get_show(show_id)
+        if not show:
+            return {"error": "Show not found"}, 404
+        
+        episode = db.create_episode(
+            show_id=show_id,
+            creator_id=user_id,
+            name=data.get('name'),
+            description=data.get('description', ''),
+            background=data.get('background', ''),
+            plot_objectives=data.get('plot_objectives', [])
+        )
+        
+        if not episode:
+            return {"error": "Failed to create episode"}, 500
+        
+        return jsonify({"episode": episode})
+
+
+class EpisodeResource(Resource):
+    def get(self, episode_id):
+        """Get a specific episode by ID"""
+        episode = db.get_episode(episode_id)
+        
+        if not episode:
+            return {"error": "Episode not found"}, 404
+        
+        return jsonify({"episode": episode})
+    
+    def put(self, episode_id):
+        """Update an episode"""
+        user_id = get_current_user()
+        data = request.get_json()
+        
+        # Verify ownership
+        episode = db.get_episode(episode_id)
+        if not episode or episode.get('creator_id') != user_id:
+            return {"error": "Not authorized to edit this episode"}, 403
+        
+        updated_episode = db.update_episode(episode_id, data)
+        
+        if not updated_episode:
+            return {"error": "Failed to update episode"}, 500
+        
+        return jsonify({"episode": updated_episode})
+    
+    def delete(self, episode_id):
+        """Delete an episode"""
+        user_id = get_current_user()
+        
+        # Verify ownership
+        episode = db.get_episode(episode_id)
+        if not episode or episode.get('creator_id') != user_id:
+            return {"error": "Not authorized to delete this episode"}, 403
+        
+        success = db.delete_episode(episode_id)
+        
+        if not success:
+            return {"error": "Failed to delete episode"}, 500
+        
+        return {"success": True}
 
 
 # def setup_api(api, socketio):

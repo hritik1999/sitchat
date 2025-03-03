@@ -7,6 +7,7 @@ import ChatPage from '@/views/ChatPage.vue';
 import ShowPage from '@/views/ShowPage.vue';
 import CreateShow from '@/views/CreateShow.vue';
 import ShowDetailsPage from '@/views/ShowDetailsPage.vue';
+import CreateEpisode from '@/views/CreateEpisode.vue';
 
 // Define routes with meta for layout and auth requirements
 const routes = [
@@ -50,6 +51,12 @@ const routes = [
     path: '/show/:id',
     name:'ShowDetails',
     component:ShowDetailsPage,
+    meta: {requiresAuth:true,layout:'main'}
+  },
+  {
+    path: '/create/episode/:id',
+    name:'CreateEpisode',
+    component:CreateEpisode,
     meta: {requiresAuth:true,layout:'main'}
   }
   // Add more routes as needed

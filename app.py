@@ -2,7 +2,7 @@ import eventlet
 eventlet.monkey_patch()
 from flask import Flask, request, jsonify
 from application.auth.auth import supabase
-from application.api.api import ShowsResource, ShowResource
+from application.api.api import ShowsResource, ShowResource, EpisodesResource, EpisodeResource
 from flask_cors import CORS
 from flask_restful import Api
 from flask_socketio import SocketIO
@@ -101,6 +101,8 @@ def auth_verify():
 
 web_api.add_resource(ShowsResource, '/api/shows')
 web_api.add_resource(ShowResource, '/api/shows/<show_id>')
+web_api.add_resource(EpisodesResource, '/api/show/<show_id>/episodes')
+web_api.add_resource(EpisodeResource, '/api/show/<show_id>/episodes/<episode_id>')
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, port=5001, host='0.0.0.0')
