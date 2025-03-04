@@ -22,7 +22,6 @@ class UserResource(Resource):
         
         user_shows = db.get_shows_by_creator(user_id)
         user_episodes = db.get_episodes_by_creator(user_id)
-        print({"user": user, "user_shows": user_shows, "user_episodes": user_episodes})
         # Return the user data as a JSON response
         return jsonify({"user": user, "user_shows": user_shows, "user_episodes": user_episodes})
     
@@ -223,16 +222,15 @@ class EpisodesResource(Resource):
 
 
 class EpisodeResource(Resource):
-    def get(self, episode_id):
+    def get(self,show_id, episode_id):
         """Get a specific episode by ID"""
         episode = db.get_episode(episode_id)
-        
         if not episode:
             return {"error": "Episode not found"}, 404
         
         return jsonify({"episode": episode})
     
-    def put(self, episode_id):
+    def put(self, show_id, episode_id):
         """Update an episode"""
         user_id = get_current_user()
         data = request.get_json()
@@ -249,7 +247,7 @@ class EpisodeResource(Resource):
         
         return jsonify({"episode": updated_episode})
     
-    def delete(self, episode_id):
+    def delete(self,show_id, episode_id):
         """Delete an episode"""
         user_id = get_current_user()
         

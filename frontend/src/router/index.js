@@ -61,6 +61,12 @@ const routes = [
     meta: {requiresAuth:true,layout:'main'}
   },
   {
+    path: '/edit/episode/:showId/:episodeId',
+    name: 'EditEpisode',
+    component: CreateEpisode,
+    meta: { requiresAuth: true, layout: 'main' }
+  },
+  {
     path: '/profile',
     name:'Profile',
     component:Profile,

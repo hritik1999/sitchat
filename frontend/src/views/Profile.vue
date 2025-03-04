@@ -99,7 +99,7 @@
               <div class="flex justify-between items-start">
                 <CardTitle class="line-clamp-1">{{ userEpisodes.name }}</CardTitle>
                 <div class="flex gap-1">
-                  <Button @click="editEpisode(userEpisodes.id)" variant="ghost" size="icon">
+                  <Button @click="editEpisode(userEpisodes.show_id,userEpisodes.id)" variant="ghost" size="icon">
                     <PencilIcon class="h-4 w-4" />
                   </Button>
                   <Button @click="deleteEpisode(userEpisodes.id)" variant="ghost" size="icon">
@@ -257,11 +257,11 @@
       },
       editShow(showId) {
         // Navigate to edit show
-        this.$router.push(`/edit-show/${showId}`);
+        this.$router.push();
       },
-      editEpisode(episodeId) {
+      editEpisode(showId, episodeId) {
         // Navigate to edit episode
-        this.$router.push(`/edit-episode/${episodeId}`);
+        this.$router.push('/edit/episode/'+ showId + '/' + episodeId);
       },
       async getUserDetails() {
         try {

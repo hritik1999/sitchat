@@ -3,15 +3,20 @@
       <!-- Page Header -->
       <div class="mb-8">
         <h1 class="text-2xl font-bold tracking-tight">
-          {{ editingEpisode ? 'Edit Episode' : 'Create New Episode' }}
+          {{ isEditMode ? 'Edit Episode' : 'Create New Episode' }}
         </h1>
         <p class="text-muted-foreground text-sm mt-2">
-          {{ editingEpisode ? 'Update your episode details' : 'Add a new episode to your show' }}
+          {{ isEditMode ? 'Update your episode details' : 'Add a new episode to your show' }}
         </p>
       </div>
   
+      <!-- Loading State -->
+      <div v-if="isLoading" class="flex justify-center items-center min-h-[400px]">
+        <Loader2Icon class="h-8 w-8 animate-spin" />
+      </div>
+  
       <!-- Main Form -->
-      <form @submit.prevent="saveEpisode" class="space-y-6">
+      <form v-else @submit.prevent="saveEpisode" class="space-y-6">
         <!-- Episode Name -->
         <div class="space-y-2">
           <Label for="episode-name">Episode Name</Label>
@@ -57,7 +62,7 @@
               Add Objective
             </Button>
           </div>
-          
+  
           <!-- Objective Cards -->
           <div
             v-for="(objective, index) in episodeForm.plot_objectives"
@@ -74,7 +79,6 @@
               <XIcon class="h-4 w-4" />
               <span class="sr-only">Remove</span>
             </Button>
-            
             <div class="space-y-2">
               <Label :for="`objective-${index}`">Objective {{ index + 1 }}</Label>
               <Textarea
@@ -122,87 +126,149 @@
       PlusIcon,
       XIcon
     },
-    props: {
-      editingEpisode: {
-        type: Boolean,
-        default: false
-      },
-      initialData: {
-        type: Object,
-        default: () => ({
+    
+    setup() {
+      const router = useRouter()
+      const toast = useToast()
+      return { router, toast }
+    },
+  
+    data() {
+      return {
+        episodeForm: {
           name: '',
           description: '',
           background: '',
           plot_objectives: ['']
-        })
-      }
-    },
-    setup() {
-      // Initialize router here for use throughout the component
-      const router = useRouter()
-      const toast = useToast()
-      
-      return { router, toast }
-    },
-    data() {
-      return {
-        episodeForm: { ...this.initialData },
+        },
         isSaving: false,
+        isLoading: false,
         API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001',
-        session_token: localStorage.getItem('supabase_session') 
-          ? JSON.parse(localStorage.getItem('supabase_session')).access_token 
+        session_token: localStorage.getItem('supabase_session')
+          ? JSON.parse(localStorage.getItem('supabase_session')).access_token
           : null,
-        currentUserId: localStorage.getItem('supabase_session') 
-          ? JSON.parse(localStorage.getItem('supabase_session')).user?.id 
-          : null,
-        show_id: this.$route.params.id
+        currentUserId: localStorage.getItem('supabase_session')
+          ? JSON.parse(localStorage.getItem('supabase_session')).user?.id
+          : null
       }
     },
+  
     computed: {
+      isEditMode() {
+        return !!this.$route.params.episodeId
+      },
+      
+      showId() {
+        return this.$route.params.showId || this.$route.params.id
+      },
+  
+      episodeId() {
+        return this.$route.params.episodeId
+      },
+  
       isFormValid() {
         return (
-          this.episodeForm.name.trim() !== '' &&
+          this.episodeForm?.name?.trim() !== '' &&
+          Array.isArray(this.episodeForm?.plot_objectives) &&
           this.episodeForm.plot_objectives.length > 0 &&
-          this.episodeForm.plot_objectives.every(obj => obj.trim() !== '')
+          this.episodeForm.plot_objectives.every(obj => obj && obj.trim() !== '')
         )
       }
     },
+  
+    async created() {
+      if (this.isEditMode) {
+        await this.fetchEpisodeData()
+      }
+    },
+  
     methods: {
+      async fetchEpisodeData() {
+        this.isLoading = true
+        try {
+          const response = await fetch(
+            `${this.API_BASE_URL}/api/show/${this.showId}/episodes/${this.episodeId}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${this.session_token}`
+              }
+            }
+          )
+          
+          if (!response.ok) {
+            throw new Error('Failed to fetch episode data')
+          }
+  
+          const episodeData = await response.json()
+          const episode = episodeData.episode || episodeData
+          
+          let plotObjectives = ['']
+          try {
+            if (typeof episode.plot_objectives === 'string') {
+              plotObjectives = JSON.parse(episode.plot_objectives)
+            } else if (Array.isArray(episode.plot_objectives)) {
+              plotObjectives = episode.plot_objectives
+            }
+          } catch (e) {
+            this.toast.error('Error parsing episode data')
+          }
+  
+          this.episodeForm = {
+            name: episode.name || '',
+            description: episode.description || '',
+            background: episode.background || '',
+            plot_objectives: plotObjectives
+          }
+        } catch (error) {
+          this.toast.error('Failed to load episode data')
+        } finally {
+          this.isLoading = false
+        }
+      },
+  
       addObjective() {
         this.episodeForm.plot_objectives.push('')
       },
+  
       removeObjective(index) {
         this.episodeForm.plot_objectives.splice(index, 1)
       },
+  
       async saveEpisode() {
         if (!this.isFormValid) return
         
         this.isSaving = true
-        
+        const url = this.isEditMode
+          ? `${this.API_BASE_URL}/api/show/${this.showId}/episodes/${this.episodeId}`
+          : `${this.API_BASE_URL}/api/show/${this.showId}/episodes`
+  
         try {
-          // Replace with your actual API endpoint
-          const response = await fetch(`${this.API_BASE_URL}/api/show/${this.show_id}/episodes`, {
-            method: this.editingEpisode ? 'PUT' : 'POST',
+          const response = await fetch(url, {
+            method: this.isEditMode ? 'PUT' : 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${this.session_token}`
             },
-            body: JSON.stringify(this.episodeForm)
+            body: JSON.stringify({
+              ...this.episodeForm,
+              plot_objectives: JSON.stringify(this.episodeForm.plot_objectives)
+            })
           })
   
-          if (!response.ok) throw new Error('Failed to save episode')
-          
-          this.toast.success('Episode saved successfully!')
-          // Use the router instance from setup()
-          this.router.push(`/show/${this.show_id}`)
+          if (!response.ok) {
+            throw new Error(`Failed to ${this.isEditMode ? 'update' : 'create'} episode`)
+          }
+  
+          this.toast.success(`Episode ${this.isEditMode ? 'updated' : 'created'} successfully!`)
+          this.router.push(`/show/${this.showId}`)
         } catch (error) {
           this.toast.error(error.message || 'An error occurred while saving')
         } finally {
           this.isSaving = false
         }
       },
+  
       cancel() {
-        // Use the router instance from setup()
         this.router.go(-1)
       }
     }
