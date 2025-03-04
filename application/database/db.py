@@ -166,8 +166,7 @@ class SupabaseDB:
             .eq('creator_id', creator_id) \
             .order('created_at', desc=True) \
             .execute()
-        
-        return response.data[0]
+        return response.data
     
     def create_episode(self, show_id: str, creator_id: str, name: str, 
                       description: str, background: str, plot_objectives: list) -> dict:
