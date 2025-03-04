@@ -9,7 +9,7 @@ import CreateShow from '@/views/CreateShow.vue';
 import ShowDetailsPage from '@/views/ShowDetailsPage.vue';
 import CreateEpisode from '@/views/CreateEpisode.vue';
 import Profile from '@/views/Profile.vue';
-
+import EditProfile from '@/views/EditProfile.vue';
 // Define routes with meta for layout and auth requirements
 const routes = [
   {
@@ -65,6 +65,18 @@ const routes = [
     name: 'EditEpisode',
     component: CreateEpisode,
     meta: { requiresAuth: true, layout: 'main' }
+  },
+  {
+    path: '/edit/show/:showId',
+    name: 'EditShow',
+    component: CreateShow,
+    meta: { requiresAuth: true, layout: 'main' }
+  },
+  {
+    path: '/edit/profile',
+    name:'EditProfile',
+    component:EditProfile,
+    meta: {requiresAuth:true,layout:'main'}
   },
   {
     path: '/profile',

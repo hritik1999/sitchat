@@ -253,11 +253,11 @@
       },
       editUser() {
         // Navigate to edit user profile
-        this.$router.push('/edit-profile');
+        this.$router.push('/edit/profile');
       },
       editShow(showId) {
         // Navigate to edit show
-        this.$router.push();
+        this.$router.push('/edit/show/' + showId);
       },
       editEpisode(showId, episodeId) {
         // Navigate to edit episode
