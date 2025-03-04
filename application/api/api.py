@@ -6,6 +6,12 @@ from application.auth.auth import get_current_user
 import os
 import uuid
 import json
+from application.play.stage import Stage
+from application.play.actor import Actor
+from application.play.director import Director
+from application.play.player import Player
+from application.ai.llm import actor_llm, director_llm
+from flask_socketio import join_room, leave_room
 
 class UserResource(Resource):
 
@@ -368,7 +374,6 @@ class EpisodesResource(Resource):
             background=data.get('background', ''),
             plot_objectives=data.get('plot_objectives', [])
         )
-        
         if not episode:
             return {"error": "Failed to create episode"}, 500
         
@@ -416,10 +421,387 @@ class EpisodeResource(Resource):
             return {"error": "Failed to delete episode"}, 500
         
         return {"success": True}
+    
+    
+class ChatResource(Resource):
+    def post(self, episode_id):
+        """Create a new chat session for an episode"""
+        user_id = get_current_user()
+        if not user_id:
+            return {"error": "Unauthorized"}, 401
+            
+        data = request.get_json()
+        player_name = data.get('player_name', 'Player')
+        player_description = data.get('player_description', '')
+        print(data)
+        # Fetch episode details
+        episode = db.get_episode(episode_id)
+        if not episode:
+            return {"error": "Episode not found"}, 404
+            
+        # Create a new chat in the database
+        chat = db.create_chat(
+            episode_id=episode_id,
+            user_id=user_id,
+            player_name=player_name,
+            player_description=player_description
+        )
+        
+        if not chat:
+            return {"error": "Failed to create chat session"}, 500
+        print(chat)
+        return jsonify({
+            "chat": chat,
+        })
+    
+    def get(self, chat_id=None):
+        """Get chat sessions"""
+        user_id = get_current_user()
+        if not user_id:
+            return {"error": "Unauthorized"}, 401
+        
+        # If chat_id is provided, get that specific chat
+        if chat_id:
+            chat = db.get_chat(chat_id)
+            if not chat:
+                return {"error": "Chat not found"}, 404
+                
+            # Verify ownership
+            if chat.get('user_id') != user_id:
+                return {"error": "Not authorized to access this chat"}, 403
+                
+            # Get messages for this chat
+            messages = db.get_messages(chat_id)
+            
+            return jsonify({
+                "chat": chat,
+                "messages": messages
+            })
+        
+        # Otherwise, get all chats for the user
+        chats = db.get_chats(user_id)
+        return jsonify({"chats": chats})
 
 
-# def setup_api(api, socketio):
-#     # Add resources to the API with keyword arguments
-#     # api.add_resource(StageResource, '/api/stage', '/api/stage/<string:session_id>', 
-#     #                 resource_class_kwargs={'socketio': socketio})
-#     pass
+# In-memory cache of active stages (for performance)
+active_stages = {}
+
+def setup_socket_handlers(socketio):
+    """Set up Socket.IO event handlers for chat interaction"""
+    
+    @socketio.on('connect')
+    def handle_connect():
+        """Handle client connection"""
+        socketio.emit('status', {'message': 'Connected to server'})
+
+    @socketio.on('disconnect')
+    def handle_disconnect():
+        """Handle client disconnection"""
+        print(f"Client disconnected: {request.sid}")
+        # We don't remove stages from memory on disconnect to support reconnection
+
+    @socketio.on('auth')
+    def handle_auth(data):
+        """Authenticate the user with a token"""
+        token = data.get('token')
+        if not token:
+            socketio.emit('error', {'message': 'No auth token provided'}, room=request.sid)
+            return
+            
+        user_id = get_current_user(token)
+        if not user_id:
+            socketio.emit('error', {'message': 'Invalid auth token'}, room=request.sid)
+            return
+            
+        # Store user ID in Flask session
+        session['user_id'] = user_id
+        socketio.emit('auth_success', {'user_id': user_id}, room=request.sid)
+
+    @socketio.on('join_chat')
+    def handle_join_chat(data):
+        """Join a chat room and initialize if needed"""
+        chat_id = data.get('chat_id')
+        if not chat_id:
+            socketio.emit('error', {'message': 'No chat ID provided'}, room=request.sid)
+            return
+            
+        # Get user ID from session
+        user_id = session.get('user_id')
+        if not user_id:
+            # Try to authenticate with token if provided
+            token = data.get('token')
+            if token:
+                user_id = get_current_user(token)
+                if user_id:
+                    session['user_id'] = user_id
+                else:
+                    socketio.emit('error', {'message': 'Invalid auth token'}, room=request.sid)
+                    return
+            else:
+                socketio.emit('error', {'message': 'Not authenticated'}, room=request.sid)
+                return
+            
+        # Get the chat from database
+        chat = db.get_chat(chat_id)
+        if not chat:
+            socketio.emit('error', {'message': 'Chat not found'}, room=request.sid)
+            return
+            
+        # Verify ownership
+        if chat.get('user_id') != user_id:
+            socketio.emit('error', {'message': 'Not authorized to access this chat'}, room=request.sid)
+            return
+            
+        # Join the Socket.IO room for this chat
+        join_room(chat_id)
+        
+        # Get chat messages
+        messages = db.get_chat_messages(chat_id)
+        
+        # Send the chat history to the client
+        for message in messages:
+            socketio.emit('dialogue', {
+                'role': message.get('role'),
+                'content': message.get('content'),
+                'type': message.get('type')
+            }, room=request.sid)
+        
+        # Check if stage already exists in memory
+        if chat_id in active_stages:
+            # Get existing stage
+            stage = active_stages[chat_id]
+            
+            # Check if story is completed
+            if stage.story_completed:
+                socketio.emit('objective_status', {
+                    'completed': True,
+                    'story_completed': True,
+                    'index': stage.current_objective_index,
+                    'total': len(stage.plot_objectives),
+                    'message': 'Story is already complete.'
+                }, room=request.sid)
+            else:
+                # Send the current objective info
+                current_obj = stage.current_objective()
+                socketio.emit('objective_status', {
+                    'completed': False,
+                    'story_completed': False,
+                    'index': stage.current_objective_index,
+                    'current': current_obj,
+                    'total': len(stage.plot_objectives)
+                }, room=request.sid)
+        else:
+            # If chat exists but stage doesn't, we'll initialize it when starting
+            socketio.emit('status', {
+                'message': 'Ready to start chat',
+                'ready': True,
+                'chat_id': chat_id
+            }, room=request.sid)
+    
+    @socketio.on('start_chat')
+    def handle_start_chat(data):
+        """Start or resume a chat session"""
+        chat_id = data.get('chat_id')
+        if not chat_id:
+            socketio.emit('error', {'message': 'No chat ID provided'}, room=request.sid)
+            return
+            
+        # Get user ID from session
+        user_id = session.get('user_id')
+        if not user_id:
+            # Try to authenticate with token if provided
+            token = data.get('token')
+            if token:
+                user_id = get_current_user(token)
+                if user_id:
+                    session['user_id'] = user_id
+                else:
+                    socketio.emit('error', {'message': 'Invalid auth token'}, room=request.sid)
+                    return
+            else:
+                socketio.emit('error', {'message': 'Not authenticated'}, room=request.sid)
+                return
+            
+        # Check if the stage already exists
+        if chat_id in active_stages:
+            stage = active_stages[chat_id]
+            
+            # If story is already completed, just notify
+            if stage.story_completed:
+                socketio.emit('objective_status', {
+                    'completed': True,
+                    'story_completed': True,
+                    'index': stage.current_objective_index,
+                    'total': len(stage.plot_objectives),
+                    'message': 'Story is already complete.'
+                }, room=chat_id)
+                return
+                
+            # If already processing, don't start again
+            if stage.is_processing:
+                socketio.emit('status', {'message': 'Already processing'}, room=chat_id)
+                return
+                
+            # Resume existing session
+            def resume_chat():
+                stage.advance_turn()
+                
+            thread = threading.Thread(target=resume_chat)
+            thread.daemon = True
+            thread.start()
+            
+            return
+            
+        # If stage doesn't exist, initialize it
+        try:
+            # Get chat info
+            chat = db.get_chat(chat_id)
+            if not chat:
+                socketio.emit('error', {'message': 'Chat not found'}, room=chat_id)
+                return
+                
+            # Verify ownership
+            if chat.get('user_id') != user_id:
+                socketio.emit('error', {'message': 'Not authorized to access this chat'}, room=chat_id)
+                return
+                
+            # Get episode details
+            episode = db.get_episode(chat.get('episode_id'))
+            if not episode:
+                socketio.emit('error', {'message': 'Episode not found'}, room=chat_id)
+                return
+                
+            # Get show details
+            show = db.get_show(episode.get('show_id'))
+            if not show:
+                socketio.emit('error', {'message': 'Show not found'}, room=chat_id)
+                return
+                
+            # Create director
+            characters = show.get('characters', {})
+            director = Director(
+                director_llm,
+                show.get('name', ''),
+                show.get('description', ''), 
+                episode.get('background', ''), 
+                characters, 
+                chat.get('player_description', ''), 
+                show.get('relations', '')
+            )
+            
+            # Create actors
+            actors = {}
+            for name, desc in characters.items():
+                actors[name] = Actor(
+                    name=name,
+                    description=desc,
+                    relations=show.get('relations', ''),
+                    background=episode.get('background', ''),
+                    llm=actor_llm
+                )
+            
+            # Create player
+            player = Player(
+                name=chat.get('player_name', 'Player'),
+                description=chat.get('player_description', '')
+            )
+            
+            # Create and store the stage with the chat_id
+            stage = Stage(
+                actors=actors, 
+                director=director, 
+                player=player, 
+                plot_objectives=episode.get('plot_objectives', []),
+                session_id=chat_id,
+                socketio=socketio,
+                user_id=user_id
+            )
+            
+            # Cache the stage in memory
+            active_stages[chat_id] = stage
+            
+            # Start the stage sequence in a background thread
+            def start_sequence():
+                # Start the first turn
+                stage.advance_turn()
+                
+            thread = threading.Thread(target=start_sequence)
+            thread.daemon = True
+            thread.start()
+            
+            socketio.emit('status', {
+                'message': 'Chat started',
+                'started': True
+            }, room=chat_id)
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            socketio.emit('error', {'message': f'Error starting chat: {str(e)}'}, room=chat_id)
+    
+    @socketio.on('player_input')
+    def handle_player_input(data):
+        """Handle player input/interruption"""
+        chat_id = data.get('chat_id')
+        player_input = data.get('input')
+        
+        if not chat_id or not player_input:
+            socketio.emit('error', {'message': 'Missing chat ID or player input'}, room=request.sid)
+            return
+            
+        # Get user ID from session
+        user_id = session.get('user_id')
+        if not user_id:
+            # Try to authenticate with token if provided
+            token = data.get('token')
+            if token:
+                user_id = get_current_user(token)
+                if user_id:
+                    session['user_id'] = user_id
+                else:
+                    socketio.emit('error', {'message': 'Invalid auth token'}, room=request.sid)
+                    return
+            else:
+                socketio.emit('error', {'message': 'Not authenticated'}, room=request.sid)
+                return
+            
+        # Check if the stage exists
+        if chat_id not in active_stages:
+            # Try to initialize the stage
+            socketio.emit('error', {
+                'message': 'Chat not initialized. Please start the chat first.',
+                'code': 'chat_not_initialized'
+            }, room=request.sid)
+            return
+            
+        stage = active_stages[chat_id]
+        
+        # Verify ownership
+        if stage.user_id != user_id:
+            socketio.emit('error', {'message': 'Not authorized to access this chat'}, room=request.sid)
+            return
+            
+        # Check if already processing
+        if stage.is_processing:
+            socketio.emit('status', {'message': 'Already processing. Please wait.'}, room=chat_id)
+            return
+            
+        # Check if story is completed
+        if stage.story_completed:
+            socketio.emit('status', {'message': 'Story is already complete.'}, room=chat_id)
+            return
+            
+        # Process player input in a background thread
+        def process_input():
+            stage.player_interrupt(player_input)
+            
+        thread = threading.Thread(target=process_input)
+        thread.daemon = True
+        thread.start()
+        
+        socketio.emit('status', {'message': 'Processing player input...'}, room=chat_id)
+    
+    @socketio.on('heartbeat')
+    def handle_heartbeat():
+        """Handle heartbeat to keep connection alive"""
+        pass  # Just acknowledging the heartbeat is enough

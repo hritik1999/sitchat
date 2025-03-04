@@ -127,24 +127,59 @@
           </div>
         </section>
         
-        <!-- Debug Info (comment out in production) -->
-        <!-- <div class="mt-8 p-4 bg-gray-100 rounded">
-          <h3 class="text-lg font-semibold mb-2">Debug Info:</h3>
-          <div>Show Name: {{ show.name || 'Not loaded' }}</div>
-          <div>Characters Count: {{ parsedCharacters.length }}</div>
-          <pre class="text-xs mt-2 bg-gray-200 p-2 rounded overflow-auto max-h-40">{{ JSON.stringify(show, null, 2) }}</pre>
-        </div> -->
       </div>
     </div>
+    <!-- Player Dialog -->
+    <Dialog :open="playerDialog" @update:open="closePlayerDialog">
+        <DialogContent class="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Start Episode</DialogTitle>
+            <DialogDescription>
+              Enter your character details to begin "{{ selectedEpisode?.name }}"
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form @submit.prevent="startPlaying(selectedEpisode?.id)" class="space-y-4">
+            <div class="space-y-2">
+              <Label for="player-name">Your Character Name</Label>
+              <Input id="player-name" v-model="playerForm.player_name" placeholder="Your character's name" required />
+            </div>
+            
+            <div class="space-y-2">
+              <Label for="player-description">Character Description</Label>
+              <Textarea id="player-description" v-model="playerForm.player_description" placeholder="Brief description of your character" />
+            </div>
+          </form>
+          
+          <DialogFooter>
+            <Button @click="closePlayerDialog" variant="outline">Cancel</Button>
+            <Button @click="startPlaying(selectedEpisode?.id)" :disabled="isStarting">
+              <Loader2Icon v-if="isStarting" class="h-4 w-4 mr-2 animate-spin" />
+              {{ isStarting ? 'Starting...' : 'Start Episode' }}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
   </template>
   
   <script>
   import { Button } from '@/components/ui/button'
   import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
   import { Badge } from '@/components/ui/badge'
-  import { PlayIcon, PlusIcon, ChevronRightIcon } from 'lucide-vue-next'
+  import { PlayIcon, PlusIcon, ChevronRightIcon,Loader2Icon } from 'lucide-vue-next'
   import { useToast } from 'vue-toastification'
-  
+  import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+
   export default {
     components: {
       Button,
@@ -156,7 +191,17 @@
       Badge,
       PlayIcon,
       PlusIcon,
-      ChevronRightIcon
+      ChevronRightIcon,
+      Loader2Icon,
+      Dialog,
+      DialogContent,
+      DialogHeader,
+      DialogTitle,
+      DialogDescription,
+      DialogFooter,
+      Label,
+      Input,
+      Textarea
     },
     name: 'ShowDetailsPage',
     data() {
@@ -182,6 +227,13 @@
           relations: ''
         },
         episodes: [],
+        playerDialog: false,
+        selectedEpisode: null,
+        playerForm: {
+          player_name: '',
+          player_description: ''
+        },
+        isStarting: false,
       }
     },
     computed: {
@@ -211,8 +263,49 @@
       getCreatorName() {
         return this.show.users?.username || 'Unknown creator'
       },
+      createEpisode() {
+        // Redirect to create episode page or show modal
+        this.$router.push('/create/episode/' + this.show_id)
+      },
+      closePlayerDialog() {
+        this.playerDialog = false
+      },
       startEpisode(episode) {
-        alert(`Starting episode: ${episode.name}`)
+          this.selectedEpisode = episode
+          this.playerDialog = true
+        },
+        async startPlaying(episodeId) {
+          this.isStarting = true
+          const toast = useToast()
+          console.log('Episode ID:', episodeId)
+          console.log('Player Data:', this.playerForm)
+          try {
+            // Your episode starting logic
+            const response = await fetch(`${this.API_BASE_URL}/api/episodes/${episodeId}/chats`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${this.session_token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(this.playerForm)
+            });
+            
+            if (!response.ok) {
+              toast.error(`Error starting episode: ${response.statusText}`)
+            } else {
+              const data = await response.json()
+              if (data.error) {
+                toast.error(`Error starting episode: ${data.error}`)
+              } else {
+                this.$router.push(`/show/${this.show_id}/chat/${data.chat.id}`)
+            }
+            }
+          } catch (error) {
+            const toast = useToast()
+            toast.error(`Error starting episode: ${error.message}`)
+          } finally {
+            this.isStarting = false
+          }
       },
       startRandomEpisode() {
         if (this.episodes.length === 0) {
@@ -221,10 +314,6 @@
         }
         const randomEpisode = this.episodes[Math.floor(Math.random() * this.episodes.length)]
         this.startEpisode(randomEpisode)
-      },
-      createEpisode() {
-        // Redirect to create episode page or show modal
-        this.$router.push('/create/episode/' + this.show_id)
       },
       async getShow() {
         try {
@@ -250,7 +339,6 @@
           }
           
           const data = await response.json()
-          console.log('Show data:', data.show)
           
           // Replace the entire show object to ensure reactivity
           this.show = { ...data.show }
@@ -276,7 +364,6 @@
           
           if (response.ok) {
             const data = await response.json()
-            console.log('Fetched episodes:', data)
             this.episodes = data.episodes
           } else {
             console.warn(`Could not fetch episodes: ${response.status}`)

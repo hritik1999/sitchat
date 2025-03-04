@@ -1,11 +1,17 @@
 import eventlet
 eventlet.monkey_patch()
-from flask import Flask, request, jsonify
+import os
+from flask import Flask, request, jsonify, session
 from application.auth.auth import supabase
-from application.api.api import ShowsResource, ShowResource, EpisodesResource, EpisodeResource, UserResource
+from application.api.api import ShowsResource, ShowResource, EpisodesResource, EpisodeResource, UserResource, ChatResource , setup_socket_handlers, active_stages
 from flask_cors import CORS
 from flask_restful import Api
 from flask_socketio import SocketIO
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # instantiate the app
 app = Flask(__name__)
@@ -15,54 +21,26 @@ CORS(app,
      resources={r"/*": {"origins": ["*"]}},
      supports_credentials=True)
 
+# Get configuration from environment
+DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+SECRET_KEY = os.getenv('SECRET_KEY') or 'your-secret-key-for-socket-io'
+
+# Set Flask configuration
+app.config['SECRET_KEY'] = SECRET_KEY
+app.config['DEBUG'] = DEBUG
+
 # Initialize Socket.IO with more compatible settings
 socketio = SocketIO(
     app, 
-    cors_allowed_origins="*",  # Allow all origins for simplicity
-    async_mode="eventlet",     # Use eventlet for better websocket support
-    logger=True,               # Enable logging
-    engineio_logger=True       # Enable engine.io logging
+    cors_allowed_origins="*",              # Allow all origins for simplicity
+    async_mode="eventlet",                 # Use eventlet for better websocket support
+    logger=DEBUG,                          # Enable logging in debug
+    engineio_logger=DEBUG,                 # Enable engine.io logging in debug
+    ping_timeout=60,                       # Increase ping timeout for better stability
+    ping_interval=25,                      # Adjust ping interval
+    max_http_buffer_size=10e6,             # Increase buffer size for large messages
+    manage_session=True,                   # Let Socket.IO manage sessions
 )
-
-# Socket.IO events
-# @socketio.on('connect')
-# def handle_connect():
-#     socketio.emit('status', {'message': 'Connected to server'})
-
-# @socketio.on('disconnect')
-# def handle_disconnect():
-#     print("Client disconnected")
-
-# socketio.on('join_session')
-# def handle_join(data):
-#     session_id = data.get('session_id')
-#     if session_id in active_stages:
-#         socketio.emit('status', {'message': f'Joined session {session_id}'})
-        
-#         # Send the current dialogue history to catch up the client
-#         stage = active_stages[session_id]
-#         for line in stage.dialogue_history:
-#             socketio.emit('dialogue', line)
-            
-#         # Ensure story completion is properly detected
-#         is_completed = (stage.current_objective_index >= len(stage.plot_objectives) or stage.story_completed)
-        
-#         # If index exceeds or equals objectives count, mark story as complete
-#         if stage.current_objective_index >= len(stage.plot_objectives):
-#             stage.story_completed = True
-        
-#         # Send the current objective info with story_completed flag
-#         socketio.emit('objective_status', {
-#             'current': stage.current_objective(),
-#             'index': stage.current_objective_index,
-#             'total': len(stage.plot_objectives),
-#             'completed': is_completed,
-#             'story_completed': is_completed,
-#             'final': is_completed
-#         })
-#     else:
-#         socketio.emit('error', {'message': 'Session not found'})
-
 
 @app.route("/auth/verify", methods=["POST"])
 def auth_verify():
@@ -88,22 +66,13 @@ def auth_verify():
     return jsonify({"message": "Login successful", "user": user_data})
 
 
-# @app.after_request
-# def after_request(response):
-#     response.headers.add('Access-Control-Allow-Origin', 'http://localhost:5173')
-#     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-#     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-#     response.headers.add('Access-Control-Allow-Credentials', 'true')
-#     return response
-
-# Configure API routes with socketio
-# setup_api(web_api, socketio)
-
+setup_socket_handlers(socketio)
 web_api.add_resource(ShowsResource, '/api/shows')
 web_api.add_resource(ShowResource, '/api/shows/<show_id>')
 web_api.add_resource(EpisodesResource, '/api/show/<show_id>/episodes')
 web_api.add_resource(EpisodeResource, '/api/show/<show_id>/episodes/<episode_id>')
 web_api.add_resource(UserResource, '/api/user')
+web_api.add_resource(ChatResource, '/api/chats', '/api/chats/<string:chat_id>', '/api/episodes/<string:episode_id>/chats')
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, port=5001, host='0.0.0.0')
