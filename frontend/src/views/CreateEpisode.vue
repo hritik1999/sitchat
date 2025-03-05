@@ -114,6 +114,7 @@
   import { Loader2Icon, PlusIcon, XIcon } from 'lucide-vue-next'
   import { useToast } from 'vue-toastification'
   import { useRouter } from 'vue-router'
+  import { fetchApi } from '@/lib/utils'
   
   export default {
     name: 'CreateEpisode',
@@ -144,12 +145,9 @@
         isSaving: false,
         isLoading: false,
         API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001',
-        session_token: localStorage.getItem('supabase_session')
-          ? JSON.parse(localStorage.getItem('supabase_session')).access_token
-          : null,
-        currentUserId: localStorage.getItem('supabase_session')
-          ? JSON.parse(localStorage.getItem('supabase_session')).user?.id
-          : null
+        // No longer storing session_token directly
+        // fetchApi will handle authentication
+        currentUserId: null // Will be populated after fetching user data
       }
     },
   
@@ -186,20 +184,10 @@
       async fetchEpisodeData() {
         this.isLoading = true
         try {
-          const response = await fetch(
-            `${this.API_BASE_URL}/api/show/${this.showId}/episodes/${this.episodeId}`,
-            {
-              headers: {
-                'Authorization': `Bearer ${this.session_token}`
-              }
-            }
+          const episodeData = await fetchApi(
+            `api/show/${this.showId}/episodes/${this.episodeId}`
           )
           
-          if (!response.ok) {
-            throw new Error('Failed to fetch episode data')
-          }
-  
-          const episodeData = await response.json()
           const episode = episodeData.episode || episodeData
           
           let plotObjectives = ['']
@@ -239,25 +227,17 @@
         
         this.isSaving = true
         const url = this.isEditMode
-          ? `${this.API_BASE_URL}/api/show/${this.showId}/episodes/${this.episodeId}`
-          : `${this.API_BASE_URL}/api/show/${this.showId}/episodes`
+          ? `api/show/${this.showId}/episodes/${this.episodeId}`
+          : `api/show/${this.showId}/episodes`
   
         try {
-          const response = await fetch(url, {
+          await fetchApi(url, {
             method: this.isEditMode ? 'PUT' : 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${this.session_token}`
-            },
             body: JSON.stringify({
               ...this.episodeForm,
               plot_objectives: JSON.stringify(this.episodeForm.plot_objectives)
             })
           })
-  
-          if (!response.ok) {
-            throw new Error(`Failed to ${this.isEditMode ? 'update' : 'create'} episode`)
-          }
   
           this.toast.success(`Episode ${this.isEditMode ? 'updated' : 'created'} successfully!`)
           this.router.push(`/show/${this.showId}`)

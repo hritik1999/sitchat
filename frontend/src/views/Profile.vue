@@ -125,6 +125,7 @@
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
   import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
   import { Loader2Icon, MoonIcon, SunIcon, PencilIcon, Trash2Icon } from 'lucide-vue-next'
+import { fetchApi } from '@/lib/utils'
   
   export default {
     components: {
@@ -151,9 +152,8 @@
           avatar_url: null
         },
         BASE_API_URL: import.meta.env.VITE_BASE_API_URL || 'http://localhost:5001',
-        session_token: localStorage.getItem('supabase_session') 
-          ? JSON.parse(localStorage.getItem('supabase_session')).access_token
-          : null,
+        // No longer storing session token directly
+        // fetchApi utility will handle authentication
         userShows: [],
         userEpisodes: null, // Can be an object or array
         loadingShows: true,
@@ -236,12 +236,8 @@
         if (confirm('Are you sure you want to delete this episode?')) {
           try {
             // Add delete API call here
-            const response = await fetch(`${this.BASE_API_URL}/api/show/${showId}/episodes/${episodeId}`, {
-              method: 'DELETE',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.session_token}`
-              }
+            await fetchApi(`api/show/${showId}/episodes/${episodeId}`, {
+              method: 'DELETE'
             })
             // If userEpisodes is an object (single episode)
             if (!Array.isArray(this.userEpisodes)) {
@@ -271,17 +267,7 @@
       },
       async getUserDetails() {
         try {
-            const response = await fetch(`${this.BASE_API_URL}/api/user`, {
-            headers: {
-                'Authorization': `Bearer ${this.session_token}`
-            }
-            });
-            
-            if (!response.ok) {
-            throw new Error(`Failed to fetch user details: ${response.status} ${response.statusText}`);
-            }
-            
-            const data = await response.json();
+            const data = await fetchApi(`api/user`);
             console.log('API Response:', data);
             
             // Update userDetails with the user data

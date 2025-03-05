@@ -42,6 +42,44 @@ socketio = SocketIO(
     manage_session=True,                   # Let Socket.IO manage sessions
 )
 
+# Middleware to authenticate socket.io connections
+@socketio.on('connect')
+def authenticate_socket():
+    auth_header = None
+    token = None
+    
+    # Check for token in auth data
+    if hasattr(request, 'args') and request.args.get('token'):
+        token = request.args.get('token')
+    
+    # Check for token in headers
+    elif hasattr(request, 'headers') and request.headers.get('Authorization'):
+        auth_header = request.headers.get('Authorization')
+        if auth_header.startswith('Bearer '):
+            token = auth_header.split('Bearer ')[1]
+        else:
+            token = auth_header
+    
+    # Check socket.io specific auth field
+    elif hasattr(request, 'auth') and request.auth.get('token'):
+        token = request.auth.get('token')
+    
+    if token:
+        try:
+            # Verify token with Supabase
+            user_response = supabase.auth.get_user(token)
+            if user_response and hasattr(user_response, 'user') and user_response.user:
+                # With the updated Supabase SDK, explicit authentication happens when we call get_user()
+                # We don't need to set anything else for authentication to work
+                return True
+        except Exception as e:
+            print(f"Socket auth error: {str(e)}")
+            return False
+            
+    # Allow connection for now, but individual handlers should check auth
+    # You could return False here to reject unauthenticated connections
+    return True
+
 @app.route("/auth/verify", methods=["POST"])
 def auth_verify():
     data = request.get_json()
@@ -49,21 +87,44 @@ def auth_verify():
     if not token:
         return jsonify({"error": "Missing access token"}), 400
 
-    user_response = supabase.auth.get_user(token)
-    if not user_response:
-        return jsonify({"error": "Invalid token"}), 401
-
-    # If the response has a nested 'user' attribute, use that
     try:
-        user = user_response.user
-    except AttributeError:
-        user = user_response
+        # Get user from token
+        user_response = supabase.auth.get_user(token)
+        if not user_response:
+            return jsonify({"error": "Invalid token"}), 401
 
-    # Convert to a dict (if it's a Pydantic model)
-    user_data = user.dict() if hasattr(user, "dict") else user
-    print(user_data)
+        # Extract user from response
+        user = user_response.user if hasattr(user_response, 'user') else user_response
 
-    return jsonify({"message": "Login successful", "user": user_data})
+        # With the updated Supabase SDK, explicit authentication happens when we call get_user()
+        # We don't need to set anything else for authentication to work
+
+        # Also get the refresh token and session expiry information
+        session_data = {}
+        try:
+            session_response = supabase.auth.get_session()
+            if hasattr(session_response, 'session'):
+                session = session_response.session
+                session_data = {
+                    'expires_at': session.expires_at if hasattr(session, 'expires_at') else None,
+                    'refresh_token': session.refresh_token if hasattr(session, 'refresh_token') else None,
+                }
+        except Exception as e:
+            print(f"Error getting session info: {str(e)}")
+            # Continue anyway, verification still worked
+
+        # Convert to a dict (if it's a Pydantic model)
+        user_data = user.dict() if hasattr(user, "dict") else user
+        
+        return jsonify({
+            "message": "Login successful", 
+            "user": user_data,
+            "session": session_data
+        })
+        
+    except Exception as e:
+        print(f"Auth verification error: {str(e)}")
+        return jsonify({"error": f"Authentication error: {str(e)}"}), 401
 
 
 setup_socket_handlers(socketio)

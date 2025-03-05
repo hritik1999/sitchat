@@ -116,6 +116,8 @@ import { ArrowLeftIcon, SendIcon } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
+import { fetchApi } from '@/lib/utils'
+import { supabase } from '@/composables/useSupabase'
 import io from 'socket.io-client'
 
 export default {
@@ -134,13 +136,13 @@ export default {
       progress: 0,
       objectiveIndex: 0,
       totalObjectives: 1,
-      objectiveProgress: '0/1',
+      objectiveProgress: this.objectiveIndex/this.totalObjectives,
       currentObjective: '',
       isTyping: false,
       API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001',
       SOCKET_URL: import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001',
       showId: this.$route.params.show_id,
-      episodeId: this.$route.params.episode_id,
+      episodeId:'',
       chatId: this.$route.params.chat_id,
       showName: 'Loading...',
       episodeName: 'Loading...',
@@ -174,13 +176,9 @@ export default {
   methods: {
     async fetchChatDetails() {
       try {
-        // Make a fetch request to your backend API for chat details
-        const response = await fetch(`${this.API_BASE_URL}/api/chat/${this.chatId}`)
-        if (!response.ok) {
-          throw new Error('Failed to fetch chat details')
-        }
+        // Get chat details
+        const data = await fetchApi(`api/chats/${this.chatId}`)
         
-        const data = await response.json()
         if (!data || !data.chat) {
           throw new Error('Invalid chat data received')
         }
@@ -193,13 +191,10 @@ export default {
         
         // If we have a show ID from the episode
         if (chatData.episodes?.show_id) {
-          const showResponse = await fetch(`${this.API_BASE_URL}/api/show/${chatData.episodes.show_id}`)
-          if (showResponse.ok) {
-            const showData = await showResponse.json()
-            if (showData && showData.show) {
-              this.showId = showData.show.id
-              this.showName = showData.show.name || 'Unknown Show'
-            }
+          const showData = await fetchApi(`api/shows/${chatData.episodes.show_id}`)
+          if (showData && showData.show) {
+            this.showId = showData.show.id
+            this.showName = showData.show.name || 'Unknown Show'
           }
         }
       } catch (error) {
@@ -208,22 +203,38 @@ export default {
       }
     },
 
-    connectToSocket() {
-      // Initialize Socket.io connection
-      this.socket = io(this.SOCKET_URL)
+    async connectToSocket() {
+      try {
+        // Get current session for authentication
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
 
-      // Connection events
-      this.socket.on('connect', this.handleConnect)
-      this.socket.on('connect_error', this.handleConnectionError)
-      this.socket.on('disconnect', this.handleDisconnect)
-      
-      // Chat events
-      this.socket.on('dialogue', this.handleDialogue)
-      this.socket.on('status', this.handleStatus)
-      this.socket.on('error', this.handleError)
-      this.socket.on('objective_status', this.handleObjectiveStatus)
-      this.socket.on('typing_indicator', this.handleTypingIndicator)
-      this.socket.on('director_status', this.handleDirectorStatus)
+        // Initialize Socket.io connection with auth token
+        this.socket = io(this.SOCKET_URL, {
+          auth: {
+            token: token
+          },
+          extraHeaders: {
+            Authorization: token ? `Bearer ${token}` : ''
+          }
+        });
+
+        // Connection events
+        this.socket.on('connect', this.handleConnect);
+        this.socket.on('connect_error', this.handleConnectionError);
+        this.socket.on('disconnect', this.handleDisconnect);
+        
+        // Chat events
+        this.socket.on('dialogue', this.handleDialogue);
+        this.socket.on('status', this.handleStatus);
+        this.socket.on('error', this.handleError);
+        this.socket.on('objective_status', this.handleObjectiveStatus);
+        this.socket.on('typing_indicator', this.handleTypingIndicator);
+        this.socket.on('director_status', this.handleDirectorStatus);
+      } catch (error) {
+        console.error('Error connecting to socket:', error);
+        this.errorMessage = 'Connection error. Please try refreshing the page.';
+      }
     },
 
     disconnectSocket() {

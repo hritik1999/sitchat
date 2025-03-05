@@ -63,6 +63,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { PlusIcon } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { supabase } from '@/composables/useSupabase'
+import { fetchApi } from '@/lib/utils'
 
 export default {
   name: 'ShowPage',
@@ -107,14 +108,8 @@ export default {
       this.error = null
       
       try {
-        console.log('Fetching shows from:', `${this.API_BASE_URL}/api/shows`)
-        const response = await fetch(`${this.API_BASE_URL}/api/shows`)
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch shows: ${response.status} ${response.statusText}`)
-        }
-        
-        const data = await response.json()
+        console.log('Fetching shows')
+        const data = await fetchApi('api/shows')
         
         // Validate the received data
         if (!data || !data.shows || !Array.isArray(data.shows)) {

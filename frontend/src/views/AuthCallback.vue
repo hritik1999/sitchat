@@ -3,40 +3,44 @@
   </template>
   
   <script>
-  export default {
+  import { supabase } from '@/composables/useSupabase';
+import { fetchApi } from '@/lib/utils';
+
+export default {
     name: "AuthCallback",
     data() {
-      return {
-        API_BASE_URL: import.meta.env.VITE_API_URL || 'http://localhost:5001'
-      };
+      return {};
     },
     created() {
-      // Extract the access token from the URL fragment
-      const hash = window.location.hash.slice(1);
-      const params = new URLSearchParams(hash);
-      const accessToken = params.get("access_token");
+      // Let Supabase handle the OAuth callback automatically
+      // The client is configured with detectSessionInUrl: true
       
-      if (accessToken) {
-        // Save it locally or update your auth state
-        localStorage.setItem("supabase_session", JSON.stringify({ access_token: accessToken }));
-        
-        // Optionally, verify the token on the backend:
-        fetch("" + this.API_BASE_URL + "/auth/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ access_token: accessToken }),
-        })
-        .then((res) => res.json())
-        .then((data) => {
-          console.log("Backend verification:", data);
-          // Redirect to your main app/dashboard after verification
-          this.$router.push("/");
-        })
-        .catch((err) => console.error("Verification error:", err));
-      } else {
-        console.error("Access token not found.");
-        this.$router.push("/login");
-      }
+      // Wait briefly to allow Supabase to process the URL
+      setTimeout(async () => {
+        try {
+          // Get the current session
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          if (session) {
+            // Verify the token on the backend using fetchApi
+            const data = await fetchApi("auth/verify", {
+              method: "POST",
+              body: JSON.stringify({ access_token: session.access_token }),
+            });
+            
+            console.log("Backend verification:", data);
+            
+            // Redirect to main app after verification
+            this.$router.push("/");
+          } else {
+            console.error("No active session found");
+            this.$router.push("/auth");
+          }
+        } catch (err) {
+          console.error("Auth callback error:", err);
+          this.$router.push("/auth");
+        }
+      }, 500);
     },
   };
   </script>

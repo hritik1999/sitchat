@@ -489,10 +489,12 @@ active_stages = {}
 def setup_socket_handlers(socketio):
     """Set up Socket.IO event handlers for chat interaction"""
     
-    @socketio.on('connect')
-    def handle_connect():
-        """Handle client connection"""
-        socketio.emit('status', {'message': 'Connected to server'})
+    # Connection is already handled by the global socket.io middleware
+    # This function is no longer needed
+    # @socketio.on('connect')
+    # def handle_connect():
+    #    """Handle client connection"""
+    #    socketio.emit('status', {'message': 'Connected to server'})
 
     @socketio.on('disconnect')
     def handle_disconnect():

@@ -113,6 +113,7 @@
     UploadIcon, 
     XIcon 
   } from 'lucide-vue-next'
+  import { fetchApi } from '@/lib/utils'
   
   export default {
     name: 'EditProfile',
@@ -146,23 +147,12 @@
       })
   
       const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
-      const session_token = localStorage.getItem('supabase_session')
-        ? JSON.parse(localStorage.getItem('supabase_session')).access_token
-        : null
+      // No longer storing session token directly
+      // fetchApi utility will handle authentication
   
       const fetchUserData = async () => {
         try {
-          const response = await fetch(`${API_BASE_URL}/api/user`, {
-            headers: {
-              'Authorization': `Bearer ${session_token}`
-            }
-          })
-  
-          if (!response.ok) {
-            throw new Error('Failed to fetch user data')
-          }
-  
-          const data = await response.json()
+          const data = await fetchApi('api/user')
           const userData = data.user || data
   
           // Update form data
@@ -222,17 +212,13 @@
             email: userForm.email
           }))
   
-          const response = await fetch(`${API_BASE_URL}/api/user`, {
+          await fetchApi('api/user', {
             method: 'PUT',
+            body: formData,
             headers: {
-              'Authorization': `Bearer ${session_token}`
-            },
-            body: formData
+              // Don't set Content-Type here since FormData sets it automatically with boundary
+            }
           })
-  
-          if (!response.ok) {
-            throw new Error('Failed to update profile')
-          }
   
           toast.success('Profile updated successfully!')
           router.push('/profile')

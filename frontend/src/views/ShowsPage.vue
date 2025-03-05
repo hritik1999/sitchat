@@ -174,6 +174,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSupabase } from '@/composables/useSupabase'
 import { useToast } from 'vue-toastification'
+import { fetchApi } from '@/lib/utils'
 import { 
   PlusIcon, XIcon, ImageIcon, UploadIcon, 
   Loader2Icon, EditIcon, TrashIcon 
@@ -249,14 +250,7 @@ async function fetchShows() {
   loading.value = true
   
   try {
-    const response = await fetch(`${API_BASE_URL}/api/shows`)
-    
-    if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(errorData.error || 'Failed to fetch shows')
-    }
-    
-    const data = await response.json()
+    const data = await fetchApi('api/shows')
     shows.value = data.shows || []
   } catch (error) {
     console.error('Error fetching shows:', error)
