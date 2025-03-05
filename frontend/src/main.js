@@ -1,34 +1,14 @@
-import { createApp } from 'vue'
-import App from './App.vue'
-import router from './router'
-import Toast, { POSITION } from 'vue-toastification'
+import { createApp } from 'vue';
+import App from './App.vue';
+import router from './router';
+// Import the Toast plugin and its styles
+import Toast from 'vue-toastification';
+import 'vue-toastification/dist/index.css';
 import './assets/index.css'
 
-// Import toast styles
-import 'vue-toastification/dist/index.css'
+const app = createApp(App);
 
-// Create the app
-const app = createApp(App)
+app.use(router);
+app.use(Toast);
 
-// Configure toast
-const toastOptions = {
-  position: POSITION.TOP_RIGHT,
-  timeout: 5000,
-  closeOnClick: true,
-  pauseOnFocusLoss: true,
-  pauseOnHover: true,
-  draggable: true,
-  draggablePercent: 0.6,
-  showCloseButtonOnHover: false,
-  hideProgressBar: false,
-  closeButton: 'button',
-  icon: true,
-  rtl: false
-}
-
-// Use plugins
-app.use(router)
-app.use(Toast, toastOptions)
-
-// Mount the app
-app.mount('#app')
+app.mount('#app');

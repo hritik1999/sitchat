@@ -1,69 +1,176 @@
 from flask_restful import Resource, Api, marshal_with, fields, reqparse, marshal
-from flask import request, jsonify, g
+from flask import request, jsonify, g, Response, session
 import threading
-import json
-import uuid
+from application.database.db import db
+from application.auth.auth import get_current_user
 import os
-from application.ai.llm import actor_llm, director_llm
+import uuid
+import json
+from application.play.stage import Stage
 from application.play.actor import Actor
 from application.play.director import Director
 from application.play.player import Player
-from application.play.stage import Stage
-from application.database.db import db
-from application.auth.auth import authenticate_request, get_current_user_id
+from application.ai.llm import actor_llm, director_llm
+from flask_socketio import join_room, leave_room
 
-# Store active stage sessions in memory
-active_stages = {}
+class UserResource(Resource):
 
-# --- Authentication Resources ---
+    def get(self):
+        # Get current user from the token
+        user_id = get_current_user()
+        if not user_id:
+            return {"error": "Unauthorized. Please login again"}, 401
 
-class AuthResource(Resource):
-    def post(self, action):
-        """Handle auth actions: register, login, logout"""
-        if action == 'register':
-            data = request.get_json()
-            return db.sign_up(
-                data.get('email'),
-                data.get('password'),
-                data.get('username')
-            )
+        # Get user data from the database
+        user = db.get_user(user_id)
+        if not user:
+            return {"error": "User not found"}, 404
+        user_shows = db.get_shows_by_creator(user_id)
+        user_episodes = db.get_episodes_by_creator(user_id)
+        # Return the user data as a JSON response
+        return jsonify({"user": user, "user_shows": user_shows, "user_episodes": user_episodes})
+    
+    def put(self):
+        """Update user profile including avatar"""
+        try:
+            # Get current user from the token
+            user_id = get_current_user()
+            if not user_id:
+                return {"error": "Unauthorized.Please login again"}, 401
+
+            # Get current user data
+            current_user = db.get_user(user_id)
+            if not current_user:
+                return {"error": "User not found"}, 404
+
+            # Get form data
+            form_data = request.form.get('data')
+            if not form_data:
+                return {"error": "No form data provided"}, 400
+
+            # Parse JSON data
+            try:
+                data = json.loads(form_data)
+            except json.JSONDecodeError:
+                return {"error": "Invalid form data format"}, 400
+
+            # Initialize avatar_url with existing URL
+            avatar_url = current_user.get('avatar_url')
+
+            # Handle avatar upload if provided
+            if 'avatar' in request.files:
+                file = request.files['avatar']
+                if file.filename != '':
+                    # Validate file type
+                    allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
+                    if '.' not in file.filename or \
+                    file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
+                        return {"error": "Invalid file type"}, 400
+
+                    try:
+                        # Create unique filename
+                        file_ext = file.filename.rsplit('.', 1)[1].lower()
+                        filename = f"{str(uuid.uuid4())}.{file_ext}"
+                        
+                        # Save file temporarily
+                        temp_path = os.path.join('/tmp', filename)
+                        file.save(temp_path)
+
+                        # Upload to storage
+                        with open(temp_path, 'rb') as f:
+                            file_content = f.read()
+                        
+                        result = db.supabase.storage.from_('show-images').upload(
+                            path=filename,
+                            file=file_content
+                        )
+
+                        # Clean up temp file
+                        os.remove(temp_path)
+
+                        if result and hasattr(result, 'error') and result.error:
+                            return {"error": f"Upload failed: {result.error}"}, 500
+
+                        # Get public URL for the new avatar
+                        avatar_url = db.supabase.storage.from_('show-images').get_public_url(filename)
+
+                        # Delete old avatar if exists
+                        if current_user.get('avatar_url'):
+                            try:
+                                old_filename = current_user['avatar_url'].split('/')[-1]
+                                db.supabase.storage.from_('show-images').remove(old_filename)
+                            except Exception as e:
+                                print(f"Warning: Failed to delete old avatar: {str(e)}")
+
+                    except Exception as e:
+                        print(f"Upload error: {str(e)}")
+                        return {"error": f"Upload failed: {str(e)}"}, 500
+
+            # Prepare update data
+            update_data = {
+                'username': data.get('username'),
+                'email': data.get('email')
+            }
+            
+            # Only include avatar_url if it has changed
+            if avatar_url != current_user.get('avatar_url'):
+                update_data['avatar_url'] = avatar_url
+
+            # Update user profile
+            updated_user = db.update_user_profile(user_id, update_data)
+            
+            if updated_user:
+                return jsonify({"user": updated_user})
+            else:
+                # Try to get the user again to confirm the update
+                check_user = db.get_user(user_id)
+                if check_user:
+                    return jsonify({"user": check_user})
+                return {"error": "Failed to update user"}, 500
+
+        except Exception as e:
+            print(f"Unexpected error: {str(e)}")
+            return {"error": f"An error occurred: {str(e)}"}, 500
+
+class ShowsResource(Resource):
+    def get(self):
+        """Get a list of all shows"""
+        shows = db.get_shows()
+        return jsonify({"shows": shows})
         
-        elif action == 'login':
-            data = request.get_json()
-            return db.sign_in(
-                data.get('email'),
-                data.get('password')
-            )
-        
-        elif action == 'logout':
-            return db.sign_out()
-        
-        else:
-            return {"error": "Invalid action"}, 400
-
-
-# --- Show Resources ---
-
-class ImageUploadResource(Resource):
-    @authenticate_request
     def post(self):
-        """Handle image upload to Supabase storage"""
-        user_id = get_current_user_id()
-        
+        """Create a new show"""
+        # Get current user from the token
+        user_id = get_current_user()
+        if not user_id:
+            return {"error": "Unauthorized. Please login again"}, 401
+            
+        # Check if image file is provided
         if 'image' not in request.files:
             return {"error": "No image file provided"}, 400
-        
+            
+        # Get the image file
         file = request.files['image']
-        
         if file.filename == '':
             return {"error": "No selected file"}, 400
-        
+            
+        # Get form data from the 'data' field
+        form_data = request.form.get('data')
+        if not form_data:
+            return {"error": "No form data provided"}, 400
+            
+        # Parse the JSON data
+        try:
+            data = json.loads(form_data)
+        except json.JSONDecodeError:
+            return {"error": "Invalid form data format"}, 400
+            
         # Validate file type (accept only images)
         allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
         if '.' not in file.filename or \
            file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
             return {"error": "Invalid file type"}, 400
-        
+            
         try:
             # Create a unique filename
             file_ext = file.filename.rsplit('.', 1)[1].lower()
@@ -76,7 +183,7 @@ class ImageUploadResource(Resource):
             # Upload to Supabase storage
             with open(temp_path, 'rb') as f:
                 file_content = f.read()
-            
+                
             # Upload to 'show-images' bucket
             result = db.supabase.storage.from_('show-images').upload(
                 path=filename,
@@ -86,81 +193,146 @@ class ImageUploadResource(Resource):
             # Clean up temp file
             os.remove(temp_path)
             
-            if hasattr(result, 'error') and result.error:
+            # Check for Supabase storage errors
+            if result and hasattr(result, 'error') and result.error:
                 return {"error": f"Upload failed: {result.error}"}, 500
-            
+                
             # Get public URL
             public_url = db.supabase.storage.from_('show-images').get_public_url(filename)
-            
-            return {"url": public_url, "success": True}
             
         except Exception as e:
             print(f"Upload error: {str(e)}")
             return {"error": f"Upload failed: {str(e)}"}, 500
-
-
-# Update the ShowsResource class to handle image URLs
-class ShowsResource(Resource):
-    def get(self):
-        """Get a list of all shows"""
-        limit = int(request.args.get('limit', 20))
-        offset = int(request.args.get('offset', 0))
         
-        shows = db.get_shows(limit, offset)
-        return jsonify({"shows": shows})
-    
-    @authenticate_request
-    def post(self):
-        """Create a new show"""
-        user_id = get_current_user_id()
-        data = request.get_json()
-        
-        show = db.create_show(
-            creator_id=user_id,
-            name=data.get('name'),
-            description=data.get('description'),
-            characters=data.get('characters', {}),
-            relations=data.get('relations', ''),
-            image_url=data.get('image_url')
-        )
+        try:
+            # Create the show in the database
+            show = db.create_show(
+                creator_id=user_id,
+                name=data.get('name'),
+                description=data.get('description'),
+                characters=data.get('characters', []),
+                relations=data.get('relations', ''),
+                image_url=public_url
+            )
+        except Exception as e:
+            print(f"database error:{str(e)}")
+            return {"error":f'database problem: {str(e)}'}, 500
+
         
         if not show:
             return {"error": "Failed to create show"}, 500
-        
+            
         return jsonify({"show": show})
-
 class ShowResource(Resource):
     def get(self, show_id):
         """Get a specific show by ID"""
         show = db.get_show(show_id)
-        
+        print(show)
         if not show:
             return {"error": "Show not found"}, 404
         
         return jsonify({"show": show})
     
-    @authenticate_request
     def put(self, show_id):
         """Update a show"""
-        user_id = get_current_user_id()
-        data = request.get_json()
-        
+        user_id = get_current_user()
+        if not user_id:
+            return {"error": "Unauthorized. Please login again"}, 401
+
         # Verify ownership
         show = db.get_show(show_id)
         if not show or show.get('creator_id') != user_id:
             return {"error": "Not authorized to edit this show"}, 403
+
+        # Get form data from the 'data' field
+        form_data = request.form.get('data')
+        if not form_data:
+            return {"error": "No form data provided"}, 400
+
+        # Parse the JSON data
+        try:
+            data = json.loads(form_data)
+        except json.JSONDecodeError:
+            return {"error": "Invalid form data format"}, 400
+
+        # Initialize public_url with existing image URL
+        public_url = show.get('image_url')
+
+        # Handle image upload if provided
+        if 'image' in request.files:
+            file = request.files['image']
+            if file.filename != '':
+                # Validate file type
+                allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
+                if '.' not in file.filename or \
+                file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
+                    return {"error": "Invalid file type"}, 400
+
+                try:
+                    # Create a unique filename
+                    file_ext = file.filename.rsplit('.', 1)[1].lower()
+                    filename = f"{str(uuid.uuid4())}.{file_ext}"
+                    
+                    # Save file temporarily
+                    temp_path = os.path.join('/tmp', filename)
+                    file.save(temp_path)
+
+                    # Upload to Supabase storage
+                    with open(temp_path, 'rb') as f:
+                        file_content = f.read()
+                    
+                    # Upload to 'show-images' bucket
+                    result = db.supabase.storage.from_('show-images').upload(
+                        path=filename,
+                        file=file_content
+                    )
+
+                    # Clean up temp file
+                    os.remove(temp_path)
+
+                    # Check for Supabase storage errors
+                    if result and hasattr(result, 'error') and result.error:
+                        return {"error": f"Upload failed: {result.error}"}, 500
+
+                    # Get new public URL
+                    public_url = db.supabase.storage.from_('show-images').get_public_url(filename)
+
+                    # Delete old image if it exists
+                    if show.get('image_url'):
+                        try:
+                            old_filename = show['image_url'].split('/')[-1]
+                            db.supabase.storage.from_('show-images').remove(old_filename)
+                        except Exception as e:
+                            print(f"Warning: Failed to delete old image: {str(e)}")
+
+                except Exception as e:
+                    print(f"Upload error: {str(e)}")
+                    return {"error": f"Upload failed: {str(e)}"}, 500
+
+        # Update the show data
+        update_data = {
+            'name': data.get('name'),
+            'description': data.get('description'),
+            'characters': data.get('characters', []),
+            'relations': data.get('relations', ''),
+        }
         
-        updated_show = db.update_show(show_id, data)
-        
-        if not updated_show:
-            return {"error": "Failed to update show"}, 500
-        
-        return jsonify({"show": updated_show})
+        # Only update image_url if a new image was uploaded
+        if public_url != show.get('image_url'):
+            update_data['image_url'] = public_url
+
+        try:
+            updated_show = db.update_show(show_id, update_data)
+            if not updated_show:
+                return {"error": "Failed to update show"}, 500
+            return jsonify({"show": updated_show})
+        except Exception as e:
+            print(f"Database error: {str(e)}")
+            return {"error": f"Database problem: {str(e)}"}, 500
     
-    @authenticate_request
     def delete(self, show_id):
         """Delete a show"""
-        user_id = get_current_user_id()
+        user_id = get_current_user()
         
         # Verify ownership
         show = db.get_show(show_id)
@@ -173,26 +345,26 @@ class ShowResource(Resource):
             return {"error": "Failed to delete show"}, 500
         
         return {"success": True}
-
-
-# --- Episode Resources ---
-
+    
 class EpisodesResource(Resource):
     def get(self, show_id):
         """Get all episodes for a show"""
         episodes = db.get_episodes(show_id)
         return jsonify({"episodes": episodes})
-    
-    @authenticate_request
+
     def post(self, show_id):
         """Create a new episode for a show"""
-        user_id = get_current_user_id()
+        user_id = get_current_user()
         data = request.get_json()
+        print(data)
+        # Verify authentication
+        if not user_id:
+            return {"error": "Unauthorized. Please login again"}, 401
         
         # Verify ownership of the show
         show = db.get_show(show_id)
-        if not show or show.get('creator_id') != user_id:
-            return {"error": "Not authorized to add episodes to this show"}, 403
+        if not show:
+            return {"error": "Show not found"}, 404
         
         episode = db.create_episode(
             show_id=show_id,
@@ -202,7 +374,6 @@ class EpisodesResource(Resource):
             background=data.get('background', ''),
             plot_objectives=data.get('plot_objectives', [])
         )
-        
         if not episode:
             return {"error": "Failed to create episode"}, 500
         
@@ -210,19 +381,17 @@ class EpisodesResource(Resource):
 
 
 class EpisodeResource(Resource):
-    def get(self, episode_id):
+    def get(self,show_id, episode_id):
         """Get a specific episode by ID"""
         episode = db.get_episode(episode_id)
-        
         if not episode:
             return {"error": "Episode not found"}, 404
         
         return jsonify({"episode": episode})
     
-    @authenticate_request
-    def put(self, episode_id):
+    def put(self, show_id, episode_id):
         """Update an episode"""
-        user_id = get_current_user_id()
+        user_id = get_current_user()
         data = request.get_json()
         
         # Verify ownership
@@ -237,10 +406,9 @@ class EpisodeResource(Resource):
         
         return jsonify({"episode": updated_episode})
     
-    @authenticate_request
-    def delete(self, episode_id):
+    def delete(self,show_id, episode_id):
         """Delete an episode"""
-        user_id = get_current_user_id()
+        user_id = get_current_user()
         
         # Verify ownership
         episode = db.get_episode(episode_id)
@@ -253,514 +421,299 @@ class EpisodeResource(Resource):
             return {"error": "Failed to delete episode"}, 500
         
         return {"success": True}
-
-
-# --- Chat/Session Resources ---
-
-class ChatsResource(Resource):
-    def __init__(self, **kwargs):
-        self.socketio = kwargs.get('socketio')
-        super().__init__()
-        
-    def get(self):
-        """Get chats for the current user or by episode"""
-        user_id = request.args.get('user_id')
-        episode_id = request.args.get('episode_id')
-        limit = int(request.args.get('limit', 20))
-        offset = int(request.args.get('offset', 0))
-        
-        chats = db.get_chats(user_id, episode_id, limit, offset)
-        return jsonify({"chats": chats})
     
-    @authenticate_request
-    def post(self):
-        """Create a new chat session"""
-        user_id = get_current_user_id()
+    
+class ChatResource(Resource):
+    def post(self, episode_id):
+        """Create a new chat session for an episode"""
+        user_id = get_current_user()
+        if not user_id:
+            return {"error": "Unauthorized. Please login again"}, 401
+            
         data = request.get_json()
-        
-        chat = db.create_chat(
-            episode_id=data.get('episode_id'),
-            user_id=user_id,
-            player_name=data.get('player_name', 'Player'),
-            player_description=data.get('player_description', '')
-        )
-        
-        if not chat:
-            return {"error": "Failed to create chat"}, 500
-        
-        # Start the chat session in memory
-        chat_id = chat['id']
-        
-        # Get the episode details
-        episode = db.get_episode(data.get('episode_id'))
+        player_name = data.get('player_name', 'Player')
+        player_description = data.get('player_description', '')
+        print(data)
+        # Fetch episode details
+        episode = db.get_episode(episode_id)
         if not episode:
             return {"error": "Episode not found"}, 404
-        
-        # Get the show details
-        show = db.get_show(episode['show_id'])
-        if not show:
-            return {"error": "Show not found"}, 404
-        
-        # Parse JSON fields
-        characters = json.loads(show['characters']) if isinstance(show['characters'], str) else show['characters']
-        plot_objectives = json.loads(episode['plot_objectives']) if isinstance(episode['plot_objectives'], str) else episode['plot_objectives']
-        
-        # Create the director
-        director = Director(
-            director_llm,
-            show['name'],
-            show['description'], 
-            episode['background'], 
-            characters, 
-            data.get('player_description', ''), 
-            show['relations']
-        )
-        
-        # Create actors
-        actors = {}
-        for name, desc in characters.items():
-            actors[name] = Actor(
-                name=name,
-                description=desc,
-                relations=show['relations'],
-                background=episode['background'],
-                llm=actor_llm
-            )
-        
-        # Create player
-        player = Player(
-            name=data.get('player_name', 'Player'),
-            description=data.get('player_description', '')
-        )
-        
-        # Create and store the stage in memory
-        stage = Stage(
-            actors=actors, 
-            director=director, 
-            player=player, 
-            plot_objectives=plot_objectives,
-            socketio=self.socketio
-        )
-        
-        # Store the chat_id to link with database
-        stage.chat_id = chat_id
-        
-        # IMPORTANT: Explicitly store in active_stages with chat_id as key
-        active_stages[chat_id] = stage
-        
-        # Print debug info to verify
-        print(f"🔵 Created new chat with ID: {chat_id}")
-        print(f"🔵 Active stages now contains keys: {list(active_stages.keys())}")
-        
-        # Immediately send the director status to show it's working
-        if self.socketio:
-            self.socketio.emit('director_status', {"status": "directing", "message": "Director is directing..."})
-        
-        # Start the stage sequence in a background thread to not block the response
-        def start_sequence():
-            try:
-                # Give the frontend a moment to connect to the socket before starting
-                import time
-                time.sleep(1)
-                
-                # Start the sequence
-                result = stage.advance_turn()
-                
-                # Save the initial dialogue to the database
-                if result and result.get('dialogue'):
-                    db.add_messages_batch(chat_id, result['dialogue'])
-                
-            except Exception as e:
-                print(f"❌ Error starting sequence: {str(e)}")
-                if self.socketio:
-                    self.socketio.emit('error', {'message': f'Error starting sequence: {str(e)}'})
             
-        thread = threading.Thread(target=start_sequence)
-        thread.daemon = True
-        thread.start()
-        
-        return {
-            'chat_id': chat_id,
-            'session_id': chat_id,  # Add this line to provide both formats
-            'message': 'Chat created and started automatically',
-            'state': stage.get_state()
-        }
-
-
-class ChatResource(Resource):
-    def get(self, chat_id):
-        """Get a specific chat by ID with its messages"""
-        chat = db.get_chat(chat_id)
+        # Create a new chat in the database
+        chat = db.create_chat(
+            episode_id=episode_id,
+            user_id=user_id,
+            player_name=player_name,
+            player_description=player_description
+        )
         
         if not chat:
-            return {"error": "Chat not found"}, 404
-        
-        # Get the messages for this chat
-        messages = db.get_messages(chat_id)
-        
+            return {"error": "Failed to create chat session"}, 500
+        print(chat)
         return jsonify({
             "chat": chat,
-            "messages": messages
         })
     
-    @authenticate_request
-    def delete(self, chat_id):
-        """Delete a chat"""
-        user_id = get_current_user_id()
+    def get(self, chat_id=None):
+        """Get chat sessions"""
+        user_id = get_current_user()
+        if not user_id:
+            return {"error": "Unauthorized. Please login again"}, 401
         
-        # Verify ownership
+        # If chat_id is provided, get that specific chat
+        if chat_id:
+            chat = db.get_chat(chat_id)
+            if not chat:
+                return {"error": "Chat not found"}, 404
+                
+            # Verify ownership
+            if chat.get('user_id') != user_id:
+                return {"error": "Not authorized to access this chat"}, 403
+                
+            # Get messages for this chat
+            messages = db.get_messages(chat_id)
+            
+            return jsonify({
+                "chat": chat,
+                "messages": messages
+            })
+        
+        # Otherwise, get all chats for the user
+        chats = db.get_chats(user_id)
+        return jsonify({"chats": chats})
+
+
+# In-memory cache of active stages (for performance)
+active_stages = {}
+
+def setup_socket_handlers(socketio):
+    """Set up Socket.IO event handlers for chat interaction"""
+    
+    @socketio.on('connect')
+    def handle_connect():
+        """Handle client connection"""
+        socketio.emit('status', {'message': 'Connected to server'})
+
+    @socketio.on('disconnect')
+    def handle_disconnect():
+        """Handle client disconnection"""
+        print(f"Client disconnected: {request.sid}")
+        # We don't remove stages from memory on disconnect to support reconnection
+
+    @socketio.on('join_chat')
+    def handle_join_chat(data):
+        """Join a chat room and initialize if needed"""
+        chat_id = data.get('chat_id')
+        if not chat_id:
+            socketio.emit('error', {'message': 'No chat ID provided'}, room=request.sid)
+            return
+            
+        # Get the chat from database
         chat = db.get_chat(chat_id)
-        if not chat or chat.get('user_id') != user_id:
-            return {"error": "Not authorized to delete this chat"}, 403
+        if not chat:
+            socketio.emit('error', {'message': 'Chat not found'}, room=request.sid)
+            return
+            
+        # Join the Socket.IO room for this chat
+        join_room(chat_id)
         
-        # Remove from active stages if present
+        # Get chat messages directly from database
+        messages = db.get_messages(chat_id)
+        
+        # Send the chat history to the client
+        for message in messages:
+            socketio.emit('dialogue', {
+                'role': message.get('role'),
+                'content': message.get('content'),
+                'type': message.get('type')
+            }, room=request.sid)
+        
+        # Check if stage already exists in memory
         if chat_id in active_stages:
-            del active_stages[chat_id]
-        
-        success = db.delete_chat(chat_id)
-        
-        if not success:
-            return {"error": "Failed to delete chat"}, 500
-        
-        return {"success": True}
-
-
-# --- Stage Resources (for interactive chat) ---
-
-class StageResource(Resource):
-    def __init__(self, **kwargs):
-        self.socketio = kwargs.get('socketio')
-        super().__init__()
-        
-    def post(self):
-        """Create a new stage session with database integration"""
-        data = request.get_json()
-        
-        # Check if user is authenticated
-        user_id = None
-        auth_header = request.headers.get('Authorization')
-        if auth_header and auth_header.startswith('Bearer '):
-            try:
-                token = auth_header.split('Bearer ')[1]
-                user = db.supabase.auth.get_user(token)
-                user_id = user.user.id
-            except:
-                # Continue as anonymous
-                pass
-        
-        show = data.get('show')
-        description = data.get('description')
-        background = data.get('background')
-        actors_data = data.get('actors_data')
-        relations = data.get('relations')
-        player_name = data.get('player_name', 'Player')
-        player_description = data.get('player_description')
-        plot_objectives = data.get('plot_objectives')
-        
-        # Create director
-        director = Director(
-            director_llm,
-            show,
-            description, 
-            background, 
-            actors_data, 
-            player_description, 
-            relations
-        )
-        # Create actors
-        actors = {}
-        for name, desc in actors_data.items():
-            actors[name] = Actor(
-                name=name,
-                description=desc,
-                relations=relations,
-                background=background,
-                llm=actor_llm
-            )
-        
-        # Create player
-        player = Player(
-            name=player_name,
-            description=player_description
-        )
-        
-        # Create a unique ID for this session
-        session_id = str(uuid.uuid4())
-        
-        # Create and store the stage
-        stage = Stage(
-            actors=actors, 
-            director=director, 
-            player=player, 
-            plot_objectives=plot_objectives,
-            socketio=self.socketio
-        )
-        
-        active_stages[session_id] = stage
-        
-        # Immediately send director_status to update frontend
-        if self.socketio:
-            self.socketio.emit('director_status', {"status": "directing", "message": "Director is directing..."})
-        
-        # If a user is logged in, save this session to the database
-        if user_id:
-            try:
-                # First check if this show exists in the DB, or create it
-                shows = db.get_shows_by_creator(user_id)
-                show_id = None
-                
-                for existing_show in shows:
-                    if existing_show['name'] == show:
-                        show_id = existing_show['id']
-                        break
-                
-                if not show_id:
-                    # Create a new show
-                    new_show = db.create_show(
-                        creator_id=user_id,
-                        name=show,
-                        description=description,
-                        characters=actors_data,
-                        relations=relations
-                    )
-                    show_id = new_show['id']
-                
-                # Now create or find the episode
-                episodes = db.get_episodes(show_id)
-                episode_id = None
-                episode_name = f"Episode {len(episodes) + 1}"
-                
-                new_episode = db.create_episode(
-                    show_id=show_id,
-                    creator_id=user_id,
-                    name=episode_name,
-                    description=f"Generated episode for {show}",
-                    background=background,
-                    plot_objectives=plot_objectives
-                )
-                episode_id = new_episode['id']
-                
-                # Finally, create a chat record
-                chat = db.create_chat(
-                    episode_id=episode_id,
-                    user_id=user_id,
-                    player_name=player_name,
-                    player_description=player_description
-                )
-                
-                # Link the chat ID to the stage for message persistence
-                stage.chat_id = chat['id']
-                
-            except Exception as e:
-                # Soft fail - continue with in-memory only
-                print(f"Failed to save session to database: {str(e)}")
-        
-        # Start the stage sequence in a background thread to not block the response
-        def start_sequence():
-            try:
-                # Give the frontend a moment to connect to the socket before starting
-                import time
-                time.sleep(1)
-                stage.run_sequence()
-            except Exception as e:
-                if self.socketio:
-                    self.socketio.emit('error', {'message': f'Error starting sequence: {str(e)}'})
+            # Get existing stage
+            stage = active_stages[chat_id]
             
-        thread = threading.Thread(target=start_sequence)
-        thread.daemon = True
-        thread.start()
-        
-        return jsonify({
-            'session_id': session_id,
-            'message': 'Stage created and started automatically',
-            'state': stage.get_state()
-        })
-    
-    def get(self, session_id):
-        """Get the state of a stage session"""
-        if session_id not in active_stages:
-            return {'error': 'Session not found'}, 404
-            
-        stage = active_stages[session_id]
-        return jsonify({
-            'session_id': session_id,
-            'state': stage.get_state()
-        })
-    
-class ResetSessionResource(Resource):
-    def __init__(self, **kwargs):
-        self.socketio = kwargs.get('socketio')
-        super().__init__()
-        
-    def post(self, session_id):
-        """Force reset a potentially stuck session"""
-        if session_id not in active_stages:
-            return {'error': 'Session not found'}, 404
-            
-        stage = active_stages[session_id]
-        was_reset = stage.reset_processing_state(force=True)
-        
-        if was_reset:
-            if self.socketio:
-                self.socketio.emit('status', {"message": "Session processing state has been reset"})
-                self.socketio.emit('director_status', {"status": "idle", "message": ""})
-            return {
-                'session_id': session_id,
-                'message': 'Processing state reset successfully',
-                'state': stage.get_state()
-            }
+            # Check if story is completed
+            if stage.story_completed:
+                socketio.emit('objective_status', {
+                    'completed': True,
+                    'story_completed': True,
+                    'index': stage.current_objective_index,
+                    'total': len(stage.plot_objectives),
+                    'message': 'Story is already complete.'
+                }, room=request.sid)
+            else:
+                # Send the current objective info
+                current_obj = stage.current_objective()
+                socketio.emit('objective_status', {
+                    'completed': False,
+                    'story_completed': False,
+                    'index': stage.current_objective_index,
+                    'current': current_obj,
+                    'total': len(stage.plot_objectives)
+                }, room=request.sid)
         else:
-            return {
-                'session_id': session_id,
-                'message': 'Session was not in processing state, no reset needed',
-                'state': stage.get_state()
-            }
-
-
-class AdvanceTurnResource(Resource):
-    def __init__(self, **kwargs):
-        self.socketio = kwargs.get('socketio')
-        super().__init__()
-        
-    def post(self, session_id):
-        """
-        Manual trigger to advance the turn for a stage session
-        Note: With the automatic progression, this should rarely be needed
-        """
-        if session_id not in active_stages:
-            return {'error': 'Session not found'}, 404
+            # Get the completed status from the chat data
+            is_completed = chat.get('completed', False) or chat.get('story_completed', False)
             
-        stage = active_stages[session_id]
-        
-        # Immediately send director status to update frontend
-        if self.socketio:
-            self.socketio.emit('director_status', {"status": "directing", "message": "Director is directing..."})
-        
-        # Start advance_turn in a background thread to not block the response
-        def advance_in_background():
-            try:
-                result = stage.advance_turn()
+            if is_completed:
+                # Send completed status directly from database
+                # We don't need to initialize the stage if it's already completed
+                total_objectives = len(json.loads(chat.get('plot_objectives', '[]'))) if isinstance(chat.get('plot_objectives'), str) else len(chat.get('plot_objectives', []))
+                socketio.emit('objective_status', {
+                    'completed': True,
+                    'story_completed': True,
+                    'index': chat.get('current_objective_index', 0),
+                    'total': total_objectives,
+                    'message': 'Story is already complete.'
+                }, room=request.sid)
+            else:
+                # If chat exists but stage doesn't, we'll initialize it when starting
+                socketio.emit('status', {
+                    'message': 'Ready to start chat',
+                    'ready': True,
+                    'chat_id': chat_id
+                }, room=request.sid)
+    
+    @socketio.on('start_chat')
+    def handle_start_chat(data):
+        """Start or resume a chat session"""
+        chat_id = data.get('chat_id')
+        if not chat_id:
+            socketio.emit('error', {'message': 'No chat ID provided'}, room=request.sid)
+            return
+
+        # Check if the stage already exists in memory
+        if chat_id in active_stages:
+            stage = active_stages[chat_id]
+            
+            # If story is already completed, just notify
+            if stage.story_completed:
+                socketio.emit('objective_status', {
+                    'completed': True,
+                    'story_completed': True,
+                    'index': stage.current_objective_index,
+                    'total': len(stage.plot_objectives),
+                    'message': 'Story is already complete.'
+                }, room=chat_id)
+                return
                 
-                # Save dialogue to database if chat_id is linked
-                if hasattr(stage, 'chat_id') and result and result.get('dialogue'):
-                    db.add_messages_batch(stage.chat_id, result['dialogue'])
-                    
-                    # Update chat progress
-                    db.update_chat(stage.chat_id, {
-                        'current_objective_index': stage.current_objective_index,
-                        'completed': stage.current_objective_index >= len(stage.plot_objectives)
-                    })
-                    
-            except Exception as e:
-                if self.socketio:
-                    self.socketio.emit('error', {'message': f'Error advancing turn: {str(e)}'})
-                    self.socketio.emit('director_status', {"status": "idle", "message": ""})
+            # If already processing, don't start again
+            if stage.is_processing:
+                socketio.emit('status', {'message': 'Already processing'}, room=chat_id)
+                return
+                
+            # Resume existing session
+            def resume_chat():
+                stage.advance_turn()
+                
+            thread = threading.Thread(target=resume_chat)
+            thread.daemon = True
+            thread.start()
             
-        thread = threading.Thread(target=advance_in_background)
+            return
+            
+        # If stage doesn't exist in memory, initialize it from database
+        try:
+            # Create new stage instance using chat_id
+            stage = Stage(chat_id=chat_id, socketio=socketio)
+            
+            # Check if already completed (based on database)
+            if stage.story_completed:
+                socketio.emit('objective_status', {
+                    'completed': True,
+                    'story_completed': True,
+                    'index': stage.current_objective_index,
+                    'total': len(stage.plot_objectives),
+                    'message': 'Story is already complete.'
+                }, room=chat_id)
+                return
+            
+            # Cache the stage in memory for performance
+            active_stages[chat_id] = stage
+            
+            # Start the stage sequence in a background thread
+            def start_sequence():
+                # Start the first turn
+                stage.advance_turn()
+                
+            thread = threading.Thread(target=start_sequence)
+            thread.daemon = True
+            thread.start()
+            
+            socketio.emit('status', {
+                'message': 'Chat started',
+                'started': True
+            }, room=chat_id)
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            socketio.emit('error', {'message': f'Error starting chat: {str(e)}'}, room=chat_id)
+    
+    @socketio.on('player_input')
+    def handle_player_input(data):
+        """Handle player input/interruption"""
+        chat_id = data.get('chat_id')
+        player_input = data.get('input')
+        
+        if not chat_id or not player_input:
+            socketio.emit('error', {'message': 'Missing chat ID or player input'}, room=request.sid)
+            return
+            
+        # Get or initialize the stage
+        stage = None
+        
+        # Check if the stage exists in memory first
+        if chat_id in active_stages:
+            stage = active_stages[chat_id]
+        else:
+            # Try to initialize the stage from database
+            try:
+                # Create the stage with the chat_id
+                stage = Stage(chat_id=chat_id, socketio=socketio)
+                active_stages[chat_id] = stage
+            except Exception as e:
+                socketio.emit('error', {
+                    'message': f'Error initializing chat: {str(e)}',
+                    'code': 'chat_not_initialized'
+                }, room=request.sid)
+                return
+            
+        # Check if already processing
+        if stage.is_processing:
+            socketio.emit('status', {'message': 'Already processing. Please wait.'}, room=chat_id)
+            return
+            
+        # Check if story is completed
+        if stage.story_completed:
+            socketio.emit('status', {'message': 'Story is already complete.'}, room=chat_id)
+            return
+            
+        # Process player input in a background thread
+        def process_input():
+            stage.player_interrupt(player_input)
+            
+        thread = threading.Thread(target=process_input)
         thread.daemon = True
         thread.start()
         
-        return jsonify({
-            'session_id': session_id,
-            'message': 'Turn advancement started',
-            'state': stage.get_state()
-        })
+        socketio.emit('status', {'message': 'Processing player input...'}, room=chat_id)
     
-
-class PlayerInterruptResource(Resource):
-    def __init__(self, **kwargs):
-        self.socketio = kwargs.get('socketio')
-        super().__init__()
+    @socketio.on('heartbeat')
+    def handle_heartbeat():
+        """Handle heartbeat to keep connection alive"""
+        pass  # Just acknowledging the heartbeat is enough
         
-    def post(self, session_id):
-        """Handle a player interruption"""
-        if session_id not in active_stages:
-            return {'error': 'Session not found'}, 404
-            
-        data = request.get_json()
-        player_input = data.get('player_input', '')
-        
-        if not player_input.strip():
-            return {'error': 'Empty player input'}, 400
-            
-        stage = active_stages[session_id]
-        
-        # Immediately send director status to update frontend
-        if self.socketio:
-            self.socketio.emit('director_status', {"status": "directing", "message": "Director is directing..."})
-        
-        # Handle interrupt in a background thread to not block the response
-        def interrupt_in_background():
-            try:
-                result = stage.player_interrupt(player_input)
+    # Add a function to clean up memory - you can call this periodically 
+    # if you're concerned about memory usage
+    def cleanup_inactive_stages():
+        """Remove stages that are completed or inactive from memory"""
+        for chat_id in list(active_stages.keys()):
+            stage = active_stages[chat_id]
+            if stage.story_completed:
+                del active_stages[chat_id]
                 
-                # Save player input and resulting dialogue to database if chat_id is linked
-                if hasattr(stage, 'chat_id') and stage.chat_id:
-                    # If there's dialogue in the result, save it to database
-                    if result and result.get('dialogue'):
-                        # Get the latest sequence number
-                        current_messages = db.get_messages(stage.chat_id)
-                        start_sequence = len(current_messages)
-                        
-                        # Prepare messages with proper sequence numbers
-                        dialogue_messages = []
-                        for idx, msg in enumerate(result['dialogue']):
-                            dialogue_messages.append({
-                                'role': msg['role'],
-                                'content': msg['content'],
-                                'type': msg['type'],
-                                'sequence': start_sequence + idx
-                            })
-                        
-                        if dialogue_messages:
-                            db.add_messages_batch(stage.chat_id, dialogue_messages)
-                    
-                    # Update chat progress
-                    db.update_chat(stage.chat_id, {
-                        'current_objective_index': stage.current_objective_index,
-                        'completed': stage.current_objective_index >= len(stage.plot_objectives)
-                    })
-                    
-            except Exception as e:
-                if self.socketio:
-                    self.socketio.emit('error', {'message': f'Error processing interruption: {str(e)}'})
-                    self.socketio.emit('director_status', {"status": "idle", "message": ""})
-            
-        thread = threading.Thread(target=interrupt_in_background)
-        thread.daemon = True
-        thread.start()
-        
-        return jsonify({
-            'session_id': session_id,
-            'message': 'Player interruption processed',
-            'state': stage.get_state()
-        })
-
-
-def setup_api(api, socketio):
-    # Authentication endpoints
-    api.add_resource(AuthResource, '/api/auth/<string:action>')
-    api.add_resource(ImageUploadResource, '/api/upload-image')
-    
-    # Show endpoints
-    api.add_resource(ShowsResource, '/api/shows')
-    api.add_resource(ShowResource, '/api/shows/<string:show_id>')
-    
-    # Episode endpoints
-    api.add_resource(EpisodesResource, '/api/shows/<string:show_id>/episodes')
-    api.add_resource(EpisodeResource, '/api/episodes/<string:episode_id>')
-    
-    # Chat endpoints
-    api.add_resource(ChatsResource, '/api/chats',
-                    resource_class_kwargs={'socketio': socketio})
-    api.add_resource(ChatResource, '/api/chats/<string:chat_id>')
-    
-    # Interactive stage endpoints
-    api.add_resource(StageResource, '/api/stage', '/api/stage/<string:session_id>', 
-                    resource_class_kwargs={'socketio': socketio})
-    api.add_resource(AdvanceTurnResource, '/api/stage/<string:session_id>/advance',
-                    resource_class_kwargs={'socketio': socketio})
-    api.add_resource(PlayerInterruptResource, '/api/stage/<string:session_id>/interrupt',
-                    resource_class_kwargs={'socketio': socketio})
-    api.add_resource(ResetSessionResource, '/api/stage/<string:session_id>/reset',
-                resource_class_kwargs={'socketio': socketio})
+    # You can expose this if needed
+    socketio.cleanup_inactive_stages = cleanup_inactive_stages
+ 

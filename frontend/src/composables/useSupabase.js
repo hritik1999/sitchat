@@ -1,10 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from "@supabase/supabase-js";
 
-// Create a single supabase client for the entire app
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseKey = import.meta.env.VITE_SUPABASE_KEY
-const supabase = createClient(supabaseUrl, supabaseKey)
+const supabaseUrl = "https://wpwichwnfgbpggcqujld.supabase.co";
+const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indwd2ljaHduZmdicGdnY3F1amxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA2NjAzMDcsImV4cCI6MjA1NjIzNjMwN30.y0QCwf--milc8b-3TjJvE-hHIFPKm8QqONFI8m7AjL4";
 
-export function useSupabase() {
-  return { supabase }
-}
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);

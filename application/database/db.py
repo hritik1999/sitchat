@@ -3,6 +3,7 @@ import json
 from supabase import create_client, Client
 from dotenv import load_dotenv
 from typing import Dict, List, Optional, Any, Union
+from flask import g
 
 # Load environment variables
 load_dotenv()
@@ -46,9 +47,25 @@ class SupabaseDB:
     
     def update_user_profile(self, user_id: str, data: dict) -> dict:
         """Update a user's profile"""
-        response = self.supabase.table('users').update(data).eq('id', user_id).execute()
-        return response.data[0] if response.data else None
-    
+        try:            
+            # Remove None values from the update data
+            update_data = {k: v for k, v in data.items() if v is not None}
+            
+            # Execute the update
+            response = self.supabase.table('users').update(update_data).eq('id', user_id).execute()
+            
+            if hasattr(response, 'data') and response.data:
+                return response.data[0]
+            else:
+                # Try to fetch the user to see if update actually worked
+                get_response = self.supabase.table('users').select('*').eq('id', user_id).execute()
+                if hasattr(get_response, 'data') and get_response.data:
+                    return get_response.data[0]
+            return None
+        except Exception as e:
+            print(f"Error in update_user_profile: {str(e)}")
+            return None
+        
     # ---- Show Operations ----
     
     def get_shows(self, limit: int = 20, offset: int = 0) -> List[dict]:
@@ -141,6 +158,15 @@ class SupabaseDB:
             return None
         
         return response.data[0]
+    
+    def get_episodes_by_creator(self, creator_id: str) -> List[dict]:
+        """Get episodes created by a specific user"""
+        response = self.supabase.table('episodes') \
+            .select('*') \
+            .eq('creator_id', creator_id) \
+            .order('created_at', desc=True) \
+            .execute()
+        return response.data
     
     def create_episode(self, show_id: str, creator_id: str, name: str, 
                       description: str, background: str, plot_objectives: list) -> dict:

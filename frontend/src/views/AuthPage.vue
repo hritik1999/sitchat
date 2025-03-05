@@ -1,219 +1,184 @@
 <template>
-    <div class="container mx-auto py-10 px-4">
-      <div class="mx-auto max-w-md space-y-6">
-        <div class="space-y-2 text-center">
-          <h1 class="text-3xl font-bold">{{ isLogin ? 'Welcome Back' : 'Create Account' }}</h1>
-          <p class="text-muted-foreground">
-            {{ isLogin ? 'Enter your credentials to sign in' : 'Enter your information to create an account' }}
+    <div class="min-h-screen flex flex-col md:flex-row bg-white">
+      <!-- Left Side - Compact Auth (30%) -->
+      <div class="w-full md:w-[30%] flex items-center justify-center p-6 bg-white">
+        <div class="w-full max-w-[320px] space-y-6">
+          <div class="text-center space-y-2">
+            <div class="mb-6">
+              <!-- SitChat text logo -->
+              <span class="text-4xl font-bold text-black tracking-wider">SitChat</span>
+            </div>
+            <h1 class="text-2xl font-bold text-black">Begin Your Story</h1>
+            <p class="text-sm text-gray-500">Experience your Favourite Sitcoms!</p>
+          </div>
+  
+          <div class="space-y-3">
+            <Button variant="outline" class="w-full h-11 gap-2 hover:bg-gray-100 transition-all" @click="signInWithProvider('google')">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/7/7e/Gmail_icon_%282020%29.svg" alt="Google Logo" class="h-4 w-4" />
+              <span class="text-sm text-black">Continue with Google</span>
+            </Button>
+            
+            <Button variant="outline" class="w-full h-11 gap-2 hover:bg-gray-100 transition-all" @click="signInWithProvider('apple')">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_logo_black.svg" alt="Apple Logo" class="h-4 w-4" />
+              <span class="text-sm text-black">Continue with Apple</span>
+            </Button>
+    
+            <div class="relative py-4">
+              <div class="absolute inset-0 flex items-center">
+                <span class="w-full border-t border-gray-300" />
+              </div>
+            </div>
+          </div>
+    
+          <p class="text-center text-xs text-gray-500 px-4">
+            By continuing, you agree to our 
+            <Button variant="link" class="text-xs h-auto p-0 text-gray-500">Terms</Button> 
+            and 
+            <Button variant="link" class="text-xs h-auto p-0 text-gray-500">Privacy</Button>
           </p>
         </div>
+      </div>
+    
+      <!-- Right Side - Immersive Preview (70%) -->
+      <div class="w-full md:w-[70%] relative min-h-[60vh] bg-black">
+        <div class="absolute inset-0 pattern-dots pattern-gray-500 pattern-opacity-20 pattern-size-4"></div>
         
-        <Card>
-          <CardHeader>
-            <CardTitle>{{ isLogin ? 'Sign In' : 'Sign Up' }}</CardTitle>
-            <CardDescription>
-              {{ isLogin ? 'Enter your email and password to sign in to your account' : 'Create a new account' }}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form @submit.prevent="handleSubmit" class="space-y-4">
-              <div class="space-y-2">
-                <Label for="email">Email</Label>
-                <Input 
-                  id="email" 
-                  v-model="form.email" 
-                  type="email" 
-                  placeholder="name@example.com" 
-                  required
-                  :disabled="loading"
-                />
-              </div>
-              
-              <div v-if="!isLogin" class="space-y-2">
-                <Label for="username">Username</Label>
-                <Input 
-                  id="username" 
-                  v-model="form.username" 
-                  placeholder="johndoe" 
-                  required
-                  :disabled="loading"
-                />
-              </div>
-              
-              <div class="space-y-2">
-                <div class="flex items-center justify-between">
-                  <Label for="password">Password</Label>
-                  <a href="#" class="text-xs text-muted-foreground underline-offset-4 hover:underline">
-                    Forgot password?
-                  </a>
-                </div>
-                <Input 
-                  id="password" 
-                  v-model="form.password" 
-                  type="password" 
-                  required
-                  :disabled="loading"
-                />
-              </div>
-              
-              <div v-if="!isLogin" class="space-y-2">
-                <Label for="confirmPassword">Confirm Password</Label>
-                <Input 
-                  id="confirmPassword" 
-                  v-model="form.confirmPassword" 
-                  type="password" 
-                  required
-                  :disabled="loading"
-                />
-              </div>
-              
-              <Button type="submit" class="w-full" :disabled="loading">
-                <Loader2 v-if="loading" class="mr-2 h-4 w-4 animate-spin" />
-                {{ isLogin ? 'Sign In' : 'Create Account' }}
-              </Button>
-            </form>
-          </CardContent>
-          <CardFooter>
-            <div class="text-center w-full text-sm">
-              {{ isLogin ? "Don't have an account?" : "Already have an account?" }}
-              <a 
-                href="#" 
-                @click.prevent="isLogin = !isLogin" 
-                class="font-medium text-primary underline-offset-4 hover:underline"
-              >
-                {{ isLogin ? 'Sign Up' : 'Sign In' }}
-              </a>
+        <div class="relative h-full flex items-center justify-center p-8">
+          <div class="max-w-4xl space-y-8 text-center">
+            <div class="space-y-4 animate-fade-in">
+              <h2 class="text-5xl font-bold text-white leading-tight">
+                Where Your Favourite Sitcoms Come<br>to <span class="text-gray-400">Life</span>
+              </h2>
+              <p class="text-xl text-gray-300">Interactive stories powered by AI</p>
             </div>
-          </CardFooter>
-        </Card>
+    
+            <div class="grid grid-cols-3 gap-6 mt-12">
+              <div class="feature-card">
+                <div class="icon-container">
+                  <SparklesIcon class="h-6 w-6 text-white" />
+                </div>
+                <h3 class="text-lg font-medium text-white mt-4">Dynamic Episodes</h3>
+                <p class="text-sm text-gray-300 mt-2">Experience dynamic stories where you become part of the narrative.</p>
+              </div>
+    
+              <div class="feature-card">
+                <div class="icon-container">
+                  <GlobeIcon class="h-6 w-6 text-white" />
+                </div>
+                <h3 class="text-lg font-medium text-white mt-4">Create Stories</h3>
+                <p class="text-sm text-gray-300 mt-2">Design your shows with detailed characters, relationships, and plot objectives.</p>
+              </div>
+    
+              <div class="feature-card">
+                <div class="icon-container">
+                  <ShareIcon class="h-6 w-6 text-white" />
+                </div>
+                <h3 class="text-lg font-medium text-white mt-4">Participate</h3>
+                <p class="text-sm text-gray-300 mt-2">Join the conversation as an interactive character, influencing the story's direction.</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </template>
   
-  <script setup>
-  import { ref, computed } from 'vue'
-  import { useRouter, useRoute } from 'vue-router'
-  import { useSupabase } from '@/composables/useSupabase'
-  import { useToast } from 'vue-toastification'
-  import { Loader2 } from 'lucide-vue-next'
-  import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+  <script>
+  import { useRouter } from 'vue-router'
   import { Button } from '@/components/ui/button'
-  import { Input } from '@/components/ui/input'
-  import { Label } from '@/components/ui/label'
-  
-  const router = useRouter()
-  const route = useRoute()
-  const { supabase } = useSupabase()
-  const toast = useToast()
-  
-  const isLogin = ref(true)
-  const loading = ref(false)
-  const form = ref({
-    email: '',
-    username: '',
-    password: '',
-    confirmPassword: ''
-  })
-  
-  // Handle form submission
-  async function handleSubmit() {
-    loading.value = true
-    
-    try {
-      if (isLogin.value) {
-        await login()
-      } else {
-        await register()
+  import { PlayIcon, SparklesIcon, GlobeIcon, ShareIcon } from 'lucide-vue-next'
+  import { supabase } from '@/composables/useSupabase';
+
+  export default {
+    name: 'AuthPage',
+    components: {
+      Button,
+      PlayIcon,
+      SparklesIcon,
+      GlobeIcon,
+      ShareIcon
+    },
+    setup() {
+      const router = useRouter()
+      return { router }
+    },
+    data() {
+      return {
+        api_url: import.meta.env.VITE_API_URL || 'http://localhost:5001',
+        authSubscription: null,
+        email: '',
+        username: '',
+        password: '',
+        confirmPassword: ''
       }
-    } catch (error) {
-      toast.error(error.message || 'An error occurred')
-    } finally {
-      loading.value = false
-    }
-  }
-  
-  // Log in user
-  async function login() {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: form.value.email,
-      password: form.value.password
-    })
-    
-    if (error) throw error
-    
-    toast.success('Logged in successfully')
-    router.push(route.query.redirect || '/')
-  }
-  
-  // Register new user
-async function register() {
-  // Validate passwords match
-  if (form.value.password !== form.value.confirmPassword) {
-    throw new Error('Passwords do not match')
-  }
-  
-  loading.value = true;
-  
-  try {
-    // Step 1: Register with Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: form.value.email,
-      password: form.value.password,
-      options: {
-        data: {
-          username: form.value.username
+    },
+    methods: {
+      async signInWithProvider(provider) {
+            const { data, error } = await supabase.auth.signInWithOAuth({
+                provider: provider, // "google" or "apple"
+                options: {
+                redirectTo: `${window.location.origin}/auth/callback`,
+                },
+            });
+            if (error) console.error("OAuth error:", error);
+            }
+    },
+    created() {
+    // Set up the auth state listener when the component is created
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (session) {
+          localStorage.setItem("supabase_session", JSON.stringify(session));
+        } else {
+          localStorage.removeItem("supabase_session");
         }
       }
-    })
-    
-    if (authError) throw authError
-    
-    if (!authData?.user?.id) {
-      throw new Error('Failed to create account')
+    );
+    this.authSubscription = authListener;
+  },
+  beforeDestroy() {
+    // Clean up the subscription to avoid memory leaks
+    if (this.authSubscription) {
+      this.authSubscription.unsubscribe();
     }
-    
-    // Step 2: Wait briefly to ensure auth is properly set up
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Step 3: Check if profile already exists
-    const { data: existingProfile, error: checkError } = await supabase
-      .from('users')
-      .select('id')
-      .eq('id', authData.user.id)
-      .maybeSingle()
-    
-    // Only create profile if it doesn't exist yet
-    if (!existingProfile && !checkError) {
-      // Profile doesn't exist yet, try to create it
-      const { error: profileError } = await supabase
-        .from('users')
-        .insert([
-          {
-            id: authData.user.id,
-            username: form.value.username
-          }
-        ])
-      
-      if (profileError) {
-        console.error('Profile creation error:', profileError);
-        // If it's not a duplicate key error, we should report it
-        if (profileError.code !== '23505') {
-          toast.warning('Account created but profile setup is pending');
-        }
-        // No need to throw error - the trigger will likely handle this
-      }
-    } else if (checkError) {
-      console.error('Profile check error:', checkError);
-      // Just log this error, don't throw - auth worked, so we can continue
-    }
-    
-    toast.success('Account created successfully!');
-    router.push('/');
-  } catch (error) {
-    toast.error(error.message || 'An error occurred during registration');
-    console.error('Registration error:', error);
-  } finally {
-    loading.value = false;
+  },
   }
-}
   </script>
+  
+  <style>
+  /* Custom styles for black & white theme */
+  .pattern-dots {
+    background-image: radial-gradient(currentColor 1px, transparent 1px);
+    background-size: 16px 16px;
+  }
+  
+  .feature-card {
+    @apply p-6 rounded-xl backdrop-blur-sm bg-gray-900 hover:bg-gray-800 transition-all cursor-pointer border border-white;
+  }
+  
+  .icon-container {
+    @apply p-3 rounded-lg w-fit transition-transform hover:scale-105;
+  }
+  
+  .animate-fade-in {
+    animation: fadeIn 0.8s ease-out;
+  }
+  
+  .animate-slide-up {
+    animation: slideUp 0.6s ease-out;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .icon-container {
+  @apply p-3 rounded-lg w-full flex justify-center items-center transition-transform hover:scale-105;
+}
+  </style>
+  
