@@ -2,38 +2,220 @@ import json
 import re
 import time
 import threading
+from application.database.db import db
+from application.play.player import Player
+from application.play.actor import Actor
+from application.play.director import Director
+from application.ai.llm import actor_llm, director_llm
 
 class Stage:
-    def __init__(self, actors, director, player, plot_objectives, socketio=None):
+    def __init__(self, actors=None, director=None, socketio=None, chat_id=None):
         """
+        Initialize a Stage with either explicit actors/director or load from database with chat_id
+        
+        Parameters:
         actors: dict mapping actor names to Actor objects.
         director: a Director object (with check_objective method).
-        player: a Player object.
-        plot_objectives: list of plot objective strings.
         socketio: Socket.IO instance for real-time communication.
+        chat_id: Optional chat ID to load stage data from database
         """
-        self.actors = actors
-        self.director = director
-        self.player = player
-        self.plot_objectives = plot_objectives
-        self.current_objective_index = 0
-        self.context = ""
-        self.plot_failure_reason = ''
-        self.chat_summary = ''
-        self.full_chat = ''
-        self.last_script_data = None
-        self.last_outline = None
         self.socketio = socketio
         self.dialogue_history = []
         self.is_processing = False  # Flag to prevent concurrent processing
         self.processing_lock = threading.Lock()  # Lock for thread safety
         self.story_completed = False  # Flag to track if the story is complete
+        self.full_chat = ''
+        self.chat_id = None
+
+        if chat_id:
+            # Load stage from database
+            self.chat_id = chat_id
+            chat_data = db.get_chat(chat_id)
+            
+            if not chat_data:
+                raise ValueError(f"Chat with ID {chat_id} not found in database")
+                
+            self.current_objective_index = chat_data.get('current_objective_index', 0)
+            self.plot_failure_reason = chat_data.get('plot_failure_reason', '')
+            self.context = chat_data.get('context', '')
+            self.chat_summary = chat_data.get('chat_summary', '')
+            self.last_script_data = chat_data.get('last_script_data', None)
+            self.last_outline = chat_data.get('last_outline', None)
+            self.full_chat = chat_data.get('full_chat', '')
+            
+            # Handle story completion status - check both fields
+            self.story_completed = chat_data.get('story_completed', False) or chat_data.get('completed', False)
+            
+            # Create player from chat data
+            player_name = chat_data.get('player_name', 'Player')
+            player_description = chat_data.get('player_description', '')
+            self.player = Player(name=player_name, description=player_description)
+
+            # Load episode data for plot objectives
+            episode_id = chat_data.get('episode_id')
+            episode_data = db.get_episode(episode_id)
+            
+            # Handle JSON strings for plot objectives
+            if isinstance(episode_data.get('plot_objectives'), str):
+                try:
+                    self.plot_objectives = json.loads(episode_data.get('plot_objectives', '[]'))
+                except:
+                    self.plot_objectives = []
+            else:
+                self.plot_objectives = episode_data.get('plot_objectives', [])
+            
+            background = episode_data.get('background', '')
+
+            # Load show data for character info
+            show_id = episode_data.get('show_id')
+            show_data = db.get_show(show_id)
+            self.show = show_data.get('name', '')
+            self.description = show_data.get('description', '')
+            
+            # Handle JSON strings for characters
+            if isinstance(show_data.get('characters'), str):
+                try:
+                    characters = json.loads(show_data.get('characters', '[]'))
+                except:
+                    characters = []
+            else:
+                characters = show_data.get('characters', [])
+                
+            relations = show_data.get('relations', '')
+
+            # Create actor instances for each character
+            actors = {}
+            for character in characters:
+                # Handle both object format and direct attribute access
+                char_name = character.get('name') if isinstance(character, dict) else character.name
+                char_desc = character.get('description') if isinstance(character, dict) else character.description
+                
+                actors[char_name] = Actor(
+                    char_name,
+                    char_desc,
+                    relations,
+                    background,
+                    actor_llm
+                )
+                
+            self.actors = actors
+            
+            # Create director with appropriate context
+            self.director = Director(
+                director_llm,
+                self.show,
+                self.description,
+                background,
+                self.actors,
+                self.player,
+                relations
+            )
+            
+            # Load messages from database into dialogue history
+            self.load_messages_from_db()
+        else:
+            # Traditional initialization with provided objects
+            self.actors = actors
+            self.director = director
+            self.player = None  # Will be set later
+            self.plot_objectives = []
+            self.current_objective_index = 0
+            self.context = ""
+            self.plot_failure_reason = ''
+            self.chat_summary = ''
+            self.last_script_data = None
+            self.last_outline = None
+
+    def save_state_to_db(self):
+        """
+        Save current state of the stage to the database
+        """
+        if not self.chat_id:
+            # Cannot save without a chat_id
+            self.emit_event('error', {"message": "Cannot save state: no chat_id provided"})
+            return False
+            
+        # Prepare chat data for save
+        chat_data = {
+            'current_objective_index': self.current_objective_index,
+            'plot_failure_reason': self.plot_failure_reason,
+            'context': self.context,
+            'chat_summary': self.chat_summary,
+            'last_script_data': self.last_script_data,
+            'last_outline': self.last_outline,
+            'story_completed': self.story_completed,
+            'completed': self.story_completed  # Make sure the completed flag is synced with story_completed
+        }
+        
+        # We don't store dialogue_history in the chats table since it's in the messages table
+        # This avoids duplication of data
+        
+        # Save to database
+        try:
+            db.update_chat(self.chat_id, chat_data)
+            return True
+        except Exception as e:
+            self.emit_event('error', {"message": f"Error saving state to database: {str(e)}"})
+            return False
+            
+    def load_messages_from_db(self):
+        """
+        Load messages from database and reconstruct dialogue history
+        This is useful when reconnecting to an existing chat
+        """
+        if not self.chat_id:
+            self.emit_event('error', {"message": "Cannot load messages: no chat_id provided"})
+            return False
+            
+        try:
+            # Fetch messages from database
+            messages = db.get_messages(self.chat_id)
+            
+            if not messages:
+                return True  # No messages, but not an error
+                
+            # Clear existing dialogue history
+            self.dialogue_history = []
+            
+            # Reconstruct dialogue history from messages
+            for msg in messages:
+                dialogue_entry = {
+                    "role": msg['role'],
+                    "content": msg['content'],
+                    "type": msg['type']
+                }
+                self.dialogue_history.append(dialogue_entry)
+                
+                # Reconstruct chat context
+                if msg['type'] != 'system':  # Skip system messages for context
+                    if msg['type'] == 'player_input':
+                        line = f"{msg['role']}: {msg['content']}"
+                    elif msg['type'] == 'narration':
+                        line = f"Narration: {msg['content']}"
+                    else:
+                        line = f"{msg['role']}: {msg['content']}"
+                        
+                    if self.context:
+                        self.context += "\n" + line
+                    else:
+                        self.context = line
+                        
+            return True
+                
+        except Exception as e:
+            self.emit_event('error', {"message": f"Error loading messages from database: {str(e)}"})
+            return False
 
     def add_to_chat_history(self, text):
+        """Add text to chat history and persist if needed"""
         if self.context:
             self.context += "\n" + text
         else:
             self.context = text
+            
+        # Automatically save state after significant updates
+        if self.chat_id:
+            self.save_state_to_db()
 
     def current_objective(self):
         if self.current_objective_index < len(self.plot_objectives):
@@ -88,6 +270,10 @@ class Stage:
                 "story_completed": is_final  # Add this flag for the frontend
             }
             
+            # Save state to database after objective completion
+            if self.chat_id:
+                self.save_state_to_db()
+                
             # Emit the updated status
             self.emit_event('objective_status', objective_status)
             
@@ -102,6 +288,11 @@ class Stage:
             else:
                 # Mark the story as completed
                 self.story_completed = True
+                
+                # Save completion status to database
+                if self.chat_id:
+                    self.save_state_to_db()
+                    
                 self.emit_event('status', {"message": "All objectives completed. Story complete."})
                 # Send a clear completion event
                 self.emit_event('objective_status', {
@@ -120,6 +311,10 @@ class Stage:
             # Continue with the current objective
             self.plot_failure_reason = 'Plot objective not met due to the following reason: ' + check_result.get('reason', '') + ' Please make the plot so it is addressed and the plot objective is completed'
             
+            # Save failure reason to database
+            if self.chat_id:
+                self.save_state_to_db()
+                
             # Prepare status message
             status_msg = f"Objective '{current_obj}' not yet completed: {check_result.get('reason', '')}"
             objective_status = {
@@ -137,7 +332,6 @@ class Stage:
             
             return False, objective_status
 
-
     def process_director_script(self, script_json):
         """
         Process the JSON script generated by the director.
@@ -151,6 +345,8 @@ class Stage:
             script_data = {"scripts": []}
         
         dialogue_lines = []
+        messages_to_save = []
+        sequence_count = len(self.dialogue_history)
         
         for line in script_data.get("scripts", []):
             role = line.get("role", "")
@@ -188,6 +384,15 @@ class Stage:
                 }
                 dialogue_lines.append(dialogue_entry)
                 
+                # Add to messages to be saved in database
+                messages_to_save.append({
+                    "role": role,
+                    "content": reply_output,
+                    "type": "actor_dialogue",
+                    "sequence": sequence_count
+                })
+                sequence_count += 1
+                
                 # Emit the dialogue line through Socket.IO if available
                 self.emit_event('dialogue', dialogue_entry)
                 
@@ -197,7 +402,6 @@ class Stage:
                     "role": "Narration",
                     "status": "typing",
                 })
-                
                 
                 content = line.get('content', instructions)
                 dialogue_line = f"Narration: {content}"
@@ -216,6 +420,16 @@ class Stage:
                     "type": "narration"
                 }
                 dialogue_lines.append(dialogue_entry)
+                
+                # Add to messages to be saved in database
+                messages_to_save.append({
+                    "role": "Narration",
+                    "content": content,
+                    "type": "narration",
+                    "sequence": sequence_count
+                })
+                sequence_count += 1
+                
                 self.emit_event('dialogue', dialogue_entry)
                 
             else:
@@ -242,10 +456,32 @@ class Stage:
                     "type": "other"
                 }
                 dialogue_lines.append(dialogue_entry)
+                
+                # Add to messages to be saved in database
+                messages_to_save.append({
+                    "role": role,
+                    "content": instructions,
+                    "type": "other",
+                    "sequence": sequence_count
+                })
+                sequence_count += 1
+                
                 self.emit_event('dialogue', dialogue_entry)
         
         # Store the dialogue history for API access
         self.dialogue_history.extend(dialogue_lines)
+        
+        # Save messages to database
+        if self.chat_id and messages_to_save:
+            try:
+                db.add_messages_batch(self.chat_id, messages_to_save)
+            except Exception as e:
+                self.emit_event('error', {"message": f"Error saving messages to database: {str(e)}"})
+        
+        # Save dialogue history to database
+        if self.chat_id:
+            self.save_state_to_db()
+            
         return dialogue_lines
 
     def advance_turn(self):
@@ -271,6 +507,11 @@ class Stage:
             if not objective:
                 # Mark the story as completed
                 self.story_completed = True
+                
+                # Save completion status to database
+                if self.chat_id:
+                    self.save_state_to_db()
+                    
                 self.emit_event('status', {"message": "No current objective. Story complete."})
                 # Send a clear completion event to the frontend
                 self.emit_event('objective_status', {
@@ -299,8 +540,8 @@ class Stage:
                 # Updating the background to include the summary and clearing the chat history to reduce context window
                 self.context = ''
                 self.director.background = self.chat_summary
-                for actor in self.actors:
-                    self.actors[actor].background = self.chat_summary
+                for actor_name in self.actors:
+                    self.actors[actor_name].background = self.chat_summary
                     
                 # Get the new outline from the result
                 new_outline = outline.get('new_outline', outline)  # Fallback to the entire outline
@@ -308,6 +549,10 @@ class Stage:
                 # Director generates turn instructions (script) based on the outline
                 script_json = self.director.generate_turn_instructions(self.context, new_outline)
                 self.last_script_data = script_json
+                
+                # Save outline and script to database
+                if self.chat_id:
+                    self.save_state_to_db()
 
                 # Director is done, about to process lines
                 self.emit_event('director_status', {"status": "idle", "message": ""})
@@ -328,68 +573,7 @@ class Stage:
             
             try:
                 check_result = json.loads(self._clean_json(check_result_str))
-                if check_result.get("completed", False):
-                    # Increment the objective index BEFORE emitting status
-                    old_index = self.current_objective_index
-                    self.current_objective_index += 1
-                    self.plot_failure_reason = ''
-                    
-                    # Get the next objective (if any)
-                    next_objective = self.current_objective()
-                    
-                    status_msg = f"Objective '{objective}' completed: {check_result.get('reason', '')}"
-                    
-                    # Update the objective status to include all relevant information
-                    objective_status = {
-                        "completed": True,
-                        "message": status_msg,
-                        "reason": check_result.get('reason', ''),
-                        "index": self.current_objective_index,  # Send the NEW index
-                        "current": next_objective,  # Send the NEW objective
-                        "total": len(self.plot_objectives)
-                    }
-                    
-                    # First emit the status so UI updates correctly
-                    self.emit_event('objective_status', objective_status)
-                    
-                    # Then schedule the next turn with a clear objective
-                    if self.current_objective_index < len(self.plot_objectives):
-                        def schedule_next_turn():
-                            # Reset processing state before scheduling next turn
-                            with self.processing_lock:
-                                self.is_processing = False
-                            self.trigger_next_turn()
-                            
-                        # Start the next turn immediately without delay
-                        schedule_next_turn()
-                    else:
-                        self.emit_event('status', {"message": "All objectives completed. Story complete."})
-                        with self.processing_lock:
-                            self.is_processing = False
-                else:
-                    status_msg = f"Objective '{objective}' not yet completed: {check_result.get('reason', '')}"
-                    self.plot_failure_reason = 'Plot objective not met due to the following reason: ' + check_result.get('reason', '') + ' Please make the plot so it is addressed and the plot objective is completed'
-                    objective_status = {
-                        "completed": False,
-                        "message": status_msg,
-                        "reason": check_result.get('reason', ''),
-                        "index": self.current_objective_index,
-                        "current": objective,
-                        "total": len(self.plot_objectives)
-                    }
-                    
-                    # Emit status for UI
-                    self.emit_event('objective_status', objective_status)
-                    
-                    # Continue with the current objective without delay
-                    def schedule_next_turn():
-                        # Reset processing state before scheduling next turn
-                        with self.processing_lock:
-                            self.is_processing = False
-                        self.trigger_next_turn()
-                        
-                    # Start immediately without delay
-                    schedule_next_turn()
+                completed, objective_status = self.check_objective_completion(check_result, objective)
                 
             except Exception as e:
                 error_msg = f"Error parsing objective check result: {str(e)}"
@@ -471,6 +655,23 @@ class Stage:
             self.dialogue_history.append(player_dialogue)
             self.emit_event('dialogue', player_dialogue)
             
+            # Save player input to message database
+            if self.chat_id:
+                sequence = len(self.dialogue_history) - 1  # Use the current position in history
+                try:
+                    db.add_message(
+                        self.chat_id,
+                        self.player.name,
+                        player_input,
+                        "player_input",
+                        sequence
+                    )
+                except Exception as e:
+                    self.emit_event('error', {"message": f"Error saving player message to database: {str(e)}"})
+                
+                # Also save overall state
+                self.save_state_to_db()
+                
             # Show that director is working
             self.emit_event('director_status', {"status": "directing", "message": "Director is directing..."})
             
@@ -479,6 +680,11 @@ class Stage:
             if not current_obj:
                 self.emit_event('status', {"message": "No current objective to continue after interruption."})
                 self.story_completed = True  # Mark as completed if there's no objective
+                
+                # Save completion status
+                if self.chat_id:
+                    self.save_state_to_db()
+                    
                 with self.processing_lock:
                     self.is_processing = False
                 return {"status": "error", "message": "No current objective", "dialogue": []}
@@ -492,6 +698,10 @@ class Stage:
             script_json = self.director.generate_turn_instructions(self.context, new_outline)
             self.last_script_data = script_json
             
+            # Save new outline and script to database
+            if self.chat_id:
+                self.save_state_to_db()
+                
             # Director is done working
             self.emit_event('director_status', {"status": "idle", "message": ""})
             
@@ -536,6 +746,10 @@ class Stage:
         # If index exceeds or equals objectives count, explicitly mark as completed
         if self.current_objective_index >= len(self.plot_objectives):
             self.story_completed = True  # Ensure this flag is set
+            
+            # Save the completion status to database
+            if self.chat_id:
+                self.save_state_to_db()
         
         return {
             "current_objective_index": self.current_objective_index,
@@ -568,3 +782,54 @@ class Stage:
             "status": "started",
             "message": "Story sequence started"
         }
+        
+    def create_new_chat(self, player_name, player_description, episode_id, user_id):
+        """
+        Create a new chat entry in the database and initialize this stage with it
+        
+        Parameters:
+        player_name: Name of the player character
+        player_description: Description of the player character
+        episode_id: ID of the episode to play
+        user_id: ID of the user creating this chat
+        
+        Returns:
+        str: New chat_id
+        """
+        try:
+            # Create chat in database using the SupabaseDB method
+            chat_result = db.create_chat(
+                episode_id=episode_id,
+                user_id=user_id,
+                player_name=player_name,
+                player_description=player_description
+            )
+            
+            if not chat_result:
+                error_msg = "Failed to create chat in database"
+                self.emit_event('error', {"message": error_msg})
+                return None
+                
+            chat_id = chat_result['id']
+            self.chat_id = chat_id
+            
+            # Reinitialize this stage with the new chat_id
+            self.__init__(chat_id=chat_id, socketio=self.socketio)
+            
+            # Add initial system message
+            try:
+                db.add_message(
+                    chat_id=chat_id,
+                    role="system",
+                    content="Chat started",
+                    type="system",
+                    sequence=0
+                )
+            except Exception as e:
+                self.emit_event('error', {"message": f"Warning: Could not add initial system message: {str(e)}"})
+            
+            return chat_id
+        except Exception as e:
+            error_msg = f"Error creating new chat: {str(e)}"
+            self.emit_event('error', {"message": error_msg})
+            return None

@@ -1,5 +1,5 @@
 from flask_restful import Resource, Api, marshal_with, fields, reqparse, marshal
-from flask import request, jsonify, g, Response
+from flask import request, jsonify, g, Response, session
 import threading
 from application.database.db import db
 from application.auth.auth import get_current_user
@@ -19,7 +19,7 @@ class UserResource(Resource):
         # Get current user from the token
         user_id = get_current_user()
         if not user_id:
-            return {"error": "Unauthorized"}, 401
+            return {"error": "Unauthorized. Please login again"}, 401
 
         # Get user data from the database
         user = db.get_user(user_id)
@@ -36,7 +36,7 @@ class UserResource(Resource):
             # Get current user from the token
             user_id = get_current_user()
             if not user_id:
-                return {"error": "Unauthorized"}, 401
+                return {"error": "Unauthorized.Please login again"}, 401
 
             # Get current user data
             current_user = db.get_user(user_id)
@@ -143,7 +143,7 @@ class ShowsResource(Resource):
         # Get current user from the token
         user_id = get_current_user()
         if not user_id:
-            return {"error": "Unauthorized"}, 401
+            return {"error": "Unauthorized. Please login again"}, 401
             
         # Check if image file is provided
         if 'image' not in request.files:
@@ -237,7 +237,7 @@ class ShowResource(Resource):
         """Update a show"""
         user_id = get_current_user()
         if not user_id:
-            return {"error": "Unauthorized"}, 401
+            return {"error": "Unauthorized. Please login again"}, 401
 
         # Verify ownership
         show = db.get_show(show_id)
@@ -359,7 +359,7 @@ class EpisodesResource(Resource):
         print(data)
         # Verify authentication
         if not user_id:
-            return {"error": "Unauthorized"}, 401
+            return {"error": "Unauthorized. Please login again"}, 401
         
         # Verify ownership of the show
         show = db.get_show(show_id)
@@ -428,7 +428,7 @@ class ChatResource(Resource):
         """Create a new chat session for an episode"""
         user_id = get_current_user()
         if not user_id:
-            return {"error": "Unauthorized"}, 401
+            return {"error": "Unauthorized. Please login again"}, 401
             
         data = request.get_json()
         player_name = data.get('player_name', 'Player')
@@ -458,7 +458,7 @@ class ChatResource(Resource):
         """Get chat sessions"""
         user_id = get_current_user()
         if not user_id:
-            return {"error": "Unauthorized"}, 401
+            return {"error": "Unauthorized. Please login again"}, 401
         
         # If chat_id is provided, get that specific chat
         if chat_id:
@@ -500,23 +500,6 @@ def setup_socket_handlers(socketio):
         print(f"Client disconnected: {request.sid}")
         # We don't remove stages from memory on disconnect to support reconnection
 
-    @socketio.on('auth')
-    def handle_auth(data):
-        """Authenticate the user with a token"""
-        token = data.get('token')
-        if not token:
-            socketio.emit('error', {'message': 'No auth token provided'}, room=request.sid)
-            return
-            
-        user_id = get_current_user(token)
-        if not user_id:
-            socketio.emit('error', {'message': 'Invalid auth token'}, room=request.sid)
-            return
-            
-        # Store user ID in Flask session
-        session['user_id'] = user_id
-        socketio.emit('auth_success', {'user_id': user_id}, room=request.sid)
-
     @socketio.on('join_chat')
     def handle_join_chat(data):
         """Join a chat room and initialize if needed"""
@@ -525,38 +508,17 @@ def setup_socket_handlers(socketio):
             socketio.emit('error', {'message': 'No chat ID provided'}, room=request.sid)
             return
             
-        # Get user ID from session
-        user_id = session.get('user_id')
-        if not user_id:
-            # Try to authenticate with token if provided
-            token = data.get('token')
-            if token:
-                user_id = get_current_user(token)
-                if user_id:
-                    session['user_id'] = user_id
-                else:
-                    socketio.emit('error', {'message': 'Invalid auth token'}, room=request.sid)
-                    return
-            else:
-                socketio.emit('error', {'message': 'Not authenticated'}, room=request.sid)
-                return
-            
         # Get the chat from database
         chat = db.get_chat(chat_id)
         if not chat:
             socketio.emit('error', {'message': 'Chat not found'}, room=request.sid)
             return
             
-        # Verify ownership
-        if chat.get('user_id') != user_id:
-            socketio.emit('error', {'message': 'Not authorized to access this chat'}, room=request.sid)
-            return
-            
         # Join the Socket.IO room for this chat
         join_room(chat_id)
         
-        # Get chat messages
-        messages = db.get_chat_messages(chat_id)
+        # Get chat messages directly from database
+        messages = db.get_messages(chat_id)
         
         # Send the chat history to the client
         for message in messages:
@@ -591,12 +553,27 @@ def setup_socket_handlers(socketio):
                     'total': len(stage.plot_objectives)
                 }, room=request.sid)
         else:
-            # If chat exists but stage doesn't, we'll initialize it when starting
-            socketio.emit('status', {
-                'message': 'Ready to start chat',
-                'ready': True,
-                'chat_id': chat_id
-            }, room=request.sid)
+            # Get the completed status from the chat data
+            is_completed = chat.get('completed', False) or chat.get('story_completed', False)
+            
+            if is_completed:
+                # Send completed status directly from database
+                # We don't need to initialize the stage if it's already completed
+                total_objectives = len(json.loads(chat.get('plot_objectives', '[]'))) if isinstance(chat.get('plot_objectives'), str) else len(chat.get('plot_objectives', []))
+                socketio.emit('objective_status', {
+                    'completed': True,
+                    'story_completed': True,
+                    'index': chat.get('current_objective_index', 0),
+                    'total': total_objectives,
+                    'message': 'Story is already complete.'
+                }, room=request.sid)
+            else:
+                # If chat exists but stage doesn't, we'll initialize it when starting
+                socketio.emit('status', {
+                    'message': 'Ready to start chat',
+                    'ready': True,
+                    'chat_id': chat_id
+                }, room=request.sid)
     
     @socketio.on('start_chat')
     def handle_start_chat(data):
@@ -605,24 +582,8 @@ def setup_socket_handlers(socketio):
         if not chat_id:
             socketio.emit('error', {'message': 'No chat ID provided'}, room=request.sid)
             return
-            
-        # Get user ID from session
-        user_id = session.get('user_id')
-        if not user_id:
-            # Try to authenticate with token if provided
-            token = data.get('token')
-            if token:
-                user_id = get_current_user(token)
-                if user_id:
-                    session['user_id'] = user_id
-                else:
-                    socketio.emit('error', {'message': 'Invalid auth token'}, room=request.sid)
-                    return
-            else:
-                socketio.emit('error', {'message': 'Not authenticated'}, room=request.sid)
-                return
-            
-        # Check if the stage already exists
+
+        # Check if the stage already exists in memory
         if chat_id in active_stages:
             stage = active_stages[chat_id]
             
@@ -652,72 +613,23 @@ def setup_socket_handlers(socketio):
             
             return
             
-        # If stage doesn't exist, initialize it
+        # If stage doesn't exist in memory, initialize it from database
         try:
-            # Get chat info
-            chat = db.get_chat(chat_id)
-            if not chat:
-                socketio.emit('error', {'message': 'Chat not found'}, room=chat_id)
-                return
-                
-            # Verify ownership
-            if chat.get('user_id') != user_id:
-                socketio.emit('error', {'message': 'Not authorized to access this chat'}, room=chat_id)
-                return
-                
-            # Get episode details
-            episode = db.get_episode(chat.get('episode_id'))
-            if not episode:
-                socketio.emit('error', {'message': 'Episode not found'}, room=chat_id)
-                return
-                
-            # Get show details
-            show = db.get_show(episode.get('show_id'))
-            if not show:
-                socketio.emit('error', {'message': 'Show not found'}, room=chat_id)
-                return
-                
-            # Create director
-            characters = show.get('characters', {})
-            director = Director(
-                director_llm,
-                show.get('name', ''),
-                show.get('description', ''), 
-                episode.get('background', ''), 
-                characters, 
-                chat.get('player_description', ''), 
-                show.get('relations', '')
-            )
+            # Create new stage instance using chat_id
+            stage = Stage(chat_id=chat_id, socketio=socketio)
             
-            # Create actors
-            actors = {}
-            for name, desc in characters.items():
-                actors[name] = Actor(
-                    name=name,
-                    description=desc,
-                    relations=show.get('relations', ''),
-                    background=episode.get('background', ''),
-                    llm=actor_llm
-                )
+            # Check if already completed (based on database)
+            if stage.story_completed:
+                socketio.emit('objective_status', {
+                    'completed': True,
+                    'story_completed': True,
+                    'index': stage.current_objective_index,
+                    'total': len(stage.plot_objectives),
+                    'message': 'Story is already complete.'
+                }, room=chat_id)
+                return
             
-            # Create player
-            player = Player(
-                name=chat.get('player_name', 'Player'),
-                description=chat.get('player_description', '')
-            )
-            
-            # Create and store the stage with the chat_id
-            stage = Stage(
-                actors=actors, 
-                director=director, 
-                player=player, 
-                plot_objectives=episode.get('plot_objectives', []),
-                session_id=chat_id,
-                socketio=socketio,
-                user_id=user_id
-            )
-            
-            # Cache the stage in memory
+            # Cache the stage in memory for performance
             active_stages[chat_id] = stage
             
             # Start the stage sequence in a background thread
@@ -749,37 +661,24 @@ def setup_socket_handlers(socketio):
             socketio.emit('error', {'message': 'Missing chat ID or player input'}, room=request.sid)
             return
             
-        # Get user ID from session
-        user_id = session.get('user_id')
-        if not user_id:
-            # Try to authenticate with token if provided
-            token = data.get('token')
-            if token:
-                user_id = get_current_user(token)
-                if user_id:
-                    session['user_id'] = user_id
-                else:
-                    socketio.emit('error', {'message': 'Invalid auth token'}, room=request.sid)
-                    return
-            else:
-                socketio.emit('error', {'message': 'Not authenticated'}, room=request.sid)
-                return
-            
-        # Check if the stage exists
-        if chat_id not in active_stages:
-            # Try to initialize the stage
-            socketio.emit('error', {
-                'message': 'Chat not initialized. Please start the chat first.',
-                'code': 'chat_not_initialized'
-            }, room=request.sid)
-            return
-            
-        stage = active_stages[chat_id]
+        # Get or initialize the stage
+        stage = None
         
-        # Verify ownership
-        if stage.user_id != user_id:
-            socketio.emit('error', {'message': 'Not authorized to access this chat'}, room=request.sid)
-            return
+        # Check if the stage exists in memory first
+        if chat_id in active_stages:
+            stage = active_stages[chat_id]
+        else:
+            # Try to initialize the stage from database
+            try:
+                # Create the stage with the chat_id
+                stage = Stage(chat_id=chat_id, socketio=socketio)
+                active_stages[chat_id] = stage
+            except Exception as e:
+                socketio.emit('error', {
+                    'message': f'Error initializing chat: {str(e)}',
+                    'code': 'chat_not_initialized'
+                }, room=request.sid)
+                return
             
         # Check if already processing
         if stage.is_processing:
@@ -805,3 +704,16 @@ def setup_socket_handlers(socketio):
     def handle_heartbeat():
         """Handle heartbeat to keep connection alive"""
         pass  # Just acknowledging the heartbeat is enough
+        
+    # Add a function to clean up memory - you can call this periodically 
+    # if you're concerned about memory usage
+    def cleanup_inactive_stages():
+        """Remove stages that are completed or inactive from memory"""
+        for chat_id in list(active_stages.keys()):
+            stage = active_stages[chat_id]
+            if stage.story_completed:
+                del active_stages[chat_id]
+                
+    # You can expose this if needed
+    socketio.cleanup_inactive_stages = cleanup_inactive_stages
+ 

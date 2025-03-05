@@ -40,7 +40,7 @@ const routes = [
     path: '/show/:show_id/chat/:chat_id',
     name: 'Chat',
     component: ChatPage,
-    meta: { requiresAuth: true, layout: 'main' }
+    meta: { requiresAuth: true, layout: 'none' }
   },
   {
     path: '/create/show',

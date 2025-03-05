@@ -251,11 +251,5 @@ export default {
     
     this.authSubscription = data
   },
-  beforeUnmount() {
-    // Clean up the subscription to avoid memory leaks
-    if (this.authSubscription) {
-      this.authSubscription.unsubscribe()
-    }
-  }
 }
 </script>
