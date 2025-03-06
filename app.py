@@ -3,7 +3,8 @@ eventlet.monkey_patch()
 import os
 from flask import Flask, request, jsonify, session
 from application.auth.auth import supabase
-from application.api.api import ShowsResource, ShowResource, EpisodesResource, EpisodeResource, UserResource, ChatResource , setup_socket_handlers, active_stages
+from application.api.api import ShowsResource, ShowResource, EpisodesResource, EpisodeResource, UserResource, ChatResource 
+from application.api.socket import setup_socket_handlers, stage_manager
 from flask_cors import CORS
 from flask_restful import Api
 from flask_socketio import SocketIO
@@ -29,6 +30,7 @@ CORS(app,
      supports_credentials=True)
 
 # Get configuration from environment
+app.config['STAGE_MANAGER'] = stage_manager
 DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
 SECRET_KEY = os.getenv('SECRET_KEY') or 'your-secret-key-for-socket-io'
 

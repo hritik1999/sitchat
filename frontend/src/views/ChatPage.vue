@@ -30,10 +30,23 @@
       </div>
     </div>
 
-    <!-- Director Directing Message - with more prominent background -->
-    <div v-if="directorDirecting" class="container mx-auto px-4 pt-2">
-      <div class="text-center text-sm text-white py-2 bg-indigo-600 dark:bg-indigo-800 rounded-md p-2 animate-pulse">
+    <!-- Status Indicators -->
+    <div class="container mx-auto px-4 pt-2 space-y-2">
+      <!-- Director Directing Message -->
+      <div v-if="directorDirecting" class="text-center text-sm text-white py-2 bg-indigo-600 dark:bg-indigo-800 rounded-md p-2 animate-pulse">
         <span class="font-medium">Director is directing the scene...</span>
+      </div>
+      
+      <!-- Processing State Indicator -->
+      <div v-if="processingState && processingState !== 'IDLE'" 
+           class="text-center text-sm py-2 rounded-md p-2"
+           :class="getProcessingStateClass(processingState)">
+        <span class="font-medium">{{ getProcessingStateMessage(processingState) }}</span>
+      </div>
+      
+      <!-- Reconnection Indicator -->
+      <div v-if="isReconnecting" class="text-center text-sm text-white py-2 bg-yellow-600 dark:bg-yellow-800 rounded-md p-2 animate-pulse">
+        <span class="font-medium">Reconnecting to server...</span>
       </div>
     </div>
 
@@ -82,9 +95,17 @@
             </div>
           </div>
 
-          <!-- Error Message -->
-          <div v-if="errorMessage" class="bg-red-100 dark:bg-red-900/30 p-3 rounded-lg text-red-700 dark:text-red-300 text-sm">
-            {{ errorMessage }}
+          <!-- Error Message with Details -->
+          <div v-if="errorMessage" class="space-y-2">
+            <div class="bg-red-100 dark:bg-red-900/30 p-3 rounded-lg text-red-700 dark:text-red-300 text-sm">
+              {{ errorMessage }}
+            </div>
+            <div v-if="errorDetails" class="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg text-red-600 dark:text-red-400 text-xs">
+              <p>Details: {{ errorDetails }}</p>
+              <button @click="errorDetails = null" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 underline mt-1">
+                Hide Details
+              </button>
+            </div>
           </div>
         </div>
 
@@ -97,7 +118,7 @@
               placeholder="Type your response..."
               class="resize-none"
               rows="2"
-              :disabled="isSending || storyCompleted"
+              :disabled="isSending || storyCompleted || !canSendMessage"
               maxlength="500"
               @keydown.enter.exact.prevent="sendMessage"
               @keydown="handleTyping"
@@ -106,8 +127,9 @@
               <span class="text-sm text-muted-foreground">
                 {{ input.length }}/500
               </span>
-              <Button @click="sendMessage" :disabled="!input.trim() || isSending || storyCompleted">
-                Send
+              <Button @click="sendMessage" :disabled="!input.trim() || isSending || storyCompleted || !canSendMessage">
+                <span v-if="isSending" class="mr-2">Sending...</span>
+                <span v-else>Send</span>
                 <SendIcon class="h-4 w-4 ml-2" />
               </Button>
             </div>
@@ -159,11 +181,33 @@ export default {
       messages: [],
       statusMessage: '',
       errorMessage: '',
+      errorDetails: null,
       socket: null,
       isConnected: false,
+      isReconnecting: false,
       isChatStarted: false,
       storyCompleted: false,
-      typingTimeout: null
+      typingTimeout: null,
+      reconnectAttempts: 0,
+      maxReconnectAttempts: 5,
+      processingState: 'IDLE',
+      connectionErrorTime: null,
+      lastHeartbeat: Date.now(),
+      heartbeatInterval: null
+    }
+  },
+
+  computed: {
+    hasActiveTypingIndicators() {
+      // Check if any indicator has 'typing' status
+      return Object.values(this.typingIndicators).some(status => status === 'typing');
+    },
+    
+    canSendMessage() {
+      // Can only send if connected and state is IDLE
+      return this.isConnected && 
+        !this.isReconnecting && 
+        (this.processingState === 'IDLE' || !this.processingState);
     }
   },
 
@@ -173,19 +217,16 @@ export default {
     
     // Fetch show and episode details
     this.fetchChatDetails()
+    
+    // Setup heartbeat interval
+    this.setupHeartbeat()
   },
 
   beforeUnmount() {
     this.disconnectSocket()
+    this.clearHeartbeatInterval()
   },
 
-  computed: {
-    hasActiveTypingIndicators() {
-      // Check if any indicator has 'typing' status
-      return Object.values(this.typingIndicators).some(status => status === 'typing');
-    }
-  },
-  
   methods: {
     async fetchChatDetails() {
       try {
@@ -202,6 +243,11 @@ export default {
         this.episodeName = chatData.episodes?.name || 'Unknown Episode'
         this.storyCompleted = chatData.completed || chatData.story_completed || false
         
+        // Get processing state if available
+        if (chatData.processing_state) {
+          this.processingState = chatData.processing_state
+        }
+        
         // If we have a show ID from the episode
         if (chatData.episodes?.show_id) {
           const showData = await fetchApi(`api/shows/${chatData.episodes.show_id}`)
@@ -213,14 +259,60 @@ export default {
       } catch (error) {
         console.error('Error fetching chat details:', error)
         this.errorMessage = 'Failed to load chat details. Please try refreshing the page.'
+        this.errorDetails = error.message || 'Unknown error'
+      }
+    },
+
+    setupHeartbeat() {
+      // Send a heartbeat every 30 seconds to keep the connection alive
+      this.heartbeatInterval = setInterval(() => {
+        if (this.socket && this.isConnected) {
+          this.socket.emit('heartbeat')
+          this.lastHeartbeat = Date.now()
+        }
+        
+        // If it's been too long since the last successful heartbeat (over 2 minutes),
+        // attempt to reconnect
+        if (Date.now() - this.lastHeartbeat > 120000 && this.isConnected) {
+          console.log('No recent heartbeat, attempting reconnection')
+          this.handleConnectionTimeout()
+        }
+      }, 30000)
+    },
+    
+    clearHeartbeatInterval() {
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval)
+        this.heartbeatInterval = null
+      }
+    },
+    
+    handleConnectionTimeout() {
+      this.isConnected = false
+      this.isReconnecting = true
+      
+      // Try to reconnect
+      if (this.socket) {
+        this.socket.disconnect()
+        setTimeout(() => {
+          this.connectToSocket()
+        }, 1000)
       }
     },
 
     async connectToSocket() {
       try {
+        this.isReconnecting = true
+        
         // Get current session for authentication
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
+
+        if (!token) {
+          this.errorMessage = 'Authentication error. Please log in again.'
+          this.isReconnecting = false
+          return
+        }
 
         // Initialize Socket.io connection with auth token
         this.socket = io(this.SOCKET_URL, {
@@ -229,7 +321,11 @@ export default {
           },
           extraHeaders: {
             Authorization: token ? `Bearer ${token}` : ''
-          }
+          },
+          reconnection: true,
+          reconnectionAttempts: this.maxReconnectAttempts,
+          reconnectionDelay: 1000,
+          timeout: 10000
         });
 
         // Connection events
@@ -244,9 +340,17 @@ export default {
         this.socket.on('objective_status', this.handleObjectiveStatus);
         this.socket.on('typing_indicator', this.handleTypingIndicator);
         this.socket.on('director_status', this.handleDirectorStatus);
+        
+        // Add a reconnect event handler
+        this.socket.io.on('reconnect_attempt', this.handleReconnectAttempt);
+        this.socket.io.on('reconnect', this.handleReconnect);
+        this.socket.io.on('reconnect_failed', this.handleReconnectFailed);
+        
       } catch (error) {
         console.error('Error connecting to socket:', error);
         this.errorMessage = 'Connection error. Please try refreshing the page.';
+        this.errorDetails = error.message || 'Unknown error';
+        this.isReconnecting = false;
       }
     },
 
@@ -261,13 +365,21 @@ export default {
         this.socket.off('objective_status')
         this.socket.off('typing_indicator')
         this.socket.off('director_status')
+        
+        this.socket.io.off('reconnect_attempt')
+        this.socket.io.off('reconnect')
+        this.socket.io.off('reconnect_failed')
+        
         this.socket.disconnect()
       }
     },
 
     handleConnect() {
       this.isConnected = true
+      this.isReconnecting = false
+      this.reconnectAttempts = 0
       this.errorMessage = ''
+      this.lastHeartbeat = Date.now()
       console.log('Connected to socket server')
       
       // Join the chat room
@@ -276,18 +388,48 @@ export default {
 
     handleConnectionError(error) {
       this.isConnected = false
-      this.errorMessage = 'Connection to server failed. Please try refreshing the page.'
+      this.connectionErrorTime = Date.now()
       console.error('Socket connection error:', error)
+      
+      // Only show the error message if we're not actively trying to reconnect
+      if (!this.isReconnecting) {
+        this.errorMessage = 'Connection to server failed. Please try refreshing the page.'
+        this.errorDetails = error.message || 'Unknown error'
+      }
     },
 
     handleDisconnect(reason) {
       this.isConnected = false
       console.log('Disconnected from socket server:', reason)
       
-      if (reason === 'io server disconnect') {
-        // Server disconnected us, try to reconnect
-        this.socket.connect()
+      // If we're not already trying to reconnect, start now
+      if (!this.isReconnecting) {
+        this.isReconnecting = true
+        
+        if (reason === 'io server disconnect') {
+          // Server disconnected us, try to reconnect
+          this.socket.connect()
+        }
       }
+    },
+    
+    handleReconnectAttempt(attemptNumber) {
+      this.isReconnecting = true
+      this.reconnectAttempts = attemptNumber
+      console.log(`Reconnect attempt ${attemptNumber}/${this.maxReconnectAttempts}`)
+    },
+    
+    handleReconnect() {
+      this.isReconnecting = false
+      this.reconnectAttempts = 0
+      this.errorMessage = ''
+      console.log('Successfully reconnected to server')
+    },
+    
+    handleReconnectFailed() {
+      this.isReconnecting = false
+      this.errorMessage = 'Failed to reconnect to server after multiple attempts. Please refresh the page.'
+      console.error('Reconnection failed after maximum attempts')
     },
 
     startChat() {
@@ -299,7 +441,7 @@ export default {
     },
 
     sendMessage() {
-      if (!this.input.trim() || this.isSending || this.storyCompleted) return
+      if (!this.input.trim() || this.isSending || this.storyCompleted || !this.canSendMessage) return
 
       this.isSending = true
       
@@ -317,9 +459,35 @@ export default {
       })
       
       // Clear input and scroll
+      const inputContent = this.input
       this.input = ''
       this.scrollToBottom()
-      this.isSending = false
+      
+      // Set a timeout to clear sending state if no response
+      setTimeout(() => {
+        if (this.isSending) {
+          this.isSending = false
+          console.log('Message send operation timed out')
+          
+          // If we didn't get a response in 10 seconds, check connection
+          if (!this.errorMessage) {
+            this.checkConnectionStatus()
+          }
+        }
+      }, 10000)
+    },
+    
+    checkConnectionStatus() {
+      // Check if we're still connected
+      if (!this.isConnected || this.isReconnecting) {
+        this.errorMessage = 'You appear to be disconnected. Please wait for reconnection or refresh the page.'
+        return
+      }
+      
+      // Send a heartbeat to check connection
+      if (this.socket) {
+        this.socket.emit('heartbeat')
+      }
     },
 
     handleTyping() {
@@ -338,6 +506,9 @@ export default {
     },
 
     handleDialogue(message) {
+      // Clear sending state once we get a dialogue response
+      this.isSending = false
+      
       // Validate message before adding
       if (message && typeof message === 'object' && message.content) {
         // Add message to the chat
@@ -351,12 +522,22 @@ export default {
     },
 
     handleStatus(statusData) {
-      if (statusData && statusData.message) {
+      if (!statusData) return
+      
+      // Clear sending state
+      this.isSending = false
+      
+      if (statusData.message) {
         this.statusMessage = statusData.message
       }
       
+      // Update processing state if provided
+      if (statusData.state) {
+        this.processingState = statusData.state
+      }
+      
       // Auto-start the chat if ready and not already started
-      if (statusData && statusData.ready === true && !this.isChatStarted && !this.storyCompleted) {
+      if (statusData.ready === true && !this.isChatStarted && !this.storyCompleted) {
         // Delay starting to allow UI to render
         setTimeout(() => {
           this.startChat()
@@ -365,6 +546,9 @@ export default {
     },
 
     handleError(errorData) {
+      // Clear sending state
+      this.isSending = false
+      
       if (!errorData) return
       
       if (errorData.message) {
@@ -376,6 +560,14 @@ export default {
           // Don't display this specific error to the user, it's a backend issue
         } else {
           this.errorMessage = errorData.message
+          
+          // If there's a detailed error, store it separately
+          if (errorData.details) {
+            this.errorDetails = errorData.details
+          } else {
+            this.errorDetails = null
+          }
+          
           console.error('Socket error:', errorData)
         }
       }
@@ -402,6 +594,7 @@ export default {
       // Check if story is completed
       if (objectiveData.story_completed || objectiveData.final) {
         this.storyCompleted = true
+        this.processingState = 'COMPLETED'
         this.statusMessage = "Story completed! You've reached the end of this episode."
       }
       
@@ -476,6 +669,30 @@ export default {
       
       // Default for any actor
       return styleMap['actor_dialogue']
+    },
+    
+    getProcessingStateClass(state) {
+      const stateClasses = {
+        'INITIALIZING': 'bg-blue-500 dark:bg-blue-700 text-white',
+        'PROCESSING': 'bg-indigo-600 dark:bg-indigo-800 text-white animate-pulse',
+        'IDLE': '',
+        'FAILED': 'bg-red-500 dark:bg-red-700 text-white',
+        'COMPLETED': 'bg-green-600 dark:bg-green-800 text-white'
+      }
+      
+      return stateClasses[state] || 'bg-gray-500 dark:bg-gray-700 text-white'
+    },
+    
+    getProcessingStateMessage(state) {
+      const stateMessages = {
+        'INITIALIZING': 'Initializing story...',
+        'PROCESSING': 'Processing...',
+        'IDLE': '',
+        'FAILED': 'Error processing story',
+        'COMPLETED': 'Story completed!'
+      }
+      
+      return stateMessages[state] || `Status: ${state}`
     }
   },
   
