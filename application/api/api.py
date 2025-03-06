@@ -227,7 +227,6 @@ class ShowResource(Resource):
     def get(self, show_id):
         """Get a specific show by ID"""
         show = db.get_show(show_id)
-        print(show)
         if not show:
             return {"error": "Show not found"}, 404
         
@@ -356,7 +355,6 @@ class EpisodesResource(Resource):
         """Create a new episode for a show"""
         user_id = get_current_user()
         data = request.get_json()
-        print(data)
         # Verify authentication
         if not user_id:
             return {"error": "Unauthorized. Please login again"}, 401
@@ -433,7 +431,7 @@ class ChatResource(Resource):
         data = request.get_json()
         player_name = data.get('player_name', 'Player')
         player_description = data.get('player_description', '')
-        print(data)
+
         # Fetch episode details
         episode = db.get_episode(episode_id)
         if not episode:
@@ -449,7 +447,7 @@ class ChatResource(Resource):
         
         if not chat:
             return {"error": "Failed to create chat session"}, 500
-        print(chat)
+
         return jsonify({
             "chat": chat,
         })

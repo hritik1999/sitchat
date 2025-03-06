@@ -9,9 +9,16 @@ from flask_restful import Api
 from flask_socketio import SocketIO
 import logging
 
-# Set up logging
+# Simple solution: just set higher log levels for the libraries you want to silence
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Set higher log levels for API-related libraries
+logging.getLogger('supabase').setLevel(logging.ERROR)  # Only show errors
+logging.getLogger('openai').setLevel(logging.ERROR)    # Only show errors
+logging.getLogger('httpx').setLevel(logging.ERROR)     # HTTP client used by these libraries
+logging.getLogger('urllib3').setLevel(logging.ERROR)   # Another HTTP client
+logging.getLogger('requests').setLevel(logging.ERROR)  # Another HTTP client
 
 # instantiate the app
 app = Flask(__name__)
