@@ -35,21 +35,6 @@
             <span class="font-medium">Director is directing the scene...</span>
           </div>
 
-          <!-- Typing Indicators -->
-          <div 
-            v-for="(indicatorStatus, role) in typingIndicators" 
-            :key="role" 
-            v-if="indicatorStatus === 'typing'"
-            class="flex items-center gap-2 text-muted-foreground"
-          >
-            <div class="flex space-x-1">
-              <div class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 0ms" />
-              <div class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 150ms" />
-              <div class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 300ms" />
-            </div>
-            <span class="text-sm">{{ role }} is typing...</span>
-          </div>
-
           <!-- Current Objective -->
           <div v-if="currentObjective" class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg mb-4 border border-blue-100 dark:border-blue-800">
             <h3 class="font-medium text-sm text-blue-700 dark:text-blue-300">Current Objective:</h3>
@@ -71,6 +56,31 @@
               </div>
               <div class="p-3 rounded-lg" :class="getMessageStyle(msg.type || '', msg.role || '')">
                 {{ msg.content }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Typing Indicators - Inside chat window -->
+          <div v-if="hasActiveTypingIndicators" class="my-2">
+            <div v-for="(status, role) in typingIndicators" :key="role">
+              <div 
+                v-if="status === 'typing'"
+                class="flex items-start gap-3"
+              >
+                <div class="flex-1 max-w-[90%]">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="font-semibold text-sm" :class="getRoleColor(role)">
+                      {{ role }}
+                    </span>
+                  </div>
+                  <div class="p-3 rounded-lg bg-gray-100 dark:bg-gray-800 inline-flex items-center">
+                    <div class="flex space-x-1">
+                      <div class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 0ms" />
+                      <div class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 150ms" />
+                      <div class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 300ms" />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -173,6 +183,13 @@ export default {
     this.disconnectSocket()
   },
 
+  computed: {
+    hasActiveTypingIndicators() {
+      // Check if any indicator has 'typing' status
+      return Object.values(this.typingIndicators).some(status => status === 'typing');
+    }
+  },
+  
   methods: {
     async fetchChatDetails() {
       try {
