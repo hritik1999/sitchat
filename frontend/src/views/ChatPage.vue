@@ -425,7 +425,7 @@ export default {
     },
 
     goBack() {
-      this.$router.push({ name: 'shows' })
+      this.$router.go(-1)
     },
     
     getRoleColor(role) {

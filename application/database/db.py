@@ -235,7 +235,7 @@ class SupabaseDB:
             'user_id': user_id,
             'player_name': player_name,
             'player_description': player_description,
-            'completed': False,
+            'story_completed': False,
             'current_objective_index': 0
         }
         

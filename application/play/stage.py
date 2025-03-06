@@ -144,7 +144,6 @@ class Stage:
             'last_script_data': self.last_script_data,
             'last_outline': self.last_outline,
             'story_completed': self.story_completed,
-            'completed': self.story_completed  # Make sure the completed flag is synced with story_completed
         }
         
         # We don't store dialogue_history in the chats table since it's in the messages table
