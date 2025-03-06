@@ -30,9 +30,9 @@
       </div>
     </div>
 
-    <!-- Director Directing Message - Moved here to be always visible -->
+    <!-- Director Directing Message - with more prominent background -->
     <div v-if="directorDirecting" class="container mx-auto px-4 pt-2">
-      <div class="text-center text-sm text-muted-foreground py-2 bg-amber-50 dark:bg-amber-900/20 rounded-md p-2 animate-pulse">
+      <div class="text-center text-sm text-white py-2 bg-indigo-600 dark:bg-indigo-800 rounded-md p-2 animate-pulse">
         <span class="font-medium">Director is directing the scene...</span>
       </div>
     </div>
@@ -42,10 +42,6 @@
       <div class="h-full flex flex-col border rounded-lg bg-background dark:bg-gray-900">
         <!-- Messages Area -->
         <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
-          <!-- Status Message -->
-          <div v-if="statusMessage" class="text-center text-sm text-muted-foreground py-2 mb-4">
-            {{ statusMessage }}
-          </div>
 
           <!-- Messages -->
           <div v-for="(msg, index) in messages" :key="index" class="flex gap-3">
@@ -205,9 +201,6 @@ export default {
         this.episodeId = chatData.episode_id || this.episodeId
         this.episodeName = chatData.episodes?.name || 'Unknown Episode'
         this.storyCompleted = chatData.completed || chatData.story_completed || false
-        this.objectiveIndex = chatData.current_objective_index || 0
-        this.totalObjectives = chatData.plot_objectives.length || 1
-        this.objectiveProgress = `${this.objectiveIndex + 1}/${this.totalObjectives}`
         
         // If we have a show ID from the episode
         if (chatData.episodes?.show_id) {

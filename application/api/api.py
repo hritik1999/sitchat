@@ -498,7 +498,29 @@ def setup_socket_handlers(socketio):
     def handle_disconnect():
         """Handle client disconnection"""
         print(f"Client disconnected: {request.sid}")
-        # We don't remove stages from memory on disconnect to support reconnection
+        
+        # Find and stop any active stages associated with this client
+        client_rooms = getattr(request, 'rooms', set())
+        
+        # Remove the client's own room
+        if request.sid in client_rooms:
+            client_rooms.remove(request.sid)
+        
+        # For each room (likely to be a chat_id) the client was in
+        for chat_id in client_rooms:
+            if chat_id in active_stages:
+                # Set processing flag to False to stop any running operations
+                with active_stages[chat_id].processing_lock:
+                    active_stages[chat_id].is_processing = False
+                
+                # Optionally emit a status message to the room
+                socketio.emit('status', {'message': 'Chat paused due to client disconnect'}, room=chat_id)
+                
+                # If you want to completely remove the stage from memory
+                # del active_stages[chat_id]
+                # But this might cause issues for reconnections
+                
+                print(f"Stopped stage for chat_id: {chat_id} due to client disconnect")
 
     @socketio.on('join_chat')
     def handle_join_chat(data):
