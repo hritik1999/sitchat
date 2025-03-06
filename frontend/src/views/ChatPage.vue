@@ -375,16 +375,23 @@ export default {
     },
 
     handleConnect() {
-      this.isConnected = true
-      this.isReconnecting = false
-      this.reconnectAttempts = 0
-      this.errorMessage = ''
-      this.lastHeartbeat = Date.now()
-      console.log('Connected to socket server')
-      
-      // Join the chat room
-      this.socket.emit('join_chat', { chat_id: this.chatId })
-    },
+  this.isConnected = true
+  this.isReconnecting = false
+  this.reconnectAttempts = 0
+  this.errorMessage = ''
+  this.lastHeartbeat = Date.now()
+  console.log('[Socket] Connected to socket server');
+  
+  // Clear existing messages if we're reconnecting to avoid duplicates
+  if (this.messages.length > 0 && !this.isChatStarted) {
+    console.log('[UI] Clearing existing messages before joining chat room');
+    this.messages = [];
+  }
+  
+  // Join the chat room
+  console.log('[Socket] Joining chat room:', this.chatId);
+  this.socket.emit('join_chat', { chat_id: this.chatId })
+},
 
     handleConnectionError(error) {
       this.isConnected = false
@@ -506,20 +513,29 @@ export default {
     },
 
     handleDialogue(message) {
-      // Clear sending state once we get a dialogue response
-      this.isSending = false
-      
-      // Validate message before adding
-      if (message && typeof message === 'object' && message.content) {
-        // Add message to the chat
-        this.messages.push({
-          role: message.role || 'Unknown',
-          content: message.content,
-          type: message.type || ''
-        })
-        this.scrollToBottom()
-      }
-    },
+  // Clear sending state once we get a dialogue response
+  this.isSending = false
+  
+  // Debug log
+  console.log('[Socket] Received dialogue:', message);
+  
+  // Validate message before adding
+  if (message && typeof message === 'object' && message.content) {
+    // Add message to the chat
+    this.messages.push({
+      role: message.role || 'Unknown',
+      content: message.content,
+      type: message.type || ''
+    })
+    
+    // Debug log
+    console.log('[UI] Added message to display, total messages:', this.messages.length);
+    
+    this.scrollToBottom()
+  } else {
+    console.warn('[Socket] Received invalid dialogue message:', message);
+  }
+},
 
     handleStatus(statusData) {
       if (!statusData) return

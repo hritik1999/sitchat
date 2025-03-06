@@ -587,25 +587,32 @@ class Stage:
         try:
             # Clean and parse JSON
             script_str = self._clean_json(script_json)
+            logger.info(f"Processing director script for chat {self.chat_id}")
+            
             try:
                 script_data = json.loads(script_str)
+                scripts_count = len(script_data.get("scripts", []))
+                logger.info(f"Successfully parsed script with {scripts_count} dialogue items")
             except json.JSONDecodeError as e:
                 logger.error(f"Error parsing script JSON: {str(e)}\nScript: {script_str[:200]}...")
                 script_data = {"scripts": []}
-                
+                    
             dialogue_lines = []
             messages_to_save = []
             
             with self._state_lock:
                 sequence_count = len(self.dialogue_history)
                 
-                for line in script_data.get("scripts", []):
+                script_items = script_data.get("scripts", [])
+                for i, line in enumerate(script_items):
+                    logger.info(f"Processing script item {i+1}/{len(script_items)}")
                     role = line.get("role", "")
                     # For actor lines, check for "instruction" then fallback to "content"
                     instructions = line.get("instruction", "") or line.get("content", "")
                     
                     if role in self.actors:
                         # Show typing indicator
+                        logger.info(f"Emitting typing indicator for {role}")
                         self.emit_event('typing_indicator', {
                             "role": role,
                             "status": "typing",
@@ -616,6 +623,7 @@ class Stage:
                         
                         actor = self.actors[role]
                         # Update the actor's chat_history dynamically before calling reply.
+                        logger.info(f"Getting reply from actor {role}")
                         reply_output = actor.reply(self.context, instructions)
                         dialogue_line = f"{role}: {reply_output}"
                         self.add_to_chat_history(dialogue_line)
@@ -649,10 +657,12 @@ class Stage:
                         sequence_count += 1
                         
                         # Emit the dialogue line through Socket.IO if available
+                        logger.info(f"Emitting dialogue for {role}")
                         self.emit_event('dialogue', dialogue_entry)
                         
                     elif role.lower() == "narration":
                         # Show narration is being added
+                        logger.info(f"Emitting typing indicator for Narration")
                         self.emit_event('typing_indicator', {
                             "role": "Narration",
                             "status": "typing",
@@ -689,10 +699,12 @@ class Stage:
                         })
                         sequence_count += 1
                         
+                        logger.info(f"Emitting narration dialogue")
                         self.emit_event('dialogue', dialogue_entry)
                         
                     else:
                         # Unrecognized role; treat as narration.
+                        logger.info(f"Processing unknown role: {role}")
                         self.emit_event('typing_indicator', {
                             "role": role,
                             "status": "typing",
@@ -729,6 +741,7 @@ class Stage:
                         })
                         sequence_count += 1
                         
+                        logger.info(f"Emitting dialogue for unknown role: {role}")
                         self.emit_event('dialogue', dialogue_entry)
                 
                 # Store the dialogue history for API access
@@ -736,9 +749,11 @@ class Stage:
             
             # Save messages to database as a batch operation
             if self.chat_id and messages_to_save:
+                logger.info(f"Saving {len(messages_to_save)} messages to database for chat {self.chat_id}")
                 with self._db_lock:
                     try:
                         db.add_messages_batch(self.chat_id, messages_to_save)
+                        logger.info(f"Successfully saved messages to database for chat {self.chat_id}")
                     except Exception as e:
                         logger.error(f"Error saving messages to database: {str(e)}", exc_info=True)
                         self.emit_event('error', {"message": f"Error saving messages: {str(e)}"})
@@ -752,8 +767,9 @@ class Stage:
                     # Error already logged
                     pass
             
+            logger.info(f"Processed {len(dialogue_lines)} dialogue lines for chat {self.chat_id}")
             return dialogue_lines
-            
+                
         except Exception as e:
             error_msg = f"Error processing director script: {str(e)}"
             logger.error(error_msg, exc_info=True)
@@ -793,6 +809,7 @@ class Stage:
             self._operation_timestamp = time.time()
         
         try:
+            logger.info(f"Starting advance_turn (operation {operation_id}) for chat {self.chat_id}")
             objective = self.current_objective()
             if not objective:
                 with self._state_lock:
@@ -822,13 +839,39 @@ class Stage:
                 return {"status": "complete", "message": "Story complete", "dialogue": []}
             
             # Emit event that director is working
+            logger.info(f"Director starting work for chat {self.chat_id}")
             self.emit_event('director_status', {"status": "directing", "message": "Director is directing..."})
             
+            # Set up a timeout protection for director work
+            director_timeout = 120  # 2 minutes timeout
+            director_start_time = time.time()
+            
             # Director generates an outline based on the current chat history and current plot objective
-            outline_str = self.director.generate_outline(self.context, objective, self.plot_failure_reason)
+            try:
+                logger.info(f"Generating outline for chat {self.chat_id} with objective: {objective[:30]}...")
+                outline_str = self.director.generate_outline(self.context, objective, self.plot_failure_reason)
+                
+                # Check for timeout
+                if time.time() - director_start_time > director_timeout:
+                    raise TimeoutError("Director outline generation timed out")
+                    
+                logger.info(f"Outline generated for chat {self.chat_id}, length: {len(outline_str)}")
+            except Exception as e:
+                error_msg = f"Error generating outline: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                # Explicitly return director to idle state
+                self.emit_event('director_status', {"status": "idle", "message": ""})
+                self.emit_event('error', {"message": error_msg})
+                
+                with self._state_lock:
+                    self._state = StageState.IDLE
+                    self._current_operation_id = None
+                
+                return {"status": "error", "message": error_msg, "dialogue": []}
             
             try:
                 cleaned_outline = self._clean_json(outline_str)
+                logger.info(f"Parsing outline JSON for chat {self.chat_id}")
                 outline = json.loads(cleaned_outline)
                 
                 with self._state_lock:
@@ -845,6 +888,7 @@ class Stage:
                         pass
                 
                 # Updating the background to include the summary and clearing the chat history to reduce context window
+                logger.info(f"Updating context and backgrounds for chat {self.chat_id}")
                 with self._state_lock:
                     self.context = ''
                     self.director.background = self.chat_summary
@@ -854,8 +898,14 @@ class Stage:
                 # Get the new outline from the result
                 new_outline = outline.get('new_outline', outline)  # Fallback to the entire outline
                 
+                # Check for timeout again
+                if time.time() - director_start_time > director_timeout:
+                    raise TimeoutError("Director processing timed out after outline generation")
+                    
                 # Director generates turn instructions (script) based on the outline
+                logger.info(f"Generating turn instructions for chat {self.chat_id}")
                 script_json = self.director.generate_turn_instructions(self.context, new_outline)
+                logger.info(f"Turn instructions generated for chat {self.chat_id}, length: {len(script_json)}")
                 
                 with self._state_lock:
                     self.last_script_data = script_json
@@ -869,15 +919,20 @@ class Stage:
                         # Error already logged
                         pass
                 
-                # Director is done, about to process lines
+                # Director is done, about to process lines - IMPORTANT: This signals the frontend to stop showing "directing"
+                logger.info(f"Director finished work for chat {self.chat_id}, switching to idle")
                 self.emit_event('director_status', {"status": "idle", "message": ""})
                 
                 # Process the script and get the dialogue lines
+                logger.info(f"Processing director script for chat {self.chat_id}")
                 dialogue_lines = self.process_director_script(script_json)
+                logger.info(f"Generated {len(dialogue_lines)} dialogue lines for chat {self.chat_id}")
                 
             except Exception as e:
                 error_msg = f"Error processing outline: {str(e)}"
                 logger.error(error_msg, exc_info=True)
+                # Make sure we reset the director status in case of error
+                self.emit_event('director_status', {"status": "idle", "message": ""})
                 self.emit_event('error', {"message": error_msg})
                 
                 with self._state_lock:
@@ -887,10 +942,12 @@ class Stage:
                 return {"status": "error", "message": error_msg, "dialogue": []}
             
             # Check if the objective has been reached using the director's check_objective method
-            check_result_str = self.director.check_objective(self.full_chat, objective)
-            objective_status = {}
-            
             try:
+                logger.info(f"Checking objective completion for chat {self.chat_id}")
+                check_result_str = self.director.check_objective(self.full_chat, objective)
+                logger.info(f"Objective check result received for chat {self.chat_id}")
+                objective_status = {}
+                
                 check_result = json.loads(self._clean_json(check_result_str))
                 completed, objective_status = self.check_objective_completion(check_result, objective)
                 
@@ -908,6 +965,7 @@ class Stage:
                     self._state = StageState.IDLE
                     self._current_operation_id = None
             
+            logger.info(f"Advance turn completed for chat {self.chat_id}")
             result = {
                 "status": "success",
                 "dialogue": dialogue_lines,
@@ -925,6 +983,8 @@ class Stage:
         except Exception as e:
             error_msg = f"Unexpected error in advance_turn: {str(e)}"
             logger.error(error_msg, exc_info=True)
+            # Make sure we reset the director status
+            self.emit_event('director_status', {"status": "idle", "message": ""})
             self.emit_event('error', {"message": error_msg})
             
             with self._state_lock:
@@ -1188,10 +1248,16 @@ class Stage:
         """
         if self.socketio:
             try:
-                self.socketio.emit(event_type, data)
+                # Ensure we're sending to the correct room (chat_id)
+                if self.chat_id:
+                    self.socketio.emit(event_type, data, room=self.chat_id)
+                else:
+                    # Fallback to broadcast if no chat_id (should be rare)
+                    self.socketio.emit(event_type, data)
+                    logger.warning(f"Emitting {event_type} without chat_id room specification")
             except Exception as e:
                 logger.error(f"Error emitting event {event_type}: {str(e)}", exc_info=True)
-    
+        
     def run_sequence(self) -> Dict:
         """
         Run through the entire sequence of plot objectives.

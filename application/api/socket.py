@@ -51,13 +51,26 @@ class StageManager:
                 # Update socketio reference if provided and stage doesn't have one
                 if socketio and not stage.socketio:
                     stage.socketio = socketio
+                    logger.info(f"Updated socketio reference for existing stage {chat_id}")
+                
+                # Ensure the chat_id is properly set
+                if stage.chat_id != chat_id:
+                    logger.warning(f"Stage chat_id mismatch: {stage.chat_id} vs {chat_id}, fixing")
+                    stage.chat_id = chat_id
                 
                 return stage
                 
             # Stage doesn't exist, try to create it
             if socketio:
                 try:
+                    logger.info(f"Creating new stage for chat {chat_id}")
                     stage = Stage(chat_id=chat_id, socketio=socketio)
+                    
+                    # Verify the chat_id was properly set
+                    if stage.chat_id != chat_id:
+                        logger.warning(f"New stage chat_id mismatch: {stage.chat_id} vs {chat_id}, fixing")
+                        stage.chat_id = chat_id
+                    
                     self._active_stages[chat_id] = stage
                     self._stage_clients[chat_id] = set()
                     return stage
@@ -65,6 +78,7 @@ class StageManager:
                     logger.error(f"Error creating stage for chat {chat_id}: {str(e)}", exc_info=True)
                     return None
             
+            logger.warning(f"Cannot create stage for {chat_id}: No socketio provided")
             return None
     
     def register_client(self, client_id: str, chat_id: str) -> None:
@@ -237,16 +251,23 @@ def setup_socket_handlers(socketio):
         """Join a chat room and initialize if needed"""
         client_id = request.sid
         
+        # Log connection details
+        logger.info(f"Client {client_id} attempting to join chat room")
+        
         # Validate input
         chat_id = data.get('chat_id')
         if not chat_id:
+            logger.warning(f"Client {client_id} provided no chat_id")
             socketio.emit('error', {'message': 'No chat ID provided'}, room=client_id)
             return
+        
+        logger.info(f"Client {client_id} joining chat {chat_id}")
         
         # Get the chat from database
         try:
             chat = db.get_chat(chat_id)
             if not chat:
+                logger.warning(f"Chat {chat_id} not found for client {client_id}")
                 socketio.emit('error', {'message': 'Chat not found'}, room=client_id)
                 return
         except Exception as e:
@@ -256,7 +277,20 @@ def setup_socket_handlers(socketio):
             return
         
         # Join the Socket.IO room for this chat
-        join_room(chat_id)
+        try:
+            join_room(chat_id)
+            logger.info(f"Client {client_id} joined room {chat_id}")
+            
+            # Send confirmation
+            socketio.emit('status', {
+                'message': f'Joined chat room {chat_id}',
+                'chat_id': chat_id
+            }, room=client_id)
+        except Exception as e:
+            error_msg = f"Error joining room {chat_id}: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            socketio.emit('error', {'message': error_msg}, room=client_id)
+            return
         
         # Register client with chat
         stage_manager.register_client(client_id, chat_id)
@@ -264,14 +298,19 @@ def setup_socket_handlers(socketio):
         # Get chat messages directly from database with error handling
         try:
             messages = db.get_messages(chat_id)
+            logger.info(f"Sending {len(messages)} historical messages to client {client_id}")
             
             # Send the chat history to the client
             for message in messages:
+                # Add a small delay between messages to ensure proper ordering
+                socketio.sleep(0.05)
                 socketio.emit('dialogue', {
                     'role': message.get('role'),
                     'content': message.get('content'),
                     'type': message.get('type')
                 }, room=client_id)
+            
+            logger.info(f"Finished sending historical messages to client {client_id}")
         except Exception as e:
             error_msg = f"Error loading messages for chat {chat_id}: {str(e)}"
             logger.error(error_msg, exc_info=True)
@@ -283,6 +322,7 @@ def setup_socket_handlers(socketio):
         if stage:
             # Check if story is completed
             if stage.story_completed:
+                logger.info(f"Story already completed for chat {chat_id}")
                 socketio.emit('objective_status', {
                     'completed': True,
                     'story_completed': True,
@@ -293,14 +333,26 @@ def setup_socket_handlers(socketio):
             else:
                 # Send the current objective info
                 current_obj = stage.current_objective()
-                socketio.emit('objective_status', {
-                    'completed': False,
-                    'story_completed': False,
-                    'index': stage.current_objective_index,
-                    'current': current_obj,
-                    'total': len(stage.plot_objectives)
-                }, room=client_id)
+                with stage._state_lock:
+                    process_state = stage._state.name
+                    logger.info(f"Chat {chat_id} current state: {process_state}, " +
+                            f"objective {stage.current_objective_index}/{len(stage.plot_objectives)}")
+                    
+                    socketio.emit('status', {
+                        'message': f'Current state: {process_state}',
+                        'state': process_state
+                    }, room=client_id)
+                    
+                    socketio.emit('objective_status', {
+                        'completed': False,
+                        'story_completed': False,
+                        'index': stage.current_objective_index,
+                        'current': current_obj,
+                        'total': len(stage.plot_objectives)
+                    }, room=client_id)
         else:
+            logger.warning(f"Failed to get stage for chat {chat_id}")
+            
             # Get the completed status from the chat data
             is_completed = chat.get('completed', False) or chat.get('story_completed', False)
             
@@ -334,7 +386,7 @@ def setup_socket_handlers(socketio):
                     'chat_id': chat_id
                 }, room=client_id)
         
-        logger.info(f"Client {client_id} joined chat {chat_id}")
+        logger.info(f"Client {client_id} successfully joined chat {chat_id}")
     
     @socketio.on('start_chat')
     def handle_start_chat(data):
