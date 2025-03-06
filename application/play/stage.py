@@ -367,7 +367,10 @@ class Stage:
                 reply_output = actor.reply(self.context, instructions)
                 dialogue_line = f"{role}: {reply_output}"
                 self.add_to_chat_history(dialogue_line)
-                self.full_chat += "\n" + dialogue_line
+                if self.full_chat:
+                    self.full_chat += "\n" + dialogue_line
+                else:
+                    self.full_chat = dialogue_line
                 
                 # Remove typing indicator
                 self.emit_event('typing_indicator', {
