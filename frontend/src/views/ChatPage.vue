@@ -21,7 +21,19 @@
           <span class="text-sm">Objective Progress</span>
           <span class="text-sm">{{ objectiveProgress }}</span>
         </div>
-        <Progress :value="progress" class="h-2 bg-gray-200 dark:bg-gray-700" />
+        <div class="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
+          <div 
+            class="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+            :style="{ width: `${progress}%` }"
+          ></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Director Directing Message - Moved here to be always visible -->
+    <div v-if="directorDirecting" class="container mx-auto px-4 pt-2">
+      <div class="text-center text-sm text-muted-foreground py-2 bg-amber-50 dark:bg-amber-900/20 rounded-md p-2 animate-pulse">
+        <span class="font-medium">Director is directing the scene...</span>
       </div>
     </div>
 
@@ -30,17 +42,6 @@
       <div class="h-full flex flex-col border rounded-lg bg-background dark:bg-gray-900">
         <!-- Messages Area -->
         <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
-          <!-- System Messages -->
-          <div v-if="directorDirecting" class="text-center text-sm text-muted-foreground py-2 bg-amber-50 dark:bg-amber-900/20 rounded-md p-2 animate-pulse">
-            <span class="font-medium">Director is directing the scene...</span>
-          </div>
-
-          <!-- Current Objective -->
-          <div v-if="currentObjective" class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg mb-4 border border-blue-100 dark:border-blue-800">
-            <h3 class="font-medium text-sm text-blue-700 dark:text-blue-300">Current Objective:</h3>
-            <p class="text-sm mt-1">{{ currentObjective }}</p>
-          </div>
-
           <!-- Status Message -->
           <div v-if="statusMessage" class="text-center text-sm text-muted-foreground py-2 mb-4">
             {{ statusMessage }}
@@ -146,8 +147,7 @@ export default {
       progress: 0,
       objectiveIndex: 0,
       totalObjectives: 1,
-      objectiveProgress: this.objectiveIndex/this.totalObjectives,
-      currentObjective: '',
+      objectiveProgress: '0/1',
       isTyping: false,
       API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001',
       SOCKET_URL: import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001',
@@ -201,10 +201,13 @@ export default {
         }
         
         const chatData = data.chat
-        
+        console.log('Fetched chat details:', chatData)
         this.episodeId = chatData.episode_id || this.episodeId
         this.episodeName = chatData.episodes?.name || 'Unknown Episode'
         this.storyCompleted = chatData.completed || chatData.story_completed || false
+        this.objectiveIndex = chatData.current_objective_index || 0
+        this.totalObjectives = chatData.plot_objectives.length || 1
+        this.objectiveProgress = `${this.objectiveIndex + 1}/${this.totalObjectives}`
         
         // If we have a show ID from the episode
         if (chatData.episodes?.show_id) {
@@ -391,10 +394,14 @@ export default {
       // Update objective progress
       this.objectiveIndex = objectiveData.index || 0
       this.totalObjectives = objectiveData.total || 1
-      this.currentObjective = objectiveData.current || ''
       
-      // Calculate progress percentage
-      this.progress = Math.floor((this.objectiveIndex / this.totalObjectives) * 100)
+      // Calculate progress percentage (fixed to ensure proper display)
+      // Make sure we have at least 1% visibility when there's any progress
+      if (this.objectiveIndex > 0 && this.totalObjectives > 0) {
+        this.progress = Math.max(1, Math.floor((this.objectiveIndex / this.totalObjectives) * 100));
+      } else {
+        this.progress = 0;
+      }
       
       // Update progress text
       this.objectiveProgress = `${this.objectiveIndex}/${this.totalObjectives}`
@@ -405,6 +412,7 @@ export default {
         this.statusMessage = "Story completed! You've reached the end of this episode."
       }
       
+      console.log('Progress updated:', this.progress, '%', this.objectiveProgress);
       this.scrollToBottom()
     },
 
