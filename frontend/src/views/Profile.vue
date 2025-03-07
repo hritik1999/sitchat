@@ -20,23 +20,29 @@
         </CardHeader>
       </Card>
   
-      <!-- Settings Section -->
-      <Card class="mb-8">
-        <CardHeader>
-          <CardTitle class="text-xl">Settings</CardTitle>
-          <div class="flex items-center justify-between pt-4">
-            <div>
-              <CardTitle class="text-sm">Theme</CardTitle>
-              <CardDescription>Toggle between dark and light mode</CardDescription>
-            </div>
+  <!-- Settings Section -->
+    <Card class="mb-8">
+      <CardHeader>
+        <CardTitle class="text-xl">Settings</CardTitle>
+        <div class="flex flex-wrap items-center justify-between pt-4 gap-4">
+          <div>
+            <CardTitle class="text-sm">Theme</CardTitle>
+            <CardDescription>Toggle between dark and light mode</CardDescription>
+          </div>
+          <div class="flex items-center gap-2">
             <Button @click="toggleDarkMode" variant="outline">
               <SunIcon class="h-4 w-4 mr-2 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
               <MoonIcon class="h-4 w-4 mr-2 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
               Toggle Theme
             </Button>
+            <Button @click="logout" variant="destructive" class="md:hidden">
+              <LogOutIcon class="h-4 w-4 mr-2" />
+              Logout
+            </Button>
           </div>
-        </CardHeader>
-      </Card>
+        </div>
+      </CardHeader>
+    </Card>
   
       <!-- User's Shows Section -->
       <section class="mb-8">
@@ -126,7 +132,7 @@
   import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
   import { Loader2Icon, MoonIcon, SunIcon, PencilIcon, Trash2Icon } from 'lucide-vue-next'
 import { fetchApi } from '@/lib/utils'
-  
+  import { supabase } from '@/composables/useSupabase'
   export default {
     components: {
       Button,
@@ -200,6 +206,15 @@ import { fetchApi } from '@/lib/utils'
       toggleDarkMode() {
         const isDark = document.documentElement.classList.toggle('dark')
         localStorage.setItem('theme', isDark ? 'dark' : 'light')
+      },
+      async logout() {
+        try {
+          await supabase.auth.signOut()
+          // Force a full page reload to reset auth state
+          window.location.href = '/login'
+        } catch (error) {
+          console.error('Error during logout:', error)
+        }
       },
       formatDate(dateString) {
         if (!dateString) return '';
