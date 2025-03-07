@@ -86,7 +86,7 @@ const routes = [
     meta: {requiresAuth:true,layout:'main'}
   },
   {
-    path: '/end',
+    path: '/end/:episodeId/:chatId',
     name:'End',
     component:End,
     meta: {requiresAuth:true,layout:'none'}

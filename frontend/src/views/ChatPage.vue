@@ -30,12 +30,16 @@
       </div>
     </div>
 
-    <!-- Director Directing Message - with more prominent background -->
-    <div v-if="directorDirecting" class="container mx-auto px-4 pt-2">
-      <div class="text-center text-sm text-white py-2 bg-indigo-600 dark:bg-indigo-800 rounded-md p-2 animate-pulse">
-        <span class="font-medium">Director is directing the scene...</span>
-      </div>
-    </div>
+    <!-- Director Directing Message - with loading bar -->
+<div v-if="directorDirecting" class="container mx-auto px-4 pt-2">
+  <div class="text-center text-sm text-white py-2 bg-indigo-600 dark:bg-indigo-800 rounded-md p-2 animate-pulse">
+    <span class="font-medium">Director is directing the scene...</span>
+  </div>
+  <!-- Loading Bar -->
+  <div class="mt-2 h-1 bg-gray-200 dark:bg-gray-700 rounded-full">
+    <div class="h-full bg-indigo-500 dark:bg-indigo-400 rounded-full animate-director-progress"></div>
+  </div>
+</div>
 
     <!-- Chat Container -->
     <div class="flex-1 overflow-hidden container mx-auto p-4">
@@ -45,18 +49,36 @@
 
           <!-- Messages -->
           <div v-for="(msg, index) in messages" :key="index" class="flex gap-3">
-            <div class="flex-1 max-w-[90%]">
-              <div class="flex items-center gap-2 mb-1">
-                <span class="font-semibold text-sm" :class="getRoleColor(msg.role || '')">
-                  {{ msg.role }}
-                </span>
-              </div>
-              <div class="p-3 rounded-lg" :class="getMessageStyle(msg.type || '', msg.role || '')">
-                {{ msg.content }}
+            <div 
+              class="flex-1" 
+              :class="{
+                'flex justify-end': msg.role === 'Player'
+              }"
+            >
+              <div class="max-w-[90%]">
+                <!-- Role Label -->
+                <div class="flex items-center gap-2 mb-1" :class="{ 'justify-end': msg.role === 'Player' }">
+                  <span class="font-semibold text-sm" :class="getRoleColor(msg.role || '')">
+                    {{ msg.role }}
+                  </span>
+                </div>
+                
+                <!-- Message Bubble -->
+                <div 
+                  class="p-3 rounded-lg"
+                  :class="[
+                    getMessageStyle(msg.type || '', msg.role || ''),
+                    {
+                      'ml-auto': msg.role === 'Player',
+                      'whitespace-pre-wrap break-words': true
+                    }
+                  ]"
+                >
+                  {{ msg.content }}
+                </div>
               </div>
             </div>
           </div>
-
           <!-- Typing Indicators - Inside chat window -->
           <div v-if="hasActiveTypingIndicators" class="my-2">
             <div v-for="(status, role) in typingIndicators" :key="role">
@@ -153,6 +175,7 @@ export default {
       showName: 'Loading...',
       episodeName: 'Loading...',
       input: '',
+      characters: [],
       isSending: false,
       directorDirecting: false,
       typingIndicators: {},
@@ -163,7 +186,18 @@ export default {
       isConnected: false,
       isChatStarted: false,
       storyCompleted: false,
-      typingTimeout: null
+      typingTimeout: null,
+      characterColors: {}, // New property to store character colors
+      colorPalette: [ // Predefined color classes for characters
+        'text-red-600 dark:text-red-400',
+        'text-yellow-600 dark:text-yellow-400',
+        'text-blue-600 dark:text-blue-400',
+        'text-indigo-600 dark:text-indigo-400',
+        'text-purple-600 dark:text-purple-400',
+        'text-pink-600 dark:text-pink-400',
+        'text-orange-600 dark:text-orange-400',
+        'text-teal-600 dark:text-teal-400'
+      ],
     }
   },
 
@@ -209,6 +243,18 @@ export default {
           if (showData && showData.show) {
             this.showId = showData.show.id
             this.showName = showData.show.name || 'Unknown Show'
+            const characters = showData.show.characters
+            for (const character of characters) {
+              this.characters.push({
+                name: character.name,
+                description: character.description
+              })
+            }
+            // Assign colors to characters
+            showData.show.characters.forEach((character, index) => {
+              this.characterColors[character.name] = 
+                this.colorPalette[index % this.colorPalette.length]
+            })
           }
         }
         const messages = data.messages
@@ -447,37 +493,35 @@ export default {
     goBack() {
       this.$router.go(-1)
     },
-    
     getRoleColor(role) {
-      const colorMap = {
+      // Check if we have a color assigned for this character
+      if (this.characterColors[role]) {
+        return this.characterColors[role]
+      }
+    
+    // Default colors for system roles
+    const colorMap = {
         'Narration': 'text-purple-600 dark:text-purple-400',
         'Player': 'text-blue-600 dark:text-blue-400',
         'system': 'text-gray-600 dark:text-gray-400'
       }
       
-      // Default color for character roles
-      return colorMap[role] || 'text-green-600 dark:text-green-400'
+      return colorMap[role] || 'text-gray-600 dark:text-gray-400'
     },
-    
     getMessageStyle(type, role) {
       const styleMap = {
         'narration': 'bg-purple-100 dark:bg-purple-900/30 italic',
-        'player_input': 'bg-blue-100 dark:bg-blue-900/30',
-        'actor_dialogue': 'bg-green-100 dark:bg-green-900/30',
+        'player_input': 'bg-blue-100 dark:bg-blue-900/30 text-left', // Add text-left here
         'system': 'bg-gray-100 dark:bg-gray-800/50 text-sm'
       }
-      
-      // If we have a message type, use that, otherwise fall back to role
-      if (type && styleMap[type]) {
-        return styleMap[type]
+
+      // For actor dialogues
+      if (type === 'actor_dialogue' && this.characterColors[role]) {
+        const baseColor = this.characterColors[role].split(' ')[0]
+        return `${baseColor.replace('text', 'bg')}/20 dark:${baseColor.replace('text', 'bg')}/30`
       }
-      
-      // Default style based on role
-      if (role === 'Narration') return styleMap['narration']
-      if (role === 'Player') return styleMap['player_input']
-      
-      // Default for any actor
-      return styleMap['actor_dialogue']
+
+      return styleMap[type] || 'bg-gray-100 dark:bg-gray-800/30'
     }
   },
   
@@ -495,7 +539,7 @@ export default {
     storyCompleted(newVal) {
       if (newVal) {
         this.statusMessage = "Story completed! You've reached the end of this episode."
-        this.$router.push('/end')
+        this.$router.push('/end/'+ this.episodeId + '/' + this.chatId)
       }
     }
   }
@@ -528,5 +572,15 @@ export default {
 
 .dark .overflow-y-auto::-webkit-scrollbar-thumb:hover {
   background-color: rgba(156, 163, 175, 0.5);
+}
+
+/* Director progress animation */
+@keyframes directorProgress {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+.animate-director-progress {
+  animation: directorProgress 3s linear;
 }
 </style>
