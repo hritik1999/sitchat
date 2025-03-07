@@ -482,8 +482,20 @@ class ChatResource(Resource):
         return jsonify({"chats": chats})
 
 
-# In-memory cache of active stages (for performance)
+import time
+import threading
+import logging
+from flask import request
+from flask_socketio import join_room, leave_room
+from application.database.db import db
+from application.play.stage import Stage
+
+# Configure logging
+logger = logging.getLogger("SocketHandlers")
+
+# In-memory cache of active stages with thread safety
 active_stages = {}
+active_stages_lock = threading.RLock()
 
 def setup_socket_handlers(socketio):
     """Set up Socket.IO event handlers for chat interaction"""
@@ -491,7 +503,7 @@ def setup_socket_handlers(socketio):
     @socketio.on('disconnect')
     def handle_disconnect():
         """Handle client disconnection"""
-        print(f"Client disconnected: {request.sid}")
+        logger.info(f"Client disconnected: {request.sid}")
         
         try:
             # Find and stop any active stages associated with this client
@@ -503,22 +515,25 @@ def setup_socket_handlers(socketio):
             
             # For each room (likely to be a chat_id) the client was in
             for chat_id in client_rooms:
-                if chat_id in active_stages:
-                    # Don't forcibly reset processing flag as it may disrupt ongoing operations
-                    # Just notify other clients in the room about the disconnection
-                    socketio.emit('status', {'message': 'A client disconnected from this chat'}, room=chat_id)
-                    print(f"Client disconnected from chat_id: {chat_id}")
+                with active_stages_lock:
+                    if chat_id in active_stages:
+                        # Don't forcibly reset processing flag as it may disrupt ongoing operations
+                        # Just notify other clients in the room about the disconnection
+                        socketio.emit('status', {'message': 'A client disconnected from this chat'}, room=chat_id)
+                        logger.info(f"Client disconnected from chat_id: {chat_id}")
         except Exception as e:
-            print(f"Error handling disconnect: {str(e)}")
+            logger.error(f"Error handling disconnect: {str(e)}", exc_info=True)
 
     @socketio.on('join_chat')
     def handle_join_chat(data):
-        """Join a chat room and initialize if needed"""
+        """Join a chat room and initialize if needed with thread safety"""
         try:
             chat_id = data.get('chat_id')
             if not chat_id:
                 socketio.emit('error', {'message': 'No chat ID provided'}, room=request.sid)
                 return
+            
+            logger.info(f"Client {request.sid} joining chat: {chat_id}")
                 
             # Get the chat from database
             chat = db.get_chat(chat_id)
@@ -528,52 +543,60 @@ def setup_socket_handlers(socketio):
                 
             # Join the Socket.IO room for this chat
             join_room(chat_id)
+            
+            # Use thread-safe access to active_stages
+            stage = None
+            create_new_stage = False
+            
+            with active_stages_lock:
+                # Check if stage already exists in memory
+                if chat_id in active_stages:
+                    logger.debug(f"Using existing stage for chat_id: {chat_id}")
+                    stage = active_stages[chat_id]
+                else:
+                    # Get the completed status from the chat data
+                    is_completed = chat.get('story_completed', False) or chat.get('completed', False)
                     
-            # Check if stage already exists in memory
-            if chat_id in active_stages:
-                # Get existing stage
-                stage = active_stages[chat_id]
-                
-                # Check if story is completed
-                if stage.story_completed:
-                    socketio.emit('objective_status', {
-                        'story_completed': True,
-                        'index': stage.current_objective_index,
-                        'total': len(stage.plot_objectives),
-                        'message': 'Story is already complete.'
-                    }, room=request.sid)
-                else:
-                    # Send the current objective info
-                    current_obj = stage.current_objective()
-                    socketio.emit('objective_status', {
-                        'story_completed': False,
-                        'index': stage.current_objective_index,
-                        'current': current_obj,
-                        'total': len(stage.plot_objectives)
-                    }, room=request.sid)
-            else:
-                # Get the completed status from the chat data
-                is_completed = chat.get('story_completed', False) or chat.get('completed', False)
-                
-                if is_completed:
-                    socketio.emit('objective_status', {
-                        'completed': True,
-                        'story_completed': True,
-                        'index': chat.get('current_objective_index', 0),
-                        'total': len(chat.get('plot_objectives', [])),
-                        'message': 'Story is already complete.'
-                    }, room=request.sid)
-                else:
-                    # Create a new stage
-                    try:
-                        stage = Stage(chat_id=chat_id, socketio=socketio)
-                        active_stages[chat_id] = stage
+                    if is_completed:
+                        socketio.emit('objective_status', {
+                            'completed': True,
+                            'story_completed': True,
+                            'index': chat.get('current_objective_index', 0),
+                            'total': len(chat.get('plot_objectives', [])),
+                            'message': 'Story is already complete.'
+                        }, room=request.sid)
+                        return
+                    
+                    # Mark that we need to create a new stage (outside the lock)
+                    create_new_stage = True
 
-                        # run the stage in thread
+            # If we need to create a new stage, do it outside the lock to prevent
+            # long operations with the lock held
+            if create_new_stage:
+                try:
+                    logger.info(f"Creating new stage for chat_id: {chat_id}")
+                    stage = Stage(chat_id=chat_id, socketio=socketio)
+                    
+                    # Now store it in the dictionary with the lock
+                    with active_stages_lock:
+                        # Double-check that another thread didn't create it while we were working
+                        if chat_id not in active_stages:
+                            active_stages[chat_id] = stage
+                        else:
+                            # Another thread created it first, use that one and discard ours
+                            logger.warning(f"Another thread created stage for {chat_id}, using that one")
+                            stage = active_stages[chat_id]
+                    
+                    # Only one thread should trigger the stage sequence
+                    if stage == active_stages[chat_id]:
+                        logger.info(f"Starting sequence for chat_id: {chat_id}")
+                        
+                        # Run the stage in thread
                         def run_stage():
                             try:
                                 stage.run_sequence()
                             except Exception as e:
+                                logger.error(f"Error running stage: {str(e)}", exc_info=True)
                                 socketio.emit('error', {
                                     'message': f'Error running stage: {str(e)}',
                                     'code': 'stage_run_error'
@@ -584,21 +607,27 @@ def setup_socket_handlers(socketio):
                         thread = threading.Thread(target=run_stage)
                         thread.daemon = True
                         thread.start()
-                        
-                        # Send the current objective info
-                        current_obj = stage.current_objective()
-                        socketio.emit('objective_status', {
-                            'story_completed': False,
-                            'index': stage.current_objective_index,
-                            'current': current_obj,
-                            'total': len(stage.plot_objectives)
-                        }, room=request.sid)
-                    except Exception as e:
-                        socketio.emit('error', {
-                            'message': f'Error creating stage: {str(e)}',
-                            'code': 'stage_creation_error'
-                        }, room=request.sid)
+                    
+                except Exception as e:
+                    logger.error(f"Error creating stage: {str(e)}", exc_info=True)
+                    socketio.emit('error', {
+                        'message': f'Error creating stage: {str(e)}',
+                        'code': 'stage_creation_error'
+                    }, room=request.sid)
+                    return
+            
+            # Send the current objective info
+            if stage:
+                current_obj = stage.current_objective()
+                socketio.emit('objective_status', {
+                    'story_completed': stage.story_completed,
+                    'index': stage.current_objective_index,
+                    'current': current_obj,
+                    'total': len(stage.plot_objectives)
+                }, room=request.sid)
+            
         except Exception as e:
+            logger.error(f"Error joining chat: {str(e)}", exc_info=True)
             socketio.emit('error', {
                 'message': f'Error joining chat: {str(e)}',
                 'code': 'join_error'
@@ -607,7 +636,7 @@ def setup_socket_handlers(socketio):
     
     @socketio.on('player_input')
     def handle_player_input(data):
-        """Handle player input/interruption"""
+        """Handle player input/interruption with thread safety"""
         try:
             chat_id = data.get('chat_id')
             player_input = data.get('input')
@@ -615,45 +644,68 @@ def setup_socket_handlers(socketio):
             if not chat_id or not player_input:
                 socketio.emit('error', {'message': 'Missing chat ID or player input'}, room=request.sid)
                 return
-                
-            # Get or initialize the stage
-            stage = None
             
-            # Check if the stage exists in memory first
-            if chat_id in active_stages:
-                stage = active_stages[chat_id]
-            else:
-                # Try to initialize the stage from database
+            logger.info(f"Player input for chat_id {chat_id}: {player_input[:50]}...")
+            
+            # Get or initialize the stage with proper locking
+            stage = None
+            create_new_stage = False
+            
+            with active_stages_lock:
+                # Check if the stage exists in memory first
+                if chat_id in active_stages:
+                    stage = active_stages[chat_id]
+                else:
+                    create_new_stage = True
+            
+            # If we need to create a new stage, do it outside the lock
+            if create_new_stage:
                 try:
                     # Create the stage with the chat_id
+                    logger.info(f"Creating new stage for player input in chat_id: {chat_id}")
                     stage = Stage(chat_id=chat_id, socketio=socketio)
-                    active_stages[chat_id] = stage
+                    
+                    # Store it with proper locking
+                    with active_stages_lock:
+                        if chat_id not in active_stages:
+                            active_stages[chat_id] = stage
+                        else:
+                            # Another thread created it, use that one
+                            stage = active_stages[chat_id]
                 except Exception as e:
+                    logger.error(f"Error initializing chat: {str(e)}", exc_info=True)
                     socketio.emit('error', {
                         'message': f'Error initializing chat: {str(e)}',
                         'code': 'chat_not_initialized'
                     }, room=request.sid)
                     return
+            
+            # Now we have a valid stage, check state
+            with stage.processing_lock:
+                # Check if already processing
+                if stage.is_processing:
+                    socketio.emit('status', {'message': 'Already processing. Please wait.'}, room=chat_id)
+                    return
                 
-            # Check if already processing
-            if stage.is_processing:
-                socketio.emit('status', {'message': 'Already processing. Please wait.'}, room=chat_id)
-                return
+                # Check if story is completed
+                if stage.story_completed:
+                    socketio.emit('status', {'message': 'Story is already complete.'}, room=chat_id)
+                    return
                 
-            # Check if story is completed
-            if stage.story_completed:
-                socketio.emit('status', {'message': 'Story is already complete.'}, room=chat_id)
-                return
+                # Mark as processing to prevent others from interfering
+                stage.is_processing = True
                 
             # Process player input in a background thread
             def process_input():
                 try:
                     stage.player_interrupt(player_input)
                 except Exception as e:
+                    logger.error(f"Error processing player input: {str(e)}", exc_info=True)
                     socketio.emit('error', {
                         'message': f'Error processing player input: {str(e)}',
                         'code': 'input_error'
                     }, room=chat_id)
+                finally:
                     with stage.processing_lock:
                         stage.is_processing = False
             
@@ -663,6 +715,7 @@ def setup_socket_handlers(socketio):
             
             socketio.emit('status', {'message': 'Processing player input...'}, room=chat_id)
         except Exception as e:
+            logger.error(f"Error handling player input: {str(e)}", exc_info=True)
             socketio.emit('error', {
                 'message': f'Error handling player input: {str(e)}',
                 'code': 'input_handler_error'
@@ -673,43 +726,62 @@ def setup_socket_handlers(socketio):
         """Handle heartbeat to keep connection alive"""
         pass  # Just acknowledging the heartbeat is enough
         
-    # Add a monitoring function that can be called periodically to detect and fix stuck stages
     def monitor_active_stages():
         """Check for stuck stages and attempt to reset them"""
         current_time = time.time()
-        for chat_id, stage in list(active_stages.items()):
-            # Add a timestamp attribute to track when processing started
-            if not hasattr(stage, 'processing_started_at'):
-                stage.processing_started_at = None
-                
-            # If stage is processing for more than 5 minutes, it might be stuck
-            if stage.is_processing and stage.processing_started_at and (current_time - stage.processing_started_at > 300):
-                print(f"Stage for chat_id {chat_id} appears stuck, resetting processing flag")
-                with stage.processing_lock:
-                    stage.is_processing = False
+        with active_stages_lock:
+            for chat_id, stage in list(active_stages.items()):
+                # Add a timestamp attribute to track when processing started
+                if not hasattr(stage, 'processing_started_at'):
                     stage.processing_started_at = None
-                socketio.emit('status', {'message': 'Processing was stuck and has been reset. You can continue now.'}, room=chat_id)
-            
-            # When setting is_processing to True, also set the timestamp
-            original_set_processing = stage.processing_lock.__enter__
-            
-            def set_processing_with_timestamp(*args, **kwargs):
-                result = original_set_processing(*args, **kwargs)
-                # After acquiring the lock, if we're setting is_processing to True, record the time
-                if not hasattr(stage, 'is_processing_before'):
-                    stage.is_processing_before = stage.is_processing
-                if not stage.is_processing_before and stage.is_processing:
-                    stage.processing_started_at = current_time
-                stage.is_processing_before = stage.is_processing
-                return result
-                
-            stage.processing_lock.__enter__ = set_processing_with_timestamp
+                    
+                # If stage is processing for more than 5 minutes, it might be stuck
+                if stage.is_processing and stage.processing_started_at and (current_time - stage.processing_started_at > 300):
+                    logger.warning(f"Stage for chat_id {chat_id} appears stuck, resetting processing flag")
+                    with stage.processing_lock:
+                        stage.is_processing = False
+                        stage.processing_started_at = None
+                    socketio.emit('status', {'message': 'Processing was stuck and has been reset. You can continue now.'}, room=chat_id)
     
-    # Schedule the monitoring function to run periodically
+    def cleanup_inactive_stages():
+        """Remove stages that are completed or inactive from memory"""
+        with active_stages_lock:
+            for chat_id in list(active_stages.keys()):
+                stage = active_stages[chat_id]
+                if stage.story_completed:
+                    logger.info(f"Removing completed stage for chat_id: {chat_id}")
+                    del active_stages[chat_id]
+    
+    # Patch the Stage class to track processing time
+    original_stage_init = Stage.__init__
+    
+    def patched_stage_init(self, *args, **kwargs):
+        original_stage_init(self, *args, **kwargs)
+        self.processing_started_at = None
+        self.original_set_processing = self.processing_lock.__enter__
+        
+        def set_processing_with_timestamp(*args, **kwargs):
+            result = self.original_set_processing(*args, **kwargs)
+            # After acquiring the lock, if we're setting is_processing to True, record the time
+            if not hasattr(self, 'is_processing_before'):
+                self.is_processing_before = self.is_processing
+            if not self.is_processing_before and self.is_processing:
+                self.processing_started_at = time.time()
+            self.is_processing_before = self.is_processing
+            return result
+        
+        self.processing_lock.__enter__ = set_processing_with_timestamp
+    
+    # Apply the monkey patch
+    Stage.__init__ = patched_stage_init
+    
+    # Setup monitoring schedule
+    import schedule
+    
     def start_monitoring():
         """Start the monitoring function on a periodic schedule"""
-        import schedule
         schedule.every(5).minutes.do(monitor_active_stages)
+        schedule.every(30).minutes.do(cleanup_inactive_stages)
         
         def run_scheduler():
             while True:
@@ -719,18 +791,11 @@ def setup_socket_handlers(socketio):
         scheduler_thread = threading.Thread(target=run_scheduler)
         scheduler_thread.daemon = True
         scheduler_thread.start()
-        
+        logger.info("Stage monitoring scheduler started")
+    
     # Start the monitoring
     start_monitoring()
-        
-    # Add a function to clean up memory - you can call this periodically 
-    # if you're concerned about memory usage
-    def cleanup_inactive_stages():
-        """Remove stages that are completed or inactive from memory"""
-        for chat_id in list(active_stages.keys()):
-            stage = active_stages[chat_id]
-            if stage.story_completed:
-                del active_stages[chat_id]
-                
-    # You can expose this if needed
+    
+    # Make cleanup function available to the application
     socketio.cleanup_inactive_stages = cleanup_inactive_stages
+    socketio.monitor_active_stages = monitor_active_stages

@@ -390,7 +390,7 @@ export default {
       // Update objective progress
       this.objectiveIndex = objectiveData.index  || 0
       this.totalObjectives = objectiveData.total || 1
-      
+      console.log('Objective data:', objectiveData)
       // Calculate progress percentage (fixed to ensure proper display)
       // Make sure we have at least 1% visibility when there's any progress
       if (this.objectiveIndex > 0 && this.totalObjectives > 0) {
