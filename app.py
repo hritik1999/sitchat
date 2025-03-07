@@ -8,6 +8,8 @@ from flask_cors import CORS
 from flask_restful import Api
 from flask_socketio import SocketIO
 import logging
+import sys
+sys.stdout.flush()
 
 # Simple solution: just set higher log levels for the libraries you want to silence
 logging.basicConfig(level=logging.INFO)
@@ -143,4 +145,4 @@ web_api.add_resource(UserResource, '/api/user')
 web_api.add_resource(ChatResource, '/api/chats', '/api/chats/<string:chat_id>', '/api/episodes/<string:episode_id>/chats')
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True, port=5001, host='0.0.0.0')
+    socketio.run(app, debug=True, port=5001, host='0.0.0.0',)

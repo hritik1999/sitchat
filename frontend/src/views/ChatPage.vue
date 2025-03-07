@@ -197,10 +197,11 @@ export default {
         }
         
         const chatData = data.chat
-        console.log('Fetched chat details:', chatData)
         this.episodeId = chatData.episode_id || this.episodeId
         this.episodeName = chatData.episodes?.name || 'Unknown Episode'
-        this.storyCompleted = chatData.completed || chatData.story_completed || false
+        this.objectiveIndex = chatData.current_objective_index
+        this.totalObjectives = JSON.parse(chatData.episodes.plot_objectives).length
+        this.storyCompleted = chatData.story_completed || false
         
         // If we have a show ID from the episode
         if (chatData.episodes?.show_id) {
@@ -209,6 +210,17 @@ export default {
             this.showId = showData.show.id
             this.showName = showData.show.name || 'Unknown Show'
           }
+        }
+        const messages = data.messages
+        
+        for (const message of messages) {
+          this.messages.push({
+            role: message.role,
+            content: message.content,
+            type: message.type,
+            sequence: message.sequence
+          })
+          this.messages.sort((a, b) => a.sequence - b.sequence)
         }
       } catch (error) {
         console.error('Error fetching chat details:', error)
@@ -290,14 +302,6 @@ export default {
       }
     },
 
-    startChat() {
-      if (!this.isConnected || this.isChatStarted || this.storyCompleted) return
-      
-      this.statusMessage = 'Starting chat...'
-      this.socket.emit('start_chat', { chat_id: this.chatId })
-      this.isChatStarted = true
-    },
-
     sendMessage() {
       if (!this.input.trim() || this.isSending || this.storyCompleted) return
 
@@ -351,20 +355,19 @@ export default {
     },
 
     handleStatus(statusData) {
+     
       if (statusData && statusData.message) {
         this.statusMessage = statusData.message
+        console.log('Status data:', statusData)
       }
       
-      // Auto-start the chat if ready and not already started
-      if (statusData && statusData.ready === true && !this.isChatStarted && !this.storyCompleted) {
-        // Delay starting to allow UI to render
-        setTimeout(() => {
-          this.startChat()
-        }, 1000)
+      if (statusData && statusData.story_completed) {
+        this.storyCompleted = true
       }
     },
 
     handleError(errorData) {
+      console.error('Socket error:', errorData)
       if (!errorData) return
       
       if (errorData.message) {
@@ -385,7 +388,7 @@ export default {
       if (!objectiveData) return
       
       // Update objective progress
-      this.objectiveIndex = objectiveData.index || 0
+      this.objectiveIndex = objectiveData.index  || 0
       this.totalObjectives = objectiveData.total || 1
       
       // Calculate progress percentage (fixed to ensure proper display)
@@ -397,7 +400,7 @@ export default {
       }
       
       // Update progress text
-      this.objectiveProgress = `${this.objectiveIndex}/${this.totalObjectives}`
+      this.objectiveProgress = `${this.objectiveIndex} /${this.totalObjectives}`
       
       // Check if story is completed
       if (objectiveData.story_completed || objectiveData.final) {
@@ -405,7 +408,6 @@ export default {
         this.statusMessage = "Story completed! You've reached the end of this episode."
       }
       
-      console.log('Progress updated:', this.progress, '%', this.objectiveProgress);
       this.scrollToBottom()
     },
 
@@ -485,8 +487,15 @@ export default {
       if (newVal && !this.isChatStarted && !this.storyCompleted) {
         // Small delay to ensure join_chat has completed
         setTimeout(() => {
-          this.startChat()
+          this.handleConnect()
         }, 1000)
+      }
+    },
+    
+    storyCompleted(newVal) {
+      if (newVal) {
+        this.statusMessage = "Story completed! You've reached the end of this episode."
+        this.$router.push('/end')
       }
     }
   }

@@ -10,6 +10,7 @@ import ShowDetailsPage from '@/views/ShowDetailsPage.vue';
 import CreateEpisode from '@/views/CreateEpisode.vue';
 import Profile from '@/views/Profile.vue';
 import EditProfile from '@/views/EditProfile.vue';
+import End from '@/views/End.vue';
 // Define routes with meta for layout and auth requirements
 const routes = [
   {
@@ -83,7 +84,13 @@ const routes = [
     name:'Profile',
     component:Profile,
     meta: {requiresAuth:true,layout:'main'}
-  }
+  },
+  {
+    path: '/end',
+    name:'End',
+    component:End,
+    meta: {requiresAuth:true,layout:'none'}
+  },
   // Add more routes as needed
 ];
 
