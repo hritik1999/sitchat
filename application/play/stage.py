@@ -1024,7 +1024,7 @@ class Stage:
                     
                     # Add to context - keeping recent context but adding player input
                     # This preserves some context but prevents overlong chains
-                    recent_lines = current_context.split('\n')[-10:] if current_context else []
+                    recent_lines = current_context.split('\n')
                     recent_context = '\n'.join(recent_lines)
                     self.context = f"{recent_context}\n{interrupt_line}" if recent_context else interrupt_line
                     
@@ -1097,6 +1097,7 @@ class Stage:
                     
                     # Generate script using last outline
                     script_json = self.director.generate_turn_instructions(context_snapshot, last_outline)
+                    script_json = self._clean_json(script_json)
                     
                     with self.state_lock:
                         self.last_script_data = script_json
