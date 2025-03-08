@@ -582,6 +582,6 @@ export default {
 }
 
 .animate-director-progress {
-  animation: directorProgress 5s linear;
+  animation: directorProgress 6s linear;
 }
 </style>

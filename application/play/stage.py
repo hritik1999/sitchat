@@ -668,14 +668,14 @@ class Stage:
                     failure_reason = self.plot_failure_reason
                 
                 try:
-                    self.emit_event('director_status', {"status": "directing", "message": "Analyzing story progress..."})
+                    self.emit_event('director_status', {"status": "directing", "message": "Director is analyzing story progress..."})
                     # Generate outline without holding locks
                     logger.debug(f"Generating outline for objective: {current_objective}")
                     outline_str = self.director.generate_outline(context_snapshot, current_objective, failure_reason)
                     
                     try:
                         outline = json.loads(self._clean_json(outline_str))
-                        self.emit_event('director_status', {"status": "directing", "message": "Writing next scene..."})
+                        self.emit_event('director_status', {"status": "directing", "message": "Director is writing next scene..."})
                         
                         with self.state_lock:
                             self.last_outline = outline
@@ -696,9 +696,8 @@ class Stage:
                         with self.dialogue_lock:
                             latest_context = self.context  # Get fresh context
 
-                        self.emit_event('director_status', {"status": "directing", "message": "Director is cueing the actors..."})
                         script_json = self.director.generate_turn_instructions(latest_context, new_outline)
-                        
+                        self.emit_event('director_status', {"status": "directing", "message": "Director is cueing the actors..."})
                         with self.state_lock:
                             self.last_script_data = script_json
                         
