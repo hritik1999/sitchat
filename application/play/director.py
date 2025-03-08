@@ -74,12 +74,12 @@ class Director:
             2. Use keywords and brief instructions rather than explicit dialogue, allowing actors creative freedom in their performance.
             3. Ensure that the transitions between lines are smooth and that the overall tone remains consistent with the show's style.
             4. Use character dialogues to replace Narration wherever possible.
-            5. Do not include the player in your script but instruct the characters to engage the player if required.
+            5. instruct the characters to engage the player if required.
             6. Do not mention the Player in the narration.
             6. If the outlined events are covered before reaching {num_lines} lines, you may stop early.
 
             Your output should be a JSON object with a key "scripts" whose value is a list of dictionaries. Each dictionary should have:
-            - "role": Either one of the characters in the scene or "Narration" (do not include the player).
+            - "role": Either one of the characters in the scene or "Narration".
             - "instruction" (or "content" if it is narration): A brief, keyword-driven guideline for how the line should be performed.
 
             Example format:

@@ -148,6 +148,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { fetchApi } from '@/lib/utils'
 import { supabase } from '@/composables/useSupabase'
 import io from 'socket.io-client'
+import { useToast } from 'vue-toastification';
 
 export default {
   name: 'ChatPage',
@@ -175,7 +176,9 @@ export default {
       showName: 'Loading...',
       episodeName: 'Loading...',
       input: '',
+      toast: null,
       characters: [],
+      player_name:'',
       isSending: false,
       directorDirecting: false,
       typingIndicators: {},
@@ -200,6 +203,10 @@ export default {
         'text-teal-600 dark:text-teal-400'
       ],
     }
+  },
+  
+  created() {
+    this.toast = useToast()
   },
 
   mounted() {
@@ -303,6 +310,7 @@ export default {
         this.socket.on('objective_status', this.handleObjectiveStatus);
         this.socket.on('typing_indicator', this.handleTypingIndicator);
         this.socket.on('director_status', this.handleDirectorStatus);
+        this.socket.on('player_action', this.handlePlayerAction);
       } catch (error) {
         console.error('Error connecting to socket:', error);
         this.errorMessage = 'Connection error. Please try refreshing the page.';
@@ -320,6 +328,7 @@ export default {
         this.socket.off('objective_status')
         this.socket.off('typing_indicator')
         this.socket.off('director_status')
+        this.socket.off('player_action')
         this.socket.disconnect()
       }
     },
@@ -480,6 +489,29 @@ export default {
       }
       
       this.scrollToBottom()
+    },
+    handlePlayerAction(actionData) {
+      if (!actionData || !actionData.content) return;
+      
+      // Show a toast notification to nudge the player
+      this.toast.info("Your character can respond now. What would you like to say or do?", {
+        timeout: 8000,
+        position: "top-center",
+        closeButton: true,
+        icon: true
+      });
+      
+      // Optionally play a notification sound if you have one
+      try {
+        const audio = new Audio('/notification.mp3');
+        audio.volume = 0.5;
+        audio.play().catch(e => console.log('Audio play prevented:', e));
+      } catch (e) {
+        console.log('Audio notification not available');
+      }
+      
+      // Focus the input field automatically
+      this.$refs.messageInput.focus();
     },
 
     scrollToBottom() {

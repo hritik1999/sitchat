@@ -682,19 +682,20 @@ def setup_socket_handlers(socketio):
             
             # Now we have a valid stage, check state
             with stage.processing_lock:
-                # Check if already processing
-                if stage.is_processing:
-                    socketio.emit('status', {'message': 'Already processing. Please wait.'}, room=chat_id)
-                    return
-                
                 # Check if story is completed
                 if stage.story_completed:
                     socketio.emit('status', {'message': 'Story is already complete.'}, room=chat_id)
                     return
                 
+                # REMOVED: Don't check if already processing - always allow player interrupts
+                # REMOVED: if stage.is_processing:
+                # REMOVED:     socketio.emit('status', {'message': 'Already processing. Please wait.'}, room=chat_id)
+                # REMOVED:     return
+                    
                 # Mark as processing to prevent others from interfering
+                # This will be properly reset in player_interrupt if it was already processing
                 stage.is_processing = True
-                
+            
             # Process player input in a background thread
             def process_input():
                 try:

@@ -53,6 +53,11 @@ class Stage:
         self.dialogue_lock = threading.RLock()    # Lock for dialogue history
         self.state_lock = threading.RLock()       # Lock for state changes
         self.db_lock = threading.RLock()          # Lock for database operations
+        self.thread_lock = threading.RLock()      # Lock for thread management
+        
+        # Thread management and cancellation
+        self.active_threads = {}                  # Track active threads by ID
+        self.cancellation_event = threading.Event() # Event for signaling cancellation
         
         self.story_completed = False
         self.full_chat = ''
@@ -438,11 +443,23 @@ class Stage:
     def process_director_script(self, script_json):
         """Process the script from director with typing indicators and thread safety"""
         logger.info("Processing director script")
+
+        # Store the cancellation state at the beginning to avoid race conditions
+        # during processing
+        initial_cancellation_state = self.cancellation_event.is_set()
+        if initial_cancellation_state:
+            logger.info("Script processing cancelled immediately - cancellation flag is set")
+            return []
         
         dialogue_lines = []
         messages_to_save = []
         
         with self.timed_operation("process_director_script"):
+            # Check for cancellation again
+            if self.cancellation_event.is_set():
+                logger.info("Script processing cancelled - cancellation event is set")
+                return []
+                
             # Parse the script first
             try:
                 script_str = self._clean_json(script_json)
@@ -458,12 +475,49 @@ class Stage:
                 sequence_count = len(self.dialogue_history)
                 
                 for line in script_data.get("scripts", []):
+                    # Check for cancellation before processing each line
+                    if self.cancellation_event.is_set():
+                        logger.info("Script processing cancelled during line processing")
+                        return dialogue_lines
+                        
                     role = line.get("role", "")
                     instructions = line.get("instruction", "") or line.get("content", "")
                     
                     logger.debug(f"Processing script line for role: {role}")
                     
-                    if role in self.actors:
+                    # Check if role is player or player.name
+                    if role == "Player" or (self.player and role == self.player.name):
+                        # Handle player action prompt
+                        logger.info(f"Player action prompt: {instructions[:50]}...")
+                        
+                        # Emit the action prompt
+                        player_action_data = {
+                            "role": role,
+                            "content": instructions,
+                            "type": "player_prompt",
+                            "wait_for_response": True
+                        }
+                        self.emit_event('player_action', player_action_data)
+                        
+                        # Wait for 10 seconds or until cancellation
+                        wait_time = 10  # seconds
+                        start_time = time.time()
+                        
+                        while time.time() - start_time < wait_time:
+                            # Check for cancellation frequently
+                            if self.cancellation_event.is_set():
+                                logger.info("Player action wait cancelled")
+                                return dialogue_lines
+                            
+                            # Sleep a short time to avoid CPU spin
+                            time.sleep(0.1)
+                        
+                        # If we reach here, player didn't respond in time
+                        logger.info("Player didn't respond in time, continuing with script")
+                        
+
+                        
+                    elif role in self.actors:
                         # Handle actor dialogue
                         self.emit_event('typing_indicator', {"role": role, "status": "typing"})
                         try:
@@ -478,9 +532,26 @@ class Stage:
                         # Release the lock during the potentially long actor.reply
                         reply_output = None
                         try:
+                            # Check for cancellation before calling actor reply
+                            if self.cancellation_event.is_set():
+                                logger.info("Actor dialogue cancelled")
+                                return dialogue_lines
+                                
                             # Get actor reply without holding the lock
                             reply_output = actor.reply(context_snapshot, instructions)
+                            
+                            # Check again for cancellation
+                            if self.cancellation_event.is_set():
+                                logger.info("Actor dialogue cancelled after reply")
+                                return dialogue_lines
+                                
                             time.sleep(math.floor(len(reply_output.split(' '))/4))
+                            
+                            # Check again for cancellation
+                            if self.cancellation_event.is_set():
+                                logger.info("Actor dialogue cancelled after typing delay")
+                                return dialogue_lines
+                                
                             # Re-acquire lock to update dialogue
                             with self.dialogue_lock:
                                 dialogue_line = f"{role}: {reply_output}"
@@ -513,6 +584,11 @@ class Stage:
                         # Handle narration
                         self.emit_event('typing_indicator', {"role": "Narration", "status": "typing"})
                         
+                        # Check for cancellation
+                        if self.cancellation_event.is_set():
+                            logger.info("Narration cancelled")
+                            return dialogue_lines
+                            
                         content = line.get('content', instructions)
                         dialogue_line = f"Narration: {content}"
                         self.context = f"{self.context}\n{dialogue_line}" if self.context else dialogue_line
@@ -540,6 +616,12 @@ class Stage:
                     else:
                         # Handle other roles
                         self.emit_event('typing_indicator', {"role": role, "status": "typing"})
+                        
+                        # Check for cancellation
+                        if self.cancellation_event.is_set():
+                            logger.info("Other role dialogue cancelled")
+                            return dialogue_lines
+                            
                         time.sleep(1)  # Small delay for realism
                         
                         dialogue_line = f"{role}: {instructions}"
@@ -568,27 +650,70 @@ class Stage:
                 # Store dialogue history atomically 
                 self.dialogue_history.extend(dialogue_lines)
             
-            # Save to database outside of lock to prevent long lock times
-            if self.chat_id and messages_to_save:
-                try:
-                    with self.db_lock:
-                        db.add_messages_batch(self.chat_id, messages_to_save)
-                except Exception as e:
-                    error_msg = f"Error saving messages: {str(e)}"
-                    logger.error(error_msg, exc_info=True)
-                    self.emit_event('error', {"message": error_msg})
+            # Final cancellation check before database operations
+            if self.cancellation_event.is_set():
+                logger.info("Script processing cancelled before database save")
+                return dialogue_lines
             
-            if self.chat_id:
-                self.save_state_to_db()
-                
-            logger.info(f"Processed {len(dialogue_lines)} dialogue lines from director script")
-            return dialogue_lines
+        # Save to database outside of lock to prevent long lock times
+        if self.chat_id and messages_to_save:
+            try:
+                with self.db_lock:
+                    db.add_messages_batch(self.chat_id, messages_to_save)
+            except Exception as e:
+                error_msg = f"Error saving messages: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                self.emit_event('error', {"message": error_msg})
+        
+        if self.chat_id:
+            self.save_state_to_db()
+            
+        logger.info(f"Processed {len(dialogue_lines)} dialogue lines from director script")
+        return dialogue_lines
+
+    def _cancel_all_operations(self):
+        """Cancel all running operations - more aggressively"""
+        logger.info("Aggressively cancelling all running operations")
+        
+        # Set cancellation event to signal all threads to stop
+        self.cancellation_event.set()
+        
+        # Force-clear any pending messages from being processed
+        with self.dialogue_lock:
+            # Save current state but don't process more messages
+            pass
+        
+        # Emit a more immediate cancellation status
+        self.emit_event('status', {"message": "Processing interrupted by player"})
+        
+        # Log all active threads for debugging
+        with self.thread_lock:
+            active_count = len(self.active_threads)
+            if active_count > 0:
+                thread_info = ", ".join([f"{tid}:{info['type']}" for tid, info in self.active_threads.items()])
+                logger.info(f"Cancellation requested for {active_count} active threads: {thread_info}")
+            else:
+                logger.info("No active threads to cancel")
+
+    def flush_pending_operations(self):
+        """Force clear any pending operations"""
+        logger.info("Flushing pending operations")
+        
+        # Clear typing indicators
+        for role in list(self.actors.keys()):
+            self.emit_event('typing_indicator', {"role": role, "status": "idle"})
+        
+        # Clear director status
+        self.emit_event('director_status', {"status": "idle", "message": ""})
+        
+        # Signal status update
+        self.emit_event('status', {"message": "Scene reset for player input"})
 
     def trigger_next_turn(self):
         """Trigger the next turn in a non-blocking way with proper thread safety"""
         logger.info("Triggering next turn")
         
-        # Immediately check if we should proceed without acquiring the lock first
+        # Check if we should proceed without acquiring the lock first
         # to avoid potential deadlocks
         if self.current_objective_index >= len(self.plot_objectives) or self.story_completed:
             logger.info("All objectives completed or story finished. Not triggering new turn.")
@@ -606,10 +731,21 @@ class Stage:
                 
             logger.debug("Setting processing flag to True")
             self.is_processing = True
+            
+            # Clear cancellation event for new turn
+            self.cancellation_event.clear()
         
         def run_turn():
+            thread_id = threading.current_thread().ident
             try:
-                logger.debug("Starting background turn processing")
+                # Register this thread
+                with self.thread_lock:
+                    self.active_threads[thread_id] = {
+                        'type': 'turn_thread',
+                        'start_time': time.time()
+                    }
+                
+                logger.debug(f"Starting background turn processing in thread {thread_id}")
                 self.advance_turn()
             except Exception as e:
                 error_msg = f"Error in turn: {str(e)}"
@@ -620,6 +756,11 @@ class Stage:
                     was_processing = self.is_processing
                     self.is_processing = False
                     logger.debug(f"Released processing lock. Was processing: {was_processing}")
+                
+                # Unregister this thread
+                with self.thread_lock:
+                    if thread_id in self.active_threads:
+                        self.active_threads.pop(thread_id)
         
         thread = threading.Thread(target=run_turn)
         thread.daemon = True
@@ -628,13 +769,29 @@ class Stage:
 
     def advance_turn(self):
         """Advance the game turn based on current objective with comprehensive error handling"""
-        logger.info("Advancing turn")
+        thread_id = threading.current_thread().ident
+        logger.info(f"Advancing turn in thread {thread_id}")
+        
+        # Register this as active thread if not already done
+        with self.thread_lock:
+            if thread_id not in self.active_threads:
+                self.active_threads[thread_id] = {
+                    'type': 'advance_turn',
+                    'start_time': time.time()
+                }
         
         # Already checked in trigger_next_turn, but double-check for safety
         with self.processing_lock:
             if not self.is_processing:
                 logger.warning("Not currently processing. Setting processing flag.")
                 self.is_processing = True
+        
+        # Check if we've been cancelled
+        if self.cancellation_event.is_set():
+            logger.info("Turn cancelled - cancellation event is set")
+            with self.processing_lock:
+                self.is_processing = False
+            return {"status": "cancelled", "message": "Turn cancelled by player", "dialogue": []}
         
         result = {"status": "unknown", "message": "Turn not completed", "dialogue": []}
 
@@ -667,11 +824,21 @@ class Stage:
                     current_objective = objective  # Keep local reference
                     failure_reason = self.plot_failure_reason
                 
+                # Check cancellation before outline generation
+                if self.cancellation_event.is_set():
+                    logger.info("Turn cancelled before outline generation")
+                    return {"status": "cancelled", "message": "Turn cancelled", "dialogue": []}
+                
                 try:
                     self.emit_event('director_status', {"status": "directing", "message": "Director is analyzing story progress..."})
                     # Generate outline without holding locks
                     logger.debug(f"Generating outline for objective: {current_objective}")
                     outline_str = self.director.generate_outline(context_snapshot, current_objective, failure_reason)
+                    
+                    # Check cancellation after outline generation
+                    if self.cancellation_event.is_set():
+                        logger.info("Turn cancelled after outline generation")
+                        return {"status": "cancelled", "message": "Turn cancelled", "dialogue": []}
                     
                     try:
                         outline = json.loads(self._clean_json(outline_str))
@@ -688,6 +855,11 @@ class Stage:
                             self.director.background = self.chat_summary
                             for actor_name in self.actors:
                                 self.actors[actor_name].background = self.chat_summary
+                        
+                        # Check cancellation
+                        if self.cancellation_event.is_set():
+                            logger.info("Turn cancelled after updating outline")
+                            return {"status": "cancelled", "message": "Turn cancelled", "dialogue": []}
                                 
                         new_outline = outline.get('new_outline', outline)
                         
@@ -696,8 +868,14 @@ class Stage:
                         with self.dialogue_lock:
                             latest_context = self.context  # Get fresh context
 
-                        script_json = self.director.generate_turn_instructions(latest_context, new_outline)
                         self.emit_event('director_status', {"status": "directing", "message": "Director is cueing the actors..."})
+                        script_json = self.director.generate_turn_instructions(latest_context, new_outline)
+                        
+                        # Check cancellation after script generation
+                        if self.cancellation_event.is_set():
+                            logger.info("Turn cancelled after script generation")
+                            return {"status": "cancelled", "message": "Turn cancelled", "dialogue": []}
+                        
                         with self.state_lock:
                             self.last_script_data = script_json
                         
@@ -708,6 +886,11 @@ class Stage:
                         logger.debug("Processing director script")
                         self.emit_event('director_status', {"status": "idle", "message": ""})
                         dialogue_lines = self.process_director_script(script_json)
+                        
+                        # Check cancellation after processing script
+                        if self.cancellation_event.is_set():
+                            logger.info("Turn cancelled after processing script")
+                            return {"status": "cancelled", "message": "Turn cancelled", "dialogue": []}
                         
                     except json.JSONDecodeError as e:
                         error_msg = f"Error parsing outline JSON: {str(e)}"
@@ -725,6 +908,11 @@ class Stage:
                 logger.debug(f"Checking objective completion for: {current_objective}")
                 with self.dialogue_lock:
                     full_chat_snapshot = self.full_chat
+                
+                # Final cancellation check
+                if self.cancellation_event.is_set():
+                    logger.info("Turn cancelled before objective check")
+                    return {"status": "cancelled", "message": "Turn cancelled", "dialogue": dialogue_lines}
                 
                 try:
                     self.emit_event('director_status', {"status": "writing", "message": "Checking objective completion..."})
@@ -776,35 +964,71 @@ class Stage:
                 was_processing = self.is_processing
                 self.is_processing = False
                 logger.debug(f"advance_turn finished. Was processing: {was_processing}")
+            
+            # Unregister thread if still registered
+            with self.thread_lock:
+                if thread_id in self.active_threads:
+                    self.active_threads.pop(thread_id)
 
     def player_interrupt(self, player_input):
         """Handle player interruption with new input and proper thread safety"""
         logger.info(f"Player interrupt: {player_input[:50]}...")
         
+        # Record the current cancellation state before changes
+        previous_cancellation_state = self.cancellation_event.is_set()
+        logger.debug(f"Cancellation state before interrupt: {previous_cancellation_state}")
+        
+        # Signal all running threads to stop - more aggressively
+        self._cancel_all_operations()
+        self.flush_pending_operations()
+        
+        # Force reset processing state immediately
         with self.processing_lock:
-            if self.is_processing:
-                logger.warning("Already processing. Cannot handle player interrupt.")
-                self.emit_event('status', {"message": "Already processing. Please wait."})
-                return {"status": "waiting", "message": "Already processing", "dialogue": []}
-            
-            if self.story_completed:
-                logger.info("Story is already complete. Cannot handle player interrupt.")
-                self.emit_event('status', {"message": "Story is already complete."})
-                return {"status": "complete", "message": "Story already complete", "dialogue": []}
-                
+            was_processing = self.is_processing
+            self.is_processing = False
+            logger.info(f"Force reset processing state from {was_processing} to False")
+        
+        # Clear any pending messages in the queue
+        with self.dialogue_lock:
+            # Create a snapshot of the current dialogue for context
+            current_context = self.context
+        
+        # Wait for cancellation to take effect
+        time.sleep(0.5)
+        
+        # CRUCIAL FIX: Ensure cancellation event is cleared BEFORE continuing
+        # This prevents race conditions in process_director_script
+        self.cancellation_event.clear()
+        logger.info("Cancellation event explicitly cleared for new player interrupt operation")
+        
+        # Ensure any active Socket.IO emissions are completed
+        if self.socketio:
+            try:
+                # Emit a clear message to signal client to prepare for fresh content
+                self.socketio.emit('status', {"message": "Resetting scene for player input..."}, room=self.chat_id)
+            except Exception as e:
+                logger.error(f"Error emitting reset message: {str(e)}")
+        
+        # Set processing state for this interrupt operation
+        with self.processing_lock:
             self.is_processing = True
-            
-        result = {"status": "unknown", "message": "Interrupt not processed", "dialogue": []}
-            
+        
         try:
-            with self.timed_operation("player_interrupt", timeout=300):  # 5 minute timeout
+            with self.timed_operation("player_interrupt", timeout=300):
                 self.emit_event('status', {"message": "Player interrupts"})
                 
-                # Add player input to history
+                # Add player input to history - with a clean slate approach
                 with self.dialogue_lock:
                     player_name = self.player.name
                     interrupt_line = f"{player_name}: {player_input}"
-                    self.context = f"{self.context}\n{interrupt_line}" if self.context else interrupt_line
+                    
+                    # Add to context - keeping recent context but adding player input
+                    # This preserves some context but prevents overlong chains
+                    recent_lines = current_context.split('\n')[-10:] if current_context else []
+                    recent_context = '\n'.join(recent_lines)
+                    self.context = f"{recent_context}\n{interrupt_line}" if recent_context else interrupt_line
+                    
+                    # Full chat should maintain the complete history
                     self.full_chat = f"{self.full_chat}\n{interrupt_line}" if self.full_chat else interrupt_line
                     
                     player_dialogue = {
@@ -812,9 +1036,9 @@ class Stage:
                         "content": player_input,
                         "type": "player_input"
                     }
+                    
+                    # Make this player message the most recent one
                     self.dialogue_history.append(player_dialogue)
-                
-                self.emit_event('dialogue', player_dialogue)
                 
                 # Save to database
                 if self.chat_id:
@@ -835,12 +1059,11 @@ class Stage:
                     
                     self.save_state_to_db()
                 
-                # Generate new script
-                self.emit_event('director_status', {"status": "directing", "message": "Director is directing..."})
-                
+                # Get current objective and last outline
                 with self.state_lock:
                     current_obj = self.current_objective()
-                    
+                    last_outline = self.last_outline
+                
                 if not current_obj:
                     logger.info("No current objective. Story complete.")
                     with self.state_lock:
@@ -851,24 +1074,29 @@ class Stage:
                     return {"status": "error", "message": "No current objective", "dialogue": []}
                 
                 try:
-                    # Get context snapshot to use outside locks
+                    # Get context snapshot
                     with self.dialogue_lock:
                         context_snapshot = self.context
-                        
-                    # Generate outline without holding locks
-                    logger.debug(f"Generating outline after player interrupt for objective: {current_obj}")
-                    outline_str = self.director.generate_outline(context_snapshot, current_obj)
-                    outline = json.loads(self._clean_json(outline_str))
                     
-                    with self.state_lock:
-                        self.last_outline = outline
+                    # Generate new script
+                    self.emit_event('director_status', {"status": "directing", "message": "Director is responding to player input..."})
                     
-                    new_outline = outline.get('new_outline', outline)
+                    if not last_outline:
+                        # Only generate outline if we don't have one
+                        logger.info("No last outline available, generating new outline")
+                        outline_str = self.director.generate_outline(context_snapshot, current_obj)
+                        try:
+                            last_outline = json.loads(self._clean_json(outline_str))
+                            with self.state_lock:
+                                self.last_outline = last_outline
+                        except json.JSONDecodeError as e:
+                            error_msg = f"Error parsing outline JSON: {str(e)}"
+                            logger.error(error_msg, exc_info=True)
+                            self.emit_event('error', {"message": error_msg})
+                            return {"status": "error", "message": error_msg, "dialogue": []}
                     
-                    with self.dialogue_lock:
-                        latest_context = self.context  # Get fresh context
-                        
-                    script_json = self.director.generate_turn_instructions(latest_context, new_outline)
+                    # Generate script using last outline
+                    script_json = self.director.generate_turn_instructions(context_snapshot, last_outline)
                     
                     with self.state_lock:
                         self.last_script_data = script_json
@@ -878,37 +1106,29 @@ class Stage:
                     
                     self.emit_event('director_status', {"status": "idle", "message": ""})
                     
+                    # IMPORTANT FIX: Double-check cancellation state before script processing
+                    if self.cancellation_event.is_set():
+                        logger.warning("Cancellation event still set before script processing, clearing it again")
+                        self.cancellation_event.clear()
+                    
+                    # Log the cancellation state for debugging
+                    logger.debug(f"Cancellation state before script processing: {self.cancellation_event.is_set()}")
+                    
                     # Process the director's script
                     dialogue_lines = self.process_director_script(script_json)
                     
+                    return {
+                        "status": "success",
+                        "dialogue": dialogue_lines,
+                        "player_input": player_input
+                    }
+                
                 except Exception as e:
                     error_msg = f"Error generating script after player interrupt: {str(e)}"
                     logger.error(error_msg, exc_info=True)
                     self.emit_event('error', {"message": error_msg})
                     return {"status": "error", "message": error_msg, "dialogue": []}
-                
-                # Check objective completion
-                try:
-                    with self.dialogue_lock:
-                        full_chat_snapshot = self.full_chat
-                        
-                    check_result_str = self.director.check_objective(full_chat_snapshot, current_obj)
-                    check_result = json.loads(self._clean_json(check_result_str))
-                    completed, objective_status = self.check_objective_completion(check_result, current_obj)
                     
-                except Exception as e:
-                    error_msg = f"Error checking objective after player interrupt: {str(e)}"
-                    logger.error(error_msg, exc_info=True)
-                    self.emit_event('error', {"message": error_msg})
-                
-                result = {
-                    "status": "success",
-                    "dialogue": dialogue_lines,
-                    "player_input": player_input
-                }
-                
-                return result
-                
         except Exception as e:
             error_msg = f"Unexpected error in player_interrupt: {str(e)}"
             logger.error(error_msg, exc_info=True)
@@ -917,9 +1137,15 @@ class Stage:
             
         finally:
             with self.processing_lock:
-                was_processing = self.is_processing
                 self.is_processing = False
-                logger.debug(f"player_interrupt finished. Was processing: {was_processing}")
+                logger.debug("player_interrupt finished")
+
+    def handle_player_response(self, player_input):
+        """Handle player's response to a player_action event"""
+        logger.info(f"Received player response: {player_input[:50]}...")
+        
+        # Process the player input as an interrupt
+        return self.player_interrupt(player_input)
 
     def get_state(self):
         """Get current state of the stage thread-safely"""
@@ -971,6 +1197,9 @@ class Stage:
                     "message": "Already processing a turn"
                 }
             self.is_processing = False  # Reset to ensure we can start
+            
+            # Clear cancellation event at sequence start
+            self.cancellation_event.clear()
         
         # Use a timer to schedule the first turn after a small delay
         # This ensures any lock state changes have propagated
