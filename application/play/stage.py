@@ -20,7 +20,7 @@ logging.basicConfig(
 
 # Create specific logger for Stage with its own level and handlers
 logger = logging.getLogger("Stage")
-logger.setLevel(logging.DEBUG)  # Only Stage logs will show at DEBUG level
+logger.setLevel(logging.WARNING)  # Only Stage logs will show at DEBUG level
 
 # Clear any existing handlers to avoid duplicates
 if logger.handlers:
