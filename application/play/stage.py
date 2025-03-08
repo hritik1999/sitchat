@@ -11,7 +11,7 @@ from application.play.player import Player
 from application.play.actor import Actor
 from application.play.director import Director
 from application.ai.llm import actor_llm, director_llm
-
+import math
 # Set root logger to WARNING level to suppress most library logs
 logging.basicConfig(
     level=logging.WARNING,  # This makes all loggers use WARNING by default
@@ -480,7 +480,7 @@ class Stage:
                         try:
                             # Get actor reply without holding the lock
                             reply_output = actor.reply(context_snapshot, instructions)
-                            
+                            time.sleep(math.floor(len(reply_output.split(' '))/4))
                             # Re-acquire lock to update dialogue
                             with self.dialogue_lock:
                                 dialogue_line = f"{role}: {reply_output}"
@@ -637,6 +637,9 @@ class Stage:
                 self.is_processing = True
         
         result = {"status": "unknown", "message": "Turn not completed", "dialogue": []}
+
+        # Director generates outline and script
+        self.emit_event('director_status', {"status": "directing", "message": "Director is directing..."})
         
         try:
             with self.timed_operation("advance_turn", timeout=300):  # 5 minute timeout
@@ -657,9 +660,6 @@ class Stage:
                             "story_completed": True
                         })
                         return {"status": "complete", "message": "Story complete", "dialogue": []}
-
-                # Director generates outline and script
-                self.emit_event('director_status', {"status": "directing", "message": "Director is directing..."})
                 
                 # Get context snapshot to use outside locks
                 with self.dialogue_lock:
@@ -668,12 +668,14 @@ class Stage:
                     failure_reason = self.plot_failure_reason
                 
                 try:
+                    self.emit_event('director_status', {"status": "directing", "message": "Analyzing story progress..."})
                     # Generate outline without holding locks
                     logger.debug(f"Generating outline for objective: {current_objective}")
                     outline_str = self.director.generate_outline(context_snapshot, current_objective, failure_reason)
                     
                     try:
                         outline = json.loads(self._clean_json(outline_str))
+                        self.emit_event('director_status', {"status": "directing", "message": "Writing next scene..."})
                         
                         with self.state_lock:
                             self.last_outline = outline
@@ -693,7 +695,8 @@ class Stage:
                         logger.debug("Generating turn instructions from outline")
                         with self.dialogue_lock:
                             latest_context = self.context  # Get fresh context
-                            
+
+                        self.emit_event('director_status', {"status": "directing", "message": "Director is cueing the actors..."})
                         script_json = self.director.generate_turn_instructions(latest_context, new_outline)
                         
                         with self.state_lock:
@@ -701,11 +704,10 @@ class Stage:
                         
                         if self.chat_id:
                             self.save_state_to_db()
-
-                        self.emit_event('director_status', {"status": "idle", "message": ""})
                         
                         # Process the director's script
                         logger.debug("Processing director script")
+                        self.emit_event('director_status', {"status": "idle", "message": ""})
                         dialogue_lines = self.process_director_script(script_json)
                         
                     except json.JSONDecodeError as e:
@@ -726,7 +728,9 @@ class Stage:
                     full_chat_snapshot = self.full_chat
                 
                 try:
+                    self.emit_event('director_status', {"status": "writing", "message": "Checking objective completion..."})
                     check_result_str = self.director.check_objective(full_chat_snapshot, current_objective)
+                    self.emit_event('director_status', {"status": "idle", "message": ""})
                     check_result = json.loads(self._clean_json(check_result_str))
                     completed, objective_status = self.check_objective_completion(check_result, current_objective)
                     

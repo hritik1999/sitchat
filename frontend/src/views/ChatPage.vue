@@ -33,7 +33,7 @@
     <!-- Director Directing Message - with loading bar -->
 <div v-if="directorDirecting" class="container mx-auto px-4 pt-2">
   <div class="text-center text-sm text-white py-2 bg-indigo-600 dark:bg-indigo-800 rounded-md p-2 animate-pulse">
-    <span class="font-medium">Director is directing the scene...</span>
+    <span class="font-medium">{{ this.director_message }}</span>
   </div>
   <!-- Loading Bar -->
   <div class="mt-2 h-1 bg-gray-200 dark:bg-gray-700 rounded-full">
@@ -181,6 +181,7 @@ export default {
       typingIndicators: {},
       messages: [],
       statusMessage: '',
+      director_message: '',
       errorMessage: '',
       socket: null,
       isConnected: false,
@@ -475,7 +476,7 @@ export default {
       this.directorDirecting = directorData.status === 'directing'
       
       if (directorData.message) {
-        this.statusMessage = directorData.message
+        this.director_message = directorData.message
       }
       
       this.scrollToBottom()
@@ -581,6 +582,6 @@ export default {
 }
 
 .animate-director-progress {
-  animation: directorProgress 3s linear;
+  animation: directorProgress 5s linear;
 }
 </style>
