@@ -671,8 +671,9 @@ class Stage:
         logger.info(f"Processed {len(dialogue_lines)} dialogue lines from director script")
         return dialogue_lines
 
+    # Improved _cancel_all_operations method with more aggressive cancellation
     def _cancel_all_operations(self):
-        """Cancel all running operations - more aggressively"""
+        """Cancel all running operations with enhanced cleanup"""
         logger.info("Aggressively cancelling all running operations")
         
         # Set cancellation event to signal all threads to stop
@@ -683,8 +684,13 @@ class Stage:
             # Save current state but don't process more messages
             pass
         
-        # Emit a more immediate cancellation status
-        self.emit_event('status', {"message": "Processing interrupted by player"})
+        # Emit an immediate cancellation status
+        self.emit_event('status', {"message": "Processing interrupted and stopped"})
+        
+        # Cancel all pending operations timeouts
+        for op_name in list(self.operation_timeouts.keys()):
+            logger.warning(f"Cancelling operation timeout for: {op_name}")
+            self.operation_timeouts.pop(op_name, None)
         
         # Log all active threads for debugging
         with self.thread_lock:
@@ -694,6 +700,10 @@ class Stage:
                 logger.info(f"Cancellation requested for {active_count} active threads: {thread_info}")
             else:
                 logger.info("No active threads to cancel")
+                
+        # Clear all typing indicators to improve UI experience
+        self.emit_event('typing_indicator', {"role": "all", "status": "idle"})
+        self.emit_event('director_status', {"status": "idle", "message": ""})
 
     def flush_pending_operations(self):
         """Force clear any pending operations"""
@@ -1213,3 +1223,50 @@ class Stage:
             "status": "started",
             "message": "Story sequence started"
         }
+    
+    def stop(self):
+        """Stop all ongoing processing and cleanup resources"""
+        logger.info(f"Stopping stage for chat_id={self.chat_id}")
+        
+        # Signal all running threads to stop
+        self._cancel_all_operations()
+        
+        # Set story completed to prevent further processing
+        with self.state_lock:
+            self.story_completed = True
+            
+        # Force reset processing state
+        with self.processing_lock:
+            if self.is_processing:
+                logger.info(f"Forcibly resetting processing flag for chat_id={self.chat_id}")
+                self.is_processing = False
+        
+        # Terminate all active threads
+        with self.thread_lock:
+            for thread_id, info in list(self.active_threads.items()):
+                logger.warning(f"Forcibly terminating thread {thread_id} of type {info['type']}")
+                # We can't actually terminate threads in Python, but we've set the cancellation flag
+                # which should cause them to exit gracefully
+                
+        # Final database update to save current state - only use existing fields
+        if self.chat_id:
+            try:
+                with self.db_lock:
+                    # Only update fields that exist in the database schema
+                    db.update_chat(self.chat_id, {
+                        'story_completed': self.story_completed
+                    })
+                logger.info(f"Successfully updated database for chat_id={self.chat_id} to stopped state")
+            except Exception as e:
+                logger.error(f"Error updating database during stop: {str(e)}", exc_info=True)
+                
+        # Emit a socket event to notify clients that processing has stopped
+        self.emit_event('status', {
+            'message': 'Chat processing has been stopped',
+            'story_completed': self.story_completed
+        })
+        
+        # Cleanup any remaining resources
+        self.flush_pending_operations()
+        
+        logger.info(f"Stage stopped for chat_id={self.chat_id}")

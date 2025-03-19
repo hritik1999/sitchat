@@ -502,7 +502,7 @@ def setup_socket_handlers(socketio):
     
     @socketio.on('disconnect')
     def handle_disconnect():
-        """Handle client disconnection"""
+        """Handle client disconnection and properly clean up all resources"""
         logger.info(f"Client disconnected: {request.sid}")
         
         try:
@@ -514,15 +514,76 @@ def setup_socket_handlers(socketio):
                 client_rooms.remove(request.sid)
             
             # For each room (likely to be a chat_id) the client was in
+            # Keep track of chats that were stopped
+            stopped_chats = []
+            
             for chat_id in client_rooms:
                 with active_stages_lock:
                     if chat_id in active_stages:
-                        # Don't forcibly reset processing flag as it may disrupt ongoing operations
-                        # Just notify other clients in the room about the disconnection
-                        socketio.emit('status', {'message': 'A client disconnected from this chat'}, room=chat_id)
-                        logger.info(f"Client disconnected from chat_id: {chat_id}")
+                        try:
+                            logger.info(f"Stopping stage for chat_id={chat_id} due to client disconnect")
+                            # Call the stop method to properly terminate all operations
+                            active_stages[chat_id].stop()
+                            # Remove from active stages to free up resources
+                            active_stages.pop(chat_id)
+                            stopped_chats.append(chat_id)
+                        except Exception as e:
+                            logger.error(f"Error stopping stage for chat_id={chat_id}: {str(e)}", exc_info=True)
+                            socketio.emit('error', {'message': f'Error stopping chat: {str(e)}'}, room=chat_id)
+            
+            # Notify all rooms about disconnection
+            for chat_id in stopped_chats:
+                socketio.emit('status', {
+                    'message': 'Chat processing stopped as client disconnected'
+                }, room=chat_id)
+            
+            # Remove the client from any rooms they may have been in
+            leave_room(request.sid)
+            
+            logger.info(f"Client {request.sid} disconnected and cleaned up {len(stopped_chats)} chats")
+
         except Exception as e:
             logger.error(f"Error handling disconnect: {str(e)}", exc_info=True)
+            
+        # Force a cleanup of inactive stages to ensure memory is freed
+        try:
+            cleanup_inactive_stages()
+        except Exception as e:
+            logger.error(f"Error during forced cleanup: {str(e)}", exc_info=True)
+
+    @socketio.on('leave_chat')
+    def handle_leave_chat(data):
+        """Handle explicit leave_chat event when user navigates away"""
+        try:
+            chat_id = data.get('chat_id')
+            if not chat_id:
+                socketio.emit('error', {'message': 'No chat ID provided'}, room=request.sid)
+                return
+            
+            logger.info(f"Client {request.sid} explicitly leaving chat: {chat_id}")
+            
+            # Stop the stage immediately
+            with active_stages_lock:
+                if chat_id in active_stages:
+                    logger.info(f"Stopping stage for chat_id={chat_id} due to explicit leave")
+                    # Call the stop method to properly terminate all operations
+                    active_stages[chat_id].stop()
+                    # Remove from active stages
+                    active_stages.pop(chat_id)
+                    socketio.emit('status', {
+                        'message': 'Chat processing stopped as you left the chat'
+                    }, room=chat_id)
+            
+            # Leave the room
+            leave_room(chat_id)
+            logger.info(f"Client {request.sid} has left chat: {chat_id}")
+            
+        except Exception as e:
+            logger.error(f"Error handling leave_chat: {str(e)}", exc_info=True)
+            socketio.emit('error', {
+                'message': f'Error leaving chat: {str(e)}',
+                'code': 'leave_error'
+            }, room=request.sid)
 
     @socketio.on('join_chat')
     def handle_join_chat(data):

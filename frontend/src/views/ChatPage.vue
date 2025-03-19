@@ -318,20 +318,33 @@ export default {
     },
 
     disconnectSocket() {
-      if (this.socket) {
-        this.socket.off('connect')
-        this.socket.off('connect_error')
-        this.socket.off('disconnect')
-        this.socket.off('dialogue')
-        this.socket.off('status')
-        this.socket.off('error')
-        this.socket.off('objective_status')
-        this.socket.off('typing_indicator')
-        this.socket.off('director_status')
-        this.socket.off('player_action')
-        this.socket.disconnect()
-      }
-    },
+  if (this.socket) {
+    // First explicitly leave the chat to ensure proper cleanup
+    if (this.chatId) {
+      this.socket.emit('leave_chat', { chat_id: this.chatId });
+      console.log(`Explicitly left chat: ${this.chatId}`);
+    }
+    
+    // Short timeout to allow leave_chat to be processed
+    setTimeout(() => {
+      // Remove all event listeners
+      this.socket.off('connect');
+      this.socket.off('connect_error');
+      this.socket.off('disconnect');
+      this.socket.off('dialogue');
+      this.socket.off('status');
+      this.socket.off('error');
+      this.socket.off('objective_status');
+      this.socket.off('typing_indicator');
+      this.socket.off('director_status');
+      this.socket.off('player_action');
+      
+      // Then disconnect
+      this.socket.disconnect();
+      console.log('Socket disconnected');
+    }, 200); // Short delay to allow leave_chat to be processed
+  }
+},
 
     handleConnect() {
       this.isConnected = true
