@@ -1009,7 +1009,7 @@ class Stage:
             current_context = self.context
         
         # Wait for cancellation to take effect
-        time.sleep(0.5)
+        time.sleep(0.1)
         
         # CRUCIAL FIX: Ensure cancellation event is cleared BEFORE continuing
         # This prevents race conditions in process_director_script
