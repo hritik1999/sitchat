@@ -74,7 +74,7 @@ class Director:
             2. Use keywords and brief instructions rather than explicit dialogue, allowing actors creative freedom in their performance.
             3. Ensure that the transitions between lines are smooth and that the overall tone remains consistent with the show's style.
             4. Use character dialogues to replace Narration wherever possible.
-            5. instruct the characters to engage the player if required.
+            5. always instruct the characters to engage with the player if there is a message from the player.
             6. Do not mention the Player in the narration.
             6. If the outlined events are covered before reaching {num_lines} lines, you may stop early.
 

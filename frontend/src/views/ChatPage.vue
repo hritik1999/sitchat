@@ -574,13 +574,13 @@ export default {
   watch: {
     // Auto-start chat when connected
     isConnected(newVal) {
-      if (newVal && !this.isChatStarted && !this.storyCompleted) {
-        // Small delay to ensure join_chat has completed
-        setTimeout(() => {
-          this.handleConnect()
-        }, 1000)
-      }
-    },
+    if (newVal && !this.isChatStarted && !this.storyCompleted) {
+      setTimeout(() => {
+        // Just set the flag, don't call the full method again
+        this.isChatStarted = true;
+      }, 1000)
+    }
+  },
     
     storyCompleted(newVal) {
       if (newVal) {

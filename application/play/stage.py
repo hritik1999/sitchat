@@ -82,7 +82,7 @@ class Stage:
         """Context manager to handle operation timeouts"""
         if timeout is None:
             timeout = self.DEFAULT_TIMEOUT
-            
+                
         try:
             self.operation_timeouts[operation_name] = {
                 'start_time': time.time(),
@@ -93,12 +93,16 @@ class Stage:
             logger.error(f"Error in {operation_name}: {str(e)}", exc_info=True)
             raise
         finally:
-            elapsed = time.time() - self.operation_timeouts[operation_name]['start_time']
-            if elapsed > timeout:
-                logger.warning(f"Operation {operation_name} took {elapsed:.2f}s, exceeded timeout of {timeout}s")
+            # Check if the operation is still in the dictionary
+            if operation_name in self.operation_timeouts:
+                elapsed = time.time() - self.operation_timeouts[operation_name]['start_time']
+                if elapsed > timeout:
+                    logger.warning(f"Operation {operation_name} took {elapsed:.2f}s, exceeded timeout of {timeout}s")
+                else:
+                    logger.debug(f"Operation {operation_name} completed in {elapsed:.2f}s")
+                self.operation_timeouts.pop(operation_name, None)
             else:
-                logger.debug(f"Operation {operation_name} completed in {elapsed:.2f}s")
-            self.operation_timeouts.pop(operation_name, None)
+                logger.warning(f"Operation {operation_name} was cancelled or not found in timeouts dictionary")
     
     def _load_from_database(self, chat_id):
         """Load stage data from database with error handling"""
@@ -545,7 +549,7 @@ class Stage:
                                 logger.info("Actor dialogue cancelled after reply")
                                 return dialogue_lines
                                 
-                            time.sleep(math.floor(len(reply_output.split(' '))/4))
+                            time.sleep(math.floor(len(reply_output.split(' '))/3))
                             
                             # Check again for cancellation
                             if self.cancellation_event.is_set():
@@ -555,6 +559,7 @@ class Stage:
                             # Re-acquire lock to update dialogue
                             with self.dialogue_lock:
                                 dialogue_line = f"{role}: {reply_output}"
+                                self.dialogue_history.append(dialogue_line)
                                 self.context = f"{self.context}\n{dialogue_line}" if self.context else dialogue_line
                                 self.full_chat = f"{self.full_chat}\n{dialogue_line}" if self.full_chat else dialogue_line
                                 
@@ -1127,6 +1132,31 @@ class Stage:
                     
                     # Process the director's script
                     dialogue_lines = self.process_director_script(script_json)
+                    
+                    # NEW CODE: Check objective completion after processing player interrupt
+                    with self.dialogue_lock:
+                        full_chat_snapshot = self.full_chat
+                    
+                    # Check if objective is completed after player's input and response
+                    self.emit_event('director_status', {"status": "writing", "message": "Checking objective completion..."})
+                    try:
+                        check_result_str = self.director.check_objective(full_chat_snapshot, current_obj)
+                        self.emit_event('director_status', {"status": "idle", "message": ""})
+                        check_result = json.loads(self._clean_json(check_result_str))
+                        completed, objective_status = self.check_objective_completion(check_result, current_obj)
+                        
+                        # Schedule next turn regardless of completion status
+                        # This ensures the story continues after player interrupt
+                        if not self.story_completed and self.current_objective_index < len(self.plot_objectives):
+                            logger.info("Scheduling next turn after player interrupt")
+                            timer = threading.Timer(0.5, self.trigger_next_turn)
+                            timer.daemon = True
+                            timer.start()
+                            logger.debug(f"Scheduled next turn timer after player interrupt: {timer.name}")
+                    except Exception as e:
+                        error_msg = f"Error checking objective after player interrupt: {str(e)}"
+                        logger.error(error_msg, exc_info=True)
+                        self.emit_event('error', {"message": error_msg})
                     
                     return {
                         "status": "success",
