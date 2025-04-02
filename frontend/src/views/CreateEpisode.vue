@@ -234,8 +234,7 @@
           await fetchApi(url, {
             method: this.isEditMode ? 'PUT' : 'POST',
             body: JSON.stringify({
-              ...this.episodeForm,
-              plot_objectives: JSON.stringify(this.episodeForm.plot_objectives)
+              ...this.episodeForm
             })
           })
   

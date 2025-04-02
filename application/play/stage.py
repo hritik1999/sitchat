@@ -521,7 +521,7 @@ class Stage:
                         
 
                         
-                    elif role in self.actors:
+                    elif role.lower() in [actor.name.lower() for actor in self.actors.values()]:
                         # Handle actor dialogue
                         self.emit_event('typing_indicator', {"role": role, "status": "typing"})
                         try:
