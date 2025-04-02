@@ -525,7 +525,7 @@ class Stage:
                         # Handle actor dialogue
                         self.emit_event('typing_indicator', {"role": role, "status": "typing"})
                         try:
-                            actor = self.actors[role]
+                            actor = self.actors[role] or self.actors[role.lower()]
                             # Release dialogue lock while waiting for actor reply
                             context_snapshot = self.context  # Create snapshot
                         except Exception as e:
