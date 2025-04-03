@@ -43,7 +43,7 @@
                   <!-- Role Label -->
                   <div class="flex items-center gap-2 mb-1" :class="{ 'justify-end': msg.role === 'Player' }">
                     <span class="font-semibold text-sm" :class="getRoleColor(msg.role || '')">
-                      {{ msg.role }}
+                      {{ msg.role === 'Player' ? player_name : msg.role }}
                     </span>
                   </div>
                   
@@ -135,6 +135,7 @@
         rating: 0,
         isSubmitting: false,
         ratingSubmitted: false,
+        player_name: 'Player',
         characterColors: {},
         colorPalette: [
           'text-red-600 dark:text-red-400',
@@ -164,9 +165,9 @@
           const chatData = await fetchApi(`api/chats/${this.chatId}`, {
             headers: { Authorization: `Bearer ${token}` }
           })
-  
-          if (!chatData?.chat) throw new Error('Invalid chat data')
           
+          if (!chatData?.chat) throw new Error('Invalid chat data')
+          this.player_name = chatData.chat.player_name || 'Player' 
           this.episodeId = chatData.chat.episode_id
           this.episodeName = chatData.chat.episodes?.name || 'Unknown Episode'
           this.messages = chatData.messages?.sort((a, b) => a.sequence - b.sequence) || []
@@ -180,10 +181,10 @@
             if (showData?.show) {
               this.showName = showData.show.name || 'Unknown Show'
               // Assign character colors
-              showData.show.characters?.forEach((character, index) => {
-                this.characterColors[character.name] = 
+              showData.show.characters.forEach((character, index) => {
+              this.characterColors[character.name.toLowerCase()] = 
                   this.colorPalette[index % this.colorPalette.length]
-              })
+            })
             }
           }
         } catch (error) {
@@ -231,12 +232,21 @@
       },
   
       getRoleColor(role) {
-        return this.characterColors[role] || {
-          'Narration': 'text-purple-600 dark:text-purple-400',
-          'Player': 'text-blue-600 dark:text-blue-400',
-          'system': 'text-gray-600 dark:text-gray-400'
-        }[role] || 'text-gray-600 dark:text-gray-400'
-      },
+    const lowerRole = role.toLowerCase()
+    // Check lowercase version
+    if (this.characterColors[lowerRole]) {
+      return this.characterColors[lowerRole]
+    }
+      
+    // Default colors for system roles
+    const colorMap = {
+        'Narration': 'text-purple-600 dark:text-purple-400',
+        'Player': 'text-blue-600 dark:text-blue-400',
+        'system': 'text-gray-600 dark:text-gray-400'
+      }
+      
+      return colorMap[role] || 'text-gray-600 dark:text-gray-400'
+    },
   
       getMessageStyle(type, role) {
         const styleMap = {
@@ -245,10 +255,13 @@
           'system': 'bg-gray-100 dark:bg-gray-800/50 text-sm'
         }
   
-        if (type === 'actor_dialogue' && this.characterColors[role]) {
-          const baseColor = this.characterColors[role].split(' ')[0]
+        if (type === 'actor_dialogue') {
+        const lowerRole = role.toLowerCase()
+        if (this.characterColors[lowerRole]) {
+          const baseColor = this.characterColors[lowerRole].split(' ')[0]
           return `${baseColor.replace('text', 'bg')}/20 dark:${baseColor.replace('text', 'bg')}/30`
         }
+      }
   
         return styleMap[type] || 'bg-gray-100 dark:bg-gray-800/30'
       }

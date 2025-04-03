@@ -59,7 +59,7 @@
                 <!-- Role Label -->
                 <div class="flex items-center gap-2 mb-1" :class="{ 'justify-end': msg.role === 'Player' }">
                   <span class="font-semibold text-sm" :class="getRoleColor(msg.role || '')">
-                    {{ msg.role }}
+                    {{ msg.role === 'Player' ? player_name : msg.role }}
                   </span>
                 </div>
                 
@@ -89,7 +89,7 @@
                 <div class="flex-1 max-w-[90%]">
                   <div class="flex items-center gap-2 mb-1">
                     <span class="font-semibold text-sm" :class="getRoleColor(role)">
-                      {{ role }}
+                      {{ role === 'Player' ? player_name : role }}
                     </span>
                   </div>
                   <div class="p-3 rounded-lg bg-gray-100 dark:bg-gray-800 inline-flex items-center">
@@ -191,6 +191,7 @@ export default {
       isChatStarted: false,
       storyCompleted: false,
       typingTimeout: null,
+      player_name: 'Player',
       characterColors: {}, // New property to store character colors
       colorPalette: [ // Predefined color classes for characters
         'text-red-600 dark:text-red-400',
@@ -239,6 +240,7 @@ export default {
         }
         
         const chatData = data.chat
+        this.player_name = chatData.player_name || 'Player' 
         this.episodeId = chatData.episode_id || this.episodeId
         this.episodeName = chatData.episodes?.name || 'Unknown Episode'
         this.objectiveIndex = chatData.current_objective_index
@@ -260,8 +262,8 @@ export default {
             }
             // Assign colors to characters
             showData.show.characters.forEach((character, index) => {
-              this.characterColors[character.name] = 
-                this.colorPalette[index % this.colorPalette.length]
+              this.characterColors[character.name.toLowerCase()] = 
+                  this.colorPalette[index % this.colorPalette.length]
             })
           }
         }
@@ -540,11 +542,12 @@ export default {
       this.$router.go(-1)
     },
     getRoleColor(role) {
-      // Check if we have a color assigned for this character
-      if (this.characterColors[role]) {
-        return this.characterColors[role]
-      }
-    
+    const lowerRole = role.toLowerCase()
+    // Check lowercase version
+    if (this.characterColors[lowerRole]) {
+      return this.characterColors[lowerRole]
+    }
+      
     // Default colors for system roles
     const colorMap = {
         'Narration': 'text-purple-600 dark:text-purple-400',
@@ -562,9 +565,12 @@ export default {
       }
 
       // For actor dialogues
-      if (type === 'actor_dialogue' && this.characterColors[role]) {
-        const baseColor = this.characterColors[role].split(' ')[0]
-        return `${baseColor.replace('text', 'bg')}/20 dark:${baseColor.replace('text', 'bg')}/30`
+      if (type === 'actor_dialogue') {
+        const lowerRole = role.toLowerCase()
+        if (this.characterColors[lowerRole]) {
+          const baseColor = this.characterColors[lowerRole].split(' ')[0]
+          return `${baseColor.replace('text', 'bg')}/20 dark:${baseColor.replace('text', 'bg')}/30`
+        }
       }
 
       return styleMap[type] || 'bg-gray-100 dark:bg-gray-800/30'

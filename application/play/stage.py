@@ -60,6 +60,7 @@ class Stage:
         self.cancellation_event = threading.Event() # Event for signaling cancellation
         
         self.story_completed = False
+        self.background = ''
         self.full_chat = ''
         self.chat_id = None
         self.operation_timeouts = {}  # Track operation timeouts
@@ -146,7 +147,7 @@ class Stage:
                 # Parse plot objectives
                 self.plot_objectives = self._parse_json_field(episode_data.get('plot_objectives', '[]'))
                 background = episode_data.get('background', '')
-                
+                self.background = background
                 # Load show data
                 show_id = episode_data.get('show_id')
                 show_data = db.get_show(show_id)
@@ -548,7 +549,7 @@ class Stage:
                                 logger.info("Actor dialogue cancelled after reply")
                                 return dialogue_lines
                                 
-                            time.sleep(math.floor(len(reply_output.split(' '))/3))
+                            time.sleep(math.floor(len(reply_output.split(' '))/2))
                             
                             # Check again for cancellation
                             if self.cancellation_event.is_set():
@@ -627,8 +628,16 @@ class Stage:
                             return dialogue_lines
                             
                         time.sleep(1)  # Small delay for realism
+
+                        actor = Actor(role,'', '',self.background, llm=actor_llm)
+                        reply_output = actor.reply(self.context, instructions)
                         
-                        dialogue_line = f"{role}: {instructions}"
+                        # Check again for cancellation
+                        if self.cancellation_event.is_set():
+                            logger.info("Other role dialogue cancelled after typing delay")
+                            return dialogue_lines
+                        
+                        dialogue_line = f"{role}: {reply_output}"
                         self.context = f"{self.context}\n{dialogue_line}" if self.context else dialogue_line
                         self.full_chat = f"{self.full_chat}\n{dialogue_line}" if self.full_chat else dialogue_line
                         
@@ -636,14 +645,14 @@ class Stage:
                         
                         dialogue_entry = {
                             "role": role, 
-                            "content": instructions, 
+                            "content": reply_output, 
                             "type": "other"
                         }
                         dialogue_lines.append(dialogue_entry)
                         
                         messages_to_save.append({
                             "role": role,
-                            "content": instructions,
+                            "content": reply_output,
                             "type": "other",
                             "sequence": sequence_count
                         })
