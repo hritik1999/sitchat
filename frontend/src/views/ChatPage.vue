@@ -262,8 +262,13 @@ export default {
             }
             // Assign colors to characters
             showData.show.characters.forEach((character, index) => {
-              this.characterColors[character.name.toLowerCase()] = 
-                  this.colorPalette[index % this.colorPalette.length]
+              const cleanedName = character.name.trim().toLowerCase();
+              this.characterColors[cleanedName] = 
+                this.colorPalette[index % this.colorPalette.length];
+              
+              // Add original name mapping for display purposes
+              this.characterColors[character.name.trim()] = 
+                this.colorPalette[index % this.colorPalette.length];
             })
           }
         }
@@ -542,21 +547,28 @@ export default {
       this.$router.go(-1)
     },
     getRoleColor(role) {
-    const lowerRole = role.toLowerCase()
-    // Check lowercase version
-    if (this.characterColors[lowerRole]) {
-      return this.characterColors[lowerRole]
-    }
-      
-    // Default colors for system roles
-    const colorMap = {
-        'Narration': 'text-purple-600 dark:text-purple-400',
-        'Player': 'text-blue-600 dark:text-blue-400',
-        'system': 'text-gray-600 dark:text-gray-400'
-      }
-      
-      return colorMap[role] || 'text-gray-600 dark:text-gray-400'
-    },
+  // Clean the input role
+  const cleanedRole = role.trim().toLowerCase();
+  
+  // Check cleaned version first
+  if (this.characterColors[cleanedRole]) {
+    return this.characterColors[cleanedRole];
+  }
+  
+  // Fallback to original role check
+  if (this.characterColors[role]) {
+    return this.characterColors[role];
+  }
+
+  // Default colors for system roles
+  const colorMap = {
+    'narration': 'text-purple-600 dark:text-purple-400',
+    'player': 'text-blue-600 dark:text-blue-400',
+    'system': 'text-gray-600 dark:text-gray-400'
+  };
+  
+  return colorMap[cleanedRole] || 'text-gray-600 dark:text-gray-400';
+},
     getMessageStyle(type, role) {
       const styleMap = {
         'narration': 'bg-purple-100 dark:bg-purple-900/30 italic',
