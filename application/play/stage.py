@@ -551,10 +551,6 @@ class Stage:
                                 
                             time.sleep(math.floor(len(reply_output.split(' '))/2))
                             
-                            # Check again for cancellation
-                            if self.cancellation_event.is_set():
-                                logger.info("Actor dialogue cancelled after typing delay")
-                                return dialogue_lines
                                 
                             # Re-acquire lock to update dialogue
                             with self.dialogue_lock:
