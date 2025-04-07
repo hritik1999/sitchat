@@ -11,6 +11,7 @@ import CreateEpisode from '@/views/CreateEpisode.vue';
 import Profile from '@/views/Profile.vue';
 import EditProfile from '@/views/EditProfile.vue';
 import End from '@/views/End.vue';
+import ChatHistoryPage from '@/views/ChatHistory.vue';
 // Define routes with meta for layout and auth requirements
 const routes = [
   {
@@ -89,6 +90,12 @@ const routes = [
     path: '/end/:episode_id/:chat_id',
     name:'End',
     component:End,
+    meta: {requiresAuth:true,layout:'main'}
+  },
+  {
+    path: '/chat/history',
+    name:'ChatHistory',
+    component:ChatHistoryPage,
     meta: {requiresAuth:true,layout:'main'}
   },
   // Add more routes as needed

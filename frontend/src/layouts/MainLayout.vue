@@ -12,6 +12,9 @@
             <router-link to="/shows" class="text-sm font-medium text-slate-900 dark:text-slate-50 hover:text-primary transition-colors">
               Shows
             </router-link>
+            <router-link to="/Chat/History" class="text-sm font-medium text-slate-900 dark:text-slate-50 hover:text-primary transition-colors">
+              Chat History
+            </router-link>
             <router-link to="/leaderboards" class="text-sm font-medium text-slate-900 dark:text-slate-50 hover:text-primary transition-colors">
               Leaderboards
             </router-link>
@@ -66,6 +69,13 @@
         >
           <TvIcon class="h-5 w-5" />
           <span>Shows</span>
+        </router-link>
+        <router-link 
+          to="/Chat/History"
+          class="flex flex-col items-center gap-1 text-xs font-medium text-slate-900 dark:text-slate-50 hover:text-primary transition-colors"
+        >
+          <ChatIcon class="h-5 w-5" />
+          <span>Chat History</span>
         </router-link>
         <router-link 
           to="/leaderboards"
@@ -140,6 +150,7 @@ import {
   TvIcon,
   SunIcon,
   MoonIcon,
+  MessageCircleMore as ChatIcon,
 } from 'lucide-vue-next'
 import { supabase } from '@/composables/useSupabase'
 
@@ -158,6 +169,7 @@ export default {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
+    ChatIcon,
   },
   data() {
     return {
