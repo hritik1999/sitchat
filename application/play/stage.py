@@ -1264,10 +1264,6 @@ class Stage:
         
         # Signal all running threads to stop
         self._cancel_all_operations()
-        
-        # Set story completed to prevent further processing
-        with self.state_lock:
-            self.story_completed = True
             
         # Force reset processing state
         with self.processing_lock:

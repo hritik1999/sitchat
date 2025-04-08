@@ -228,10 +228,11 @@ class SupabaseDB:
         
         return response.data[0]
     
-    def create_chat(self, episode_id: str, user_id: str, player_name: str, player_description: str) -> dict:
+    def create_chat(self, episode_id: str,show_id: str, user_id: str, player_name: str, player_description: str) -> dict:
         """Create a new chat session"""
         chat_data = {
             'episode_id': episode_id,
+            'show_id': show_id,
             'user_id': user_id,
             'player_name': player_name,
             'player_description': player_description,

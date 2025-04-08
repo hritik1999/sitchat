@@ -56,64 +56,86 @@
             
             <!-- Episodes Grid -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <Card 
-                v-for="chat in showData.chats" 
-                :key="chat.id"
-                class="overflow-hidden hover:shadow-md transition-all duration-200 cursor-pointer"
-                @click="continueChat(chat.id)"
-              >
-                <CardHeader class="pb-2">
-                  <CardTitle class="flex justify-between items-center">
-                    <span class="truncate">{{ chat.episode_name }}</span>
-                    <Badge 
-                      :class="chat.completed ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'"
-                    >
-                      {{ chat.completed ? 'Completed' : 'In Progress' }}
-                    </Badge>
-                  </CardTitle>
-                  <CardDescription>
-                    Last played: {{ formatDate(chat.last_activity) }}
-                  </CardDescription>
-                </CardHeader>
-                
-                <CardContent class="space-y-3">
-                  <!-- Progress Bar -->
-                  <div class="space-y-1">
-                    <div class="flex justify-between items-center text-xs text-muted-foreground">
-                      <span>Progress</span>
-                      <span>{{ chat.current_objective_index }}/{{ chat.total_objectives }}</span>
+                <Card
+                    v-for="chat in showData.chats"
+                    :key="chat.id"
+                    class="overflow-hidden border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-md transition-all duration-200 cursor-pointer bg-white dark:bg-gray-900"
+                >
+                    <CardHeader class="py-2 px-3">
+                    <CardTitle class="flex justify-between items-center text-base">
+                        <span class="truncate">{{ chat.episode_name }}</span>
+                        <Badge
+                        :class="chat.completed ? 
+                            'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 px-1.5 py-0.5 text-xs rounded-full' : 
+                            'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 px-1.5 py-0.5 text-xs rounded-full'"
+                        >
+                        {{ chat.completed ? 'Completed' : 'In Progress' }}
+                        </Badge>
+                    </CardTitle>
+                    <CardDescription class="text-xs text-gray-500 dark:text-gray-400">
+                        Last played: {{ formatDate(chat.last_activity) }}
+                    </CardDescription>
+                    </CardHeader>
+                    
+                    <CardContent class="space-y-3 py-2 px-3">
+                    <!-- Compact Recap with Preview -->
+                    <div class="space-y-1">
+                        <div class="text-xs text-gray-600 dark:text-gray-300">
+                        <span class="font-medium text-gray-700 dark:text-gray-300 mr-1">Recap:</span>
+                        <span>
+                            {{ chat.expandRecap ? 
+                            chat.chat_summary : 
+                            (chat.chat_summary.length > 60 ? chat.chat_summary.substring(0, 60) + '...' : chat.chat_summary) }}
+                        </span>
+                        <span 
+                            v-if="chat.chat_summary.length > 60"
+                            @click.stop="chat.expandRecap = !chat.expandRecap" 
+                            class="text-blue-600 dark:text-blue-400 font-medium text-xs ml-1 cursor-pointer hover:underline inline-flex items-center"
+                        >
+                            {{ chat.expandRecap ? 'less' : 'more' }}
+                            <ChevronDownIcon 
+                            class="h-3 w-3 transition-transform duration-200"
+                            :class="{ 'transform rotate-180': chat.expandRecap }"
+                            />
+                        </span>
+                        </div>
                     </div>
-                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
-                      <div 
-                        class="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300" 
-                        :style="{ width: `${calculateProgress(chat.current_objective_index, chat.total_objectives)}%` }"
-                      ></div>
+                    
+                    <!-- Progress Bar -->
+                    <div class="space-y-1">
+                        <div class="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
+                        <span>Progress</span>
+                        <span>{{ chat.current_objective_index }}/{{ chat.total_objectives }}</span>
+                        </div>
+                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                        <div
+                            class="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300"
+                            :style="{ width: `${calculateProgress(chat.current_objective_index, chat.total_objectives)}%` }"
+                        ></div>
+                        </div>
                     </div>
-                  </div>
-                  
-                  <!-- Last Message Preview -->
-                  <div class="border-t pt-3 text-sm text-muted-foreground">
-                    <p class="line-clamp-2" v-if="chat.message_count > 0">
-                      <span class="font-medium">{{ chat.last_speaker }}: </span>
-                      {{ chat.last_message }}
-                    </p>
-                    <p class="text-sm text-muted-foreground" v-else>
-                      System: No messages yet
-                    </p>
-                  </div>
-                  
-                  <div class="flex justify-between items-center pt-2">
-                    <div class="text-xs text-muted-foreground">
-                      <span>{{ chat.message_count }} messages</span>
+                    
+                    <div class="flex justify-between items-center pt-1 text-xs">
+                        <span class="text-gray-600 dark:text-gray-400">Playing as: {{ chat.player_name }}</span>
+                        <Button 
+                        variant="outline" 
+                        size="sm" 
+                        @click.stop="continueChat(chat.id)" 
+                        :class="chat.completed ? 'gap-1 bg-gray-50 hover:bg-gray-100 text-gray-700 dark:bg-gray-900/20 dark:hover:bg-gray-900/30 dark:text-gray-300 border border-gray-200 dark:border-gray-800 rounded-md px-2 py-0.5 text-xs':
+                         'gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-md px-2 py-0.5 text-xs'" >
+                        <div v-if="chat.completed" class="flex items-center gap-1">
+                        <MessageCircleIcon class="h-4 w-4" />
+                        View
+                        </div>
+                        <div v-else class="flex items-center gap-1">
+                        <MessageSquareIcon class="h-4 w-4" />
+                        Continue
+                        </div>
+                        </Button>
                     </div>
-                    <Button variant="outline" size="sm" @click.stop="continueChat(chat.id)" class="gap-1">
-                      <MessageCircleIcon class="h-4 w-4" />
-                      Continue
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                    </CardContent>
+                </Card>
+                </div>
           </div>
         </div>
       </div>
@@ -128,7 +150,8 @@
     ChevronRightIcon, 
     PlayIcon, 
     MessageSquareIcon, 
-    MessageCircleIcon 
+    MessageCircleIcon ,
+    ChevronDownIcon
   } from 'lucide-vue-next'
   import { fetchApi } from '@/lib/utils'
   import { useToast } from 'vue-toastification'
@@ -146,7 +169,8 @@
       ChevronRightIcon,
       PlayIcon,
       MessageSquareIcon,
-      MessageCircleIcon
+      MessageCircleIcon,
+      ChevronDownIcon
     },
     
     data() {
@@ -173,10 +197,8 @@
             throw new Error('Invalid response format')
           }
           
-          console.log('Raw chat data:', data.chats)
-          
           // Process and organize by shows
-          this.processChatHistory(data.chats)
+        await this.processChatHistory(data.chats)
           
           // If we have no chats after processing, check if we need to fetch show details
           if (this.chatHistory.length > 0) {
@@ -204,7 +226,7 @@
         }
       },
       
-      processChatHistory(chats) {
+      async processChatHistory(chats) {
         // Group chats by show
         const showMap = new Map()
         
@@ -212,42 +234,18 @@
           // Skip if missing required data
           if (!chat.episode_id) continue
           
-          // Safely access episode and show data
-          const episodeData = chat.episodes || {}
-          const showData = episodeData.shows || {}
-          
-          const showId = episodeData.show_id || 'unknown'
-          const showName = showData.name || episodeData.show_name || 'Unknown Show'
-          const showImage = showData.image_url || null
-          
+          const episodeId = chat.episode_id
+          const showId = chat.show_id
+          // Fetch episode details
+          const episodeData = await fetchApi(`api/show/${showId}/episodes/${episodeId}`)
+          if (!episodeData) continue
+          // Fetch show details
+          const showData = await fetchApi(`api/shows/${showId}`)
+          if (!showData) continue
+
           // Parse objectives from episode data - default to 5 if not found
-          let totalObjectives = 5
-          try {
-            if (episodeData.plot_objectives) {
-              const objectives = JSON.parse(episodeData.plot_objectives)
-              if (Array.isArray(objectives) && objectives.length > 0) {
-                totalObjectives = objectives.length
-              }
-            }
-          } catch (e) {
-            console.error('Error parsing objectives:', e)
-          }
+          let totalObjectives = JSON.parse(episodeData.episode.plot_objectives).length
           
-          // Get last message info
-          let lastMessage = 'No messages yet'
-          let lastSpeaker = 'System'
-          let messageCount = 0
-          
-          if (chat.messages && chat.messages.length) {
-            messageCount = chat.messages.length
-            const sortedMessages = [...chat.messages].sort((a, b) => {
-              // Ensure sequence is a number for proper sorting
-              return (Number(b.sequence) || 0) - (Number(a.sequence) || 0)
-            })
-            const lastMsg = sortedMessages[0]
-            lastMessage = lastMsg.content || 'No content'
-            lastSpeaker = lastMsg.role || 'System'
-          }
           
           // Use a default value for current_objective_index if it's not available
           const currentObjective = typeof chat.current_objective_index === 'number' 
@@ -258,14 +256,14 @@
           const chatData = {
             id: chat.id,
             episode_id: chat.episode_id,
-            episode_name: episodeData.name || 'Unknown Episode',
+            episode_name: episodeData.episode.name || 'Unknown Episode',
             current_objective_index: currentObjective,
             total_objectives: totalObjectives,
+            player_name: chat.player_name || 'Player',
+            player_description: chat.player_description || '',
+            chat_summary: chat.chat_summary || '',
             completed: Boolean(chat.story_completed),
             last_activity: chat.updated_at || chat.created_at || new Date().toISOString(),
-            last_message: lastMessage,
-            last_speaker: lastSpeaker,
-            message_count: messageCount
           }
           
           // Add to show group or create new group
@@ -274,8 +272,8 @@
           } else {
             showMap.set(showId, {
               show_id: showId,
-              show_name: showName,
-              show_image: showImage,
+              show_name: showData.name || 'Unknown Show',
+              show_image: showData.image_url || null,
               chats: [chatData]
             })
           }
@@ -295,12 +293,7 @@
           const bDate = b.chats[0]?.last_activity || new Date(0)
           return new Date(bDate) - new Date(aDate)
         })
-        
-        // Debug the first show for troubleshooting
-        if (this.chatHistory.length > 0) {
-          console.log('First show data:', this.chatHistory[0])
-          console.log('First show chats:', this.chatHistory[0].chats)
-        }
+
       },
       
       continueChat(chatId) {

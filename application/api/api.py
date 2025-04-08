@@ -441,6 +441,7 @@ class ChatResource(Resource):
         # Create a new chat in the database
         chat = db.create_chat(
             episode_id=episode_id,
+            show_id=episode.get('show_id'),
             user_id=user_id,
             player_name=player_name,
             player_description=player_description
