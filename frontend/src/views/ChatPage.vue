@@ -241,7 +241,7 @@ export default {
         
         const chatData = data.chat
         this.player_name = chatData.player_name || 'Player' 
-        this.episodeId = chatData.episode_id || this.episodeId
+        this.episodeId = chatData.episode_id 
         this.episodeName = chatData.episodes?.name || 'Unknown Episode'
         this.objectiveIndex = chatData.current_objective_index
         this.totalObjectives = JSON.parse(chatData.episodes.plot_objectives).length
@@ -603,7 +603,8 @@ export default {
     storyCompleted(newVal) {
       if (newVal) {
         this.statusMessage = "Story completed! You've reached the end of this episode."
-        this.$router.push('/end/'+ this.episodeId + '/' + this.chatId)
+        const chat_id = this.$route.params.chat_id
+        this.$router.push(`/end/${this.episode_id}/${chat_id}`)
       }
     }
   }
