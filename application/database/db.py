@@ -301,7 +301,7 @@ class SupabaseDB:
         response = self.supabase.table('messages').insert(message_data).execute()
         return response.data
     
-    def add_rating(self, episode_id: str,show_id: str, rating: int, user_id: str) -> dict:
+    def add_rating(self, episode_id: str,show_id: str, user_id: str,rating: int) -> dict:
         """Add a rating for an episode"""
         rating_data = {
             'episode_id': episode_id,

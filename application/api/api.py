@@ -492,10 +492,26 @@ class RatingResource(Resource):
         rating = data.get('rating')
         if not rating:
             return {"error": "Rating not provided"}, 400
-        
-        success = db.add_rating(episode_id, user_id, rating)
+        # get show id
+        show_id = db.get_episode(episode_id).get('show_id')
+        success = db.add_rating(episode_id,show_id, user_id, rating)
         if not success:
             return {"error": "Failed to add rating"}, 500
         
         return {"success": True}, 201
+    
+    def get(self, episode_id):
+        user_id = get_current_user()
+        if not user_id:
+            return {"error": "Unauthorized. Please login again"}, 401
+        
+        show_id = db.get_episode(episode_id).get('show_id')
+        if not show_id:
+            return {"error": "Episode not found"}, 404
+        
+        rating = db.get_rating(episode_id, show_id, user_id)
+        if not rating:
+            return {"message":"No rating by user"}, 200
+        
+        return {"rating": rating}, 200
     
