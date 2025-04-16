@@ -43,6 +43,56 @@
         </div>
       </CardHeader>
     </Card>
+
+    <!-- Writer Statistics Section -->
+    <Card v-if="userShows.length > 0 || normalizedEpisodes.length > 0" class="mb-8">
+      <CardHeader>
+        <CardTitle class="text-xl">Writer Statistics</CardTitle>
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 pt-4">
+          <div class="flex flex-col p-4 bg-muted/50 rounded-lg">
+            <div class="flex items-center gap-2">
+              <Book class="h-5 w-5 text-primary" />
+              <span class="text-sm font-medium">Shows</span>
+            </div>
+            <span class="text-2xl font-bold mt-2">{{ writerStats.totalShows }}</span>
+          </div>
+
+          <div class="flex flex-col p-4 bg-muted/50 rounded-lg">
+            <div class="flex items-center gap-2">
+              <FileText class="h-5 w-5 text-primary" />
+              <span class="text-sm font-medium">Episodes</span>
+            </div>
+            <span class="text-2xl font-bold mt-2">{{ writerStats.totalEpisodes }}</span>
+          </div>
+
+          <div class="flex flex-col p-4 bg-muted/50 rounded-lg">
+            <div class="flex items-center gap-2">
+              <StarIcon class="h-5 w-5 text-primary" />
+              <span class="text-sm font-medium">Avg Rating</span>
+            </div>
+            <span class="text-2xl font-bold mt-2">{{ writerStats.averageRating }}</span>
+          </div>
+
+          <div class="flex flex-col p-4 bg-muted/50 rounded-lg">
+            <div class="flex items-center gap-2">
+              <Eye class="h-5 w-5 text-primary" />
+              <span class="text-sm font-medium">Total Views</span>
+            </div>
+            <span class="text-2xl font-bold mt-2">{{ writerStats.totalViews.toLocaleString() }}</span>
+          </div>
+
+          <div class="flex flex-col p-4 bg-muted/50 rounded-lg">
+            <div class="flex items-center gap-2">
+              <PiggyBank class="h-5 w-5 text-primary" />
+              <span class="text-sm font-medium">Total Earnings</span>
+            </div>
+            <span class="text-2xl font-bold mt-2 text-muted-foreground">
+              {{ writerStats.totalEarnings }}
+            </span>
+          </div>
+        </div>
+      </CardHeader>
+    </Card>
   
       <!-- User's Shows Section -->
       <section class="mb-8">
@@ -113,6 +163,21 @@
                 </div>
                 </div>
                 <CardDescription class="line-clamp-2">{{ episode.description }}</CardDescription>
+
+                <div class="flex gap-4 mt-4 text-sm">
+                <div class="flex items-center gap-1.5 text-muted-foreground">
+                  <StarIcon class="h-4 w-4 text-amber-500" />
+                  <span>{{ episode.average_ratings?.toFixed(1) || '0.0' }}</span>
+                </div>
+                <div class="flex items-center gap-1.5 text-muted-foreground">
+                  <ClockIcon class="h-4 w-4 text-emerald-500" />
+                  <span>{{ calculateDuration(episode) }}m</span>
+                </div>
+                <div class="flex items-center gap-1.5 text-muted-foreground">
+                  <EyeIcon class="h-4 w-4 text-blue-500" />
+                  <span>{{ episode.views?.toLocaleString() || 0 }}</span>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
                 <div class="flex justify-between text-sm text-muted-foreground">
@@ -130,7 +195,7 @@
   import { Button } from '@/components/ui/button'
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
   import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-  import { Loader2Icon, MoonIcon, SunIcon, PencilIcon, Trash2Icon } from 'lucide-vue-next'
+  import { Loader2Icon, MoonIcon, SunIcon, PencilIcon, Trash2Icon, LogOutIcon,StarIcon, EyeIcon, ClockIcon,ChevronDownIcon,Book, FileText, Eye, PiggyBank } from 'lucide-vue-next'
 import { fetchApi } from '@/lib/utils'
   import { supabase } from '@/composables/useSupabase'
   export default {
@@ -148,7 +213,16 @@ import { fetchApi } from '@/lib/utils'
       MoonIcon,
       SunIcon,
       PencilIcon,
-      Trash2Icon
+      Trash2Icon,
+      LogOutIcon,
+      StarIcon,
+    EyeIcon, 
+    ClockIcon,
+    ChevronDownIcon,
+    Book, 
+    FileText, 
+    Eye,
+    PiggyBank
     },
     data() {
       return {
@@ -192,6 +266,28 @@ import { fetchApi } from '@/lib/utils'
             
             // Fallback for unexpected formats
             return [];
+        },
+        writerStats() {
+          const stats = {
+            totalShows: this.userShows.length,
+            totalEpisodes: this.normalizedEpisodes.length,
+            averageRating: 0,
+            totalViews: 0,
+            totalEarnings: 'Soon'
+          };
+
+          // Calculate ratings only for episodes with rating > 0
+          const ratedEpisodes = this.normalizedEpisodes.filter(ep => ep.average_ratings > 0);
+          if (ratedEpisodes.length > 0) {
+            const totalRatings = ratedEpisodes.reduce((sum, ep) => sum + ep.average_ratings, 0);
+            stats.averageRating = (totalRatings / ratedEpisodes.length).toFixed(1);
+          }
+
+          if (this.normalizedEpisodes.length > 0) {
+            stats.totalViews = this.normalizedEpisodes.reduce((sum, ep) => sum + (ep.views || 0), 0);
+          }
+
+          return stats;
         }
         },
     mounted() {
@@ -272,6 +368,17 @@ import { fetchApi } from '@/lib/utils'
         // Navigate to edit user profile
         this.$router.push('/edit/profile');
       },
+      calculateDuration(episode) {
+    try {
+      const objectives = typeof episode.plot_objectives === 'string' 
+        ? JSON.parse(episode.plot_objectives || '[]')
+        : episode.plot_objectives || [];
+      return objectives.length * 2;
+    } catch (e) {
+      console.error('Error parsing plot objectives:', e);
+      return 0;
+    }
+  },
       editShow(showId) {
         // Navigate to edit show
         this.$router.push('/edit/show/' + showId);
