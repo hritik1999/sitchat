@@ -43,7 +43,7 @@
       <section class="mb-12">
         <div class="flex justify-between items-center mb-6">
           <h2 class="text-3xl font-bold">Episodes</h2>
-          <Button v-if="canEditShow" @click="createEpisode" variant="ghost" class="gap-2">
+          <Button  @click="createEpisode" variant="ghost" class="gap-2">
             View All
             <ChevronRightIcon class="h-4 w-4" />
           </Button>
@@ -52,25 +52,57 @@
           <Card
             v-for="episode in episodes"
             :key="episode.id"
-            class="group relative overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
-            @click="startEpisode(episode)"
+            class="group relative overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border-0 bg-muted/10"
           >
-            <div class="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-            
-            <!-- Play Button Overlay -->
-            <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-              <div class="bg-background/90 p-4 rounded-full shadow-lg">
-                <PlayIcon class="h-8 w-8 text-primary translate-x-[1px]" />
-              </div>
-            </div>
-
             <CardHeader class="relative">
-              <div class="absolute top-2 right-2 bg-primary/80 text-primary-foreground rounded-full p-2">
-                <PlayIcon class="h-4 w-4" />
+              <!-- Top accent bar -->
+              <div class="absolute top-0 left-0 right-0 h-1 bg-primary/50"></div>
+
+              <CardTitle class="text-lg mt-3 font-semibold">{{ episode.name }}</CardTitle>
+              
+              <!-- Expandable Description -->
+              <div class="relative">
+                <div 
+                  class="text-sm text-muted-foreground transition-all duration-300"
+                  :class="expandedDescriptions[episode.id] ? 'line-clamp-none' : 'line-clamp-3'"
+                >
+                  {{ episode.description || 'No description available' }}
+                </div>
+                <button
+                  v-if="showReadMore(episode.description)"
+                  @click.stop="toggleDescription(episode.id)"
+                  class="text-primary font-medium hover:underline mt-1 text-sm"
+                >
+                  {{ expandedDescriptions[episode.id] ? 'Show less' : 'Read more' }}
+                </button>
               </div>
-              <CardTitle class="line-clamp-1 text-lg">{{ episode.name }}</CardTitle>
-              <CardDescription class="line-clamp-2 text-sm mt-2">{{ episode.description }}</CardDescription>
+
+              <!-- Stats Row - Moved below description -->
+              <div class="flex gap-4 mt-4 text-sm">
+                <div class="flex items-center gap-1.5 text-muted-foreground">
+                  <StarIcon class="h-4 w-4 text-amber-500" />
+                  <span>{{ episode.average_ratings?.toFixed(1) || '0.0' }}</span>
+                </div>
+                <div class="flex items-center gap-1.5 text-muted-foreground">
+                  <ClockIcon class="h-4 w-4 text-emerald-500" />
+                  <span>{{ calculateDuration(episode) }}m</span>
+                </div>
+                <div class="flex items-center gap-1.5 text-muted-foreground">
+                  <EyeIcon class="h-4 w-4 text-blue-500" />
+                  <span>{{ episode.views?.toLocaleString() || 0 }}</span>
+                </div>
+              </div>
             </CardHeader>
+
+            <CardContent class="pb-4">
+              <Button 
+                @click="startEpisode(episode)" 
+                class="w-full gap-2 hover:scale-[1.02] transition-transform"
+              >
+                <PlayIcon class="h-4 w-4" />
+                Start Episode
+              </Button>
+            </CardContent>
           </Card>
         </div>
         <div v-else class="text-center py-12 text-muted-foreground">
@@ -166,7 +198,7 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { PlayIcon, PlusIcon, ChevronRightIcon, Loader2Icon } from 'lucide-vue-next'
+import { PlayIcon, PlusIcon, ChevronRightIcon, Loader2Icon,StarIcon, EyeIcon, ClockIcon,ChevronDownIcon  } from 'lucide-vue-next'
 import { useToast } from 'vue-toastification'
 import { fetchApi } from '@/lib/utils'
 import {
@@ -202,7 +234,11 @@ export default {
     DialogFooter,
     Label,
     Input,
-    Textarea
+    Textarea,
+    StarIcon,
+    EyeIcon, 
+    ClockIcon,
+    ChevronDownIcon
   },
   name: 'ShowDetailsPage',
   data() {
@@ -211,12 +247,6 @@ export default {
       error: null,   // Add error state
       show_id: this.$route.params.id,
       API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001',
-      session_token: localStorage.getItem('supabase_session') 
-        ? JSON.parse(localStorage.getItem('supabase_session')).access_token 
-        : null,
-      currentUserId: localStorage.getItem('supabase_session') 
-        ? JSON.parse(localStorage.getItem('supabase_session')).user?.id 
-        : null,
       show: {
         id: '',
         name: '',
@@ -235,13 +265,10 @@ export default {
         player_description: ''
       },
       isStarting: false,
+      expandedDescriptions: {},
     }
   },
   computed: {
-    canEditShow() {
-      // Check if current user is the creator of the show
-      return this.currentUserId && this.currentUserId === this.show.creator_id
-    },
     parsedCharacters() {
       try {
         if (!this.show.characters) return [];
@@ -342,7 +369,28 @@ export default {
         console.error('Error fetching episodes:', error)
         this.episodes = []
       }
+    },
+    calculateDuration(episode) {
+    try {
+      const objectives = typeof episode.plot_objectives === 'string' 
+        ? JSON.parse(episode.plot_objectives || '[]')
+        : episode.plot_objectives || [];
+      return objectives.length * 2;
+    } catch (e) {
+      console.error('Error parsing plot objectives:', e);
+      return 0;
     }
+  },
+  toggleDescription(episodeId) {
+    // Fixed the $set error by using direct property access
+    this.expandedDescriptions = {
+      ...this.expandedDescriptions,
+      [episodeId]: !this.expandedDescriptions[episodeId]
+    };
+  },
+  showReadMore(description) {
+    return description?.length > 100;
+  }
   },
   mounted() {
     // Don't check for session token directly
@@ -356,5 +404,18 @@ export default {
 /* Custom gradient overlay */
 .bg-gradient-to-t {
   background-image: linear-gradient(to top, var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to));
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
 }
 </style>

@@ -47,7 +47,21 @@
         </div>
         <CardHeader>
           <CardTitle class="line-clamp-1">{{ show.name || 'Untitled Show' }}</CardTitle>
-          <CardDescription class="line-clamp-2">{{ show.description || 'No description available' }}</CardDescription>
+          <CardDescription>
+            <p 
+              :class="{ 'line-clamp-2': !show.isExpanded }" 
+              class="transition-all duration-300"
+            >
+              {{ show.description || 'No description available' }}
+            </p>
+            <button
+              v-if="show.description"
+              @click="toggleDescription(show)"
+              class="text-primary underline hover:text-primary/80 text-sm mt-1"
+            >
+              {{ show.isExpanded ? 'Show less' : 'Read more' }}
+            </button>
+          </CardDescription>
         </CardHeader>
         <CardContent class="pt-0">
           <Button class="w-full" @click="viewShowDetails(show.id)">View Show</Button>
@@ -135,6 +149,9 @@ export default {
     handleImageError(event) {
       // Replace broken image with placeholder
       event.target.src = '/placeholder-image.jpg'
+    },
+    toggleDescription(show) {
+      show.isExpanded = !show.isExpanded;
     },
     
     async getCurrentUser() {
