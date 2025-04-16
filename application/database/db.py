@@ -301,6 +301,29 @@ class SupabaseDB:
         response = self.supabase.table('messages').insert(message_data).execute()
         return response.data
     
+    def add_rating(self, episode_id: str,show_id: str, rating: int, user_id: str) -> dict:
+        """Add a rating for an episode"""
+        rating_data = {
+            'episode_id': episode_id,
+            'show_id': show_id,
+            'rating': rating,
+            'user_id': user_id
+        }
+        
+        response = self.supabase.table('ratings').insert(rating_data).execute()
+        return response.data[0] if response.data else None
+    
+    def get_rating(self, episode_id: str,show_id: str, user_id: str) -> dict:
+        """Get a rating for an episode"""
+        response = self.supabase.table('ratings') \
+            .select('*') \
+            .eq('episode_id', episode_id) \
+            .eq('show_id', show_id) \
+            .eq('user_id', user_id) \
+            .execute()
+        
+        return response.data[0] if response.data else None
+    
     # ---- Authentication Operations ----
     
     def sign_up(self, email: str, password: str) -> dict:

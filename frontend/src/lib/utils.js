@@ -22,33 +22,34 @@ export function valueUpdater(updaterOrValue, ref) {
 export async function fetchApi(endpoint, options = {}) {
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-  
+
   // Get current session
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
-  
+
+  const isFormData = options.body instanceof FormData;
+
   // Setup headers with authentication
   const headers = {
-    'Content-Type': 'application/json',
     ...(token && { 'Authorization': `Bearer ${token}` }),
     ...options.headers
   };
-  
+
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json'; // ✅ only set for JSON
+  }
+
   const config = {
     ...options,
     headers
   };
-  
+
   const response = await fetch(url, config);
-  
-  // Handle unauthorized
+
   if (response.status === 401) {
-    // Attempt to refresh token or redirect to login
     console.error('Unauthorized - session may have expired');
-    // Could redirect to login: window.location.href = '/auth';
   }
-  
-  // Parse JSON response
+
   if (response.headers.get('content-type')?.includes('application/json')) {
     const data = await response.json();
     if (!response.ok) {
@@ -56,11 +57,10 @@ export async function fetchApi(endpoint, options = {}) {
     }
     return data;
   }
-  
-  // Handle non-JSON responses
+
   if (!response.ok) {
     throw new Error('API request failed');
   }
-  
+
   return await response.text();
 }

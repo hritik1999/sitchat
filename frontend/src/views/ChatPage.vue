@@ -253,15 +253,30 @@ export default {
           if (showData && showData.show) {
             this.showId = showData.show.id
             this.showName = showData.show.name || 'Unknown Show'
-            const characters = showData.show.characters
-            for (const character of characters) {
+            
+            // Parse the characters JSON string into an array
+            let charactersArray = [];
+            try {
+              if (typeof showData.show.characters === 'string') {
+                charactersArray = JSON.parse(showData.show.characters);
+              } else if (Array.isArray(showData.show.characters)) {
+                charactersArray = showData.show.characters;
+              }
+            } catch (e) {
+              console.error('Error parsing characters:', e);
+              charactersArray = [];
+            }
+            
+            // Add characters to the component's data
+            for (const character of charactersArray) {
               this.characters.push({
                 name: character.name,
                 description: character.description
               })
             }
+            
             // Assign colors to characters
-            showData.show.characters.forEach((character, index) => {
+            charactersArray.forEach((character, index) => {
               const cleanedName = character.name.trim().toLowerCase();
               this.characterColors[cleanedName] = 
                 this.colorPalette[index % this.colorPalette.length];
@@ -269,7 +284,7 @@ export default {
               // Add original name mapping for display purposes
               this.characterColors[character.name.trim()] = 
                 this.colorPalette[index % this.colorPalette.length];
-            })
+            });
           }
         }
         const messages = data.messages
