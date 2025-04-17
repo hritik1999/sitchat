@@ -69,13 +69,14 @@
             :key="index"
             class="p-4 border rounded-lg relative space-y-2 mt-2"
           >
-            <Button
-              type="button"
-              variant="destructive"
-              size="icon"
-              class="absolute right-2 top-2"
-              @click="removeObjective(index)"
-            >
+          <Button
+                type="button"
+                variant="destructive"
+                size="icon"
+                class="absolute right-2 top-2"
+                @click="removeObjective(index)"
+                :disabled="episodeForm.plot_objectives.length <= 1"
+              >
               <XIcon class="h-4 w-4" />
               <span class="sr-only">Remove</span>
             </Button>
@@ -190,7 +191,9 @@
           
           const episode = episodeData.episode || episodeData
           
-          let plotObjectives = ['']
+          if (plotObjectives.length === 0) {
+              plotObjectives = ['']
+            }
           try {
             if (typeof episode.plot_objectives === 'string') {
               plotObjectives = JSON.parse(episode.plot_objectives)
@@ -219,7 +222,10 @@
       },
   
       removeObjective(index) {
-        this.episodeForm.plot_objectives.splice(index, 1)
+        // Don't allow removing the last objective
+        if (this.episodeForm.plot_objectives.length > 1) {
+          this.episodeForm.plot_objectives.splice(index, 1)
+        }
       },
   
       async saveEpisode() {
