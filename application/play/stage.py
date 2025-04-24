@@ -490,7 +490,10 @@ class Stage:
                     outline_str = self.director.generate_outline(context_snapshot, current_objective)
                     outline = json.loads(self._clean_json(outline_str))
                 else:
-                    outline = self.last_outline
+                    if isinstance(self.last_outline, dict):
+                        outline = self.last_outline
+                    else:
+                        outline = json.loads(self._clean_json(self.last_outline))
                     self.player_interrupted = False
                 
                 # Check cancellation after outline generation
@@ -522,7 +525,7 @@ class Stage:
                 # Generate turn instructions without holding locks
                 latest_context = self.context  # Get fresh context
                 self.emit_event('director_status', {"status": "directing", "message": "Director is cueing the actors..."})
-                script_json = self.director.generate_turn_instructions(latest_context, new_outline)
+                script_json = self.director.generate_turn_instructions(latest_context, new_outline,self.plot_failure_reason)
                 
                 # Check cancellation after script generation
                 if self.cancellation_event.is_set():

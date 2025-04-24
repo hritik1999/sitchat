@@ -43,7 +43,7 @@ class Director:
             Remember that exceptional direction creates moments of both conflict and connection, pushing characters to reveal their true selves while progressing the overarching narrative.
             """
         
-    def generate_outline(self,chat_history,plot_objective,plot_failure_reason=''):
+    def generate_outline(self,chat_history,plot_objective):
         outline_prompt = f"""
                 As the director, analyze the current narrative trajectory and develop the next story phase following these steps:
 
@@ -69,13 +69,17 @@ class Director:
                 • Do not introduce plot elements disconnected from the current trajectory
                 • Do not ignore the player's previous actions or choices
 
-                FORMAT YOUR RESPONSE AS:
-                ```json
-                {
-                "previous_outline": "Concise yet comprehensive summary of key events from chat history",
-                "new_outline": "Detailed narrative continuation that will achieve the plot objective while engaging the player"
-                }
-                ```
+                Output your result in JSON format. Example:
+                    ```
+                    {{"previous_outline": "Summary of the existing script", "new_outline": "Continuation for the upcoming script"}}
+                    ```
+
+                Chat history: 
+                {chat_history}
+
+                Plot objective: 
+                {plot_objective}
+
                 Return only valid JSON with no additional formatting or commentary.
                 """
         messages = [
@@ -118,15 +122,19 @@ class Director:
 
             FORMAT YOUR RESPONSE AS:
             ```json
-            {
-            "scripts": [
-                {"role": "Character_Name", "instruction": "Emotional context and action guidance"},
-                {"role": "Narration", "content": "Brief environmental or situational context"},
-                {"role": "Another_Character", "instruction": "Response with specific intent"}
-            ]
-            }
-            Return only valid JSON with no additional formatting or commentary.
+                        {{"scripts": [{{"role": "Alice", "instruction": "..." }}, {{"role": "Bob", "instruction": "..." }}, {{"role": "Narration", "content": "..." }}, ...]}}
             ```
+            
+            Outline: 
+                {outline}
+
+            Chat history: 
+                {chat_history}
+            
+            Plot failure reason: 
+                {plot_failure_reason}
+
+            Return only valid JSON with no additional formatting or commentary.
             """
         messages = [
             SystemMessage(content=self.system_prompt),
