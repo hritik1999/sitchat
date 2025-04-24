@@ -14,48 +14,69 @@ class Director:
         self.relations = relations
         self.llm = llm
 
-        self.system_prompt = f"""You are the director of a drama titled "{show}". Your role is to guide the narrative while ensuring consistency in character development, relationships, and plot progression. 
+        self.system_prompt = f"""
+            You are the creative director of a dramatic experience titled "{show}". Your primary responsibility is to orchestrate an engaging narrative while maintaining coherent character development, authentic relationships, and compelling plot progression.
 
-            Description of the show: {description}
+            SHOW FRAMEWORK:
+            - Title: {show}
+            - Synopsis: {description}
+            - Current Scenario: {background}
 
-            Background of the current play: {background}
+            CHARACTER PROFILES:
+            {actors}
 
-            Characters and their descriptions: {actors}
+            RELATIONSHIP DYNAMICS:
+            {relations}
 
-            Relationships among the characters: {relations}
+            PLAYER INTEGRATION:
+            There is a human player participating as a character in this experience. Unlike the other characters you guide, the player has agency and makes their own choices. Your role is to create meaningful interactions between the AI-controlled characters and the player.
 
-            Note: There is also a player who is part of the show, but you must not direct or give instructions to the player.
-            Player description: {player}
+            - Player Character: {player}
+
+            YOUR OBJECTIVES:
+            1. Create emotionally resonant story beats
+            2. Ensure character consistency while allowing growth
+            3. Balance scripted narrative with player agency
+            4. Adapt the story based on player actions
+            5. Maintain the established tone and world rules
+
+            Remember that exceptional direction creates moments of both conflict and connection, pushing characters to reveal their true selves while progressing the overarching narrative.
             """
         
     def generate_outline(self,chat_history,plot_objective,plot_failure_reason=''):
         outline_prompt = f"""
-                Given the characters, their relationships, and the chat history for the events till now, please perform the following:
+                As the director, analyze the current narrative trajectory and develop the next story phase following these steps:
 
-                1. **Summarize** the events that have unfolded so far in a concise yet detailed using background and chat history. Highlight key character interactions and turning points.
-                2. **Outline** a detailed narrative continuation for the upcoming scene. Ensure that this outline:
+                1. NARRATIVE ANALYSIS
+                Synthesize the key events, character decisions, and emotional beats from the chat history. Focus on:
+                • Major character revelations
+                • Relationship developments
+                • Critical decisions and their consequences
+                • Player character's actions and their impact
 
-                - Seamlessly continues from the existing script.
-                - Gradually drives the plot toward the specified plot objective and achieves the plot objective while avoiding abrupt twists.
-                -the content should consistent with the characters' images.
-                - Your output should describe what will happen next without using a dialogue script format. 
-                - All characters mentioned must remain in the scene.
-                - Do not include events that have already occurred, and avoid introducing premature plot twists. 
-                - Do not disregard the existing script or introduce developments beyond the specified objective.
+                2. NARRATIVE CONTINUATION
+                Create a compelling continuation that:
+                • Naturally progresses from established events
+                • Strategically advances toward the plot objective: {plot_objective}
+                • Incorporates authentic character reactions based on their established traits
+                • Creates opportunities for meaningful player involvement
+                • Introduces appropriate dramatic tension without forced plot twists
+                • Maintains all current characters in the scene
 
-                Make sure that your continuation is coherent and maintains the overall mood and style of the show.
+                3. NARRATIVE CONSTRAINTS
+                • Do not contradict established events or character traits
+                • Do not prematurely resolve the plot objective
+                • Do not introduce plot elements disconnected from the current trajectory
+                • Do not ignore the player's previous actions or choices
 
-                Output your result in JSON format. Example:
-                    ```
-                    {{"previous_outline": "Summary of the existing script", "new_outline": "Continuation for the upcoming script"}}
-                    ```
-
-                    chat_history: {chat_history}
-                    plot_objective to achieve: {plot_objective}
-                    {plot_failure_reason}
-
-                Return only a valid JSON string without any markdown or additional formatting.
-
+                FORMAT YOUR RESPONSE AS:
+                ```json
+                {
+                "previous_outline": "Concise yet comprehensive summary of key events from chat history",
+                "new_outline": "Detailed narrative continuation that will achieve the plot objective while engaging the player"
+                }
+                ```
+                Return only valid JSON with no additional formatting or commentary.
                 """
         messages = [
             SystemMessage(content=self.system_prompt),
@@ -66,32 +87,46 @@ class Director:
         outline = chain.invoke({})
         return outline.content
     
-    def generate_turn_instructions(self,chat_history,outline,num_lines=10):
+    def generate_turn_instructions(self,chat_history,outline,plot_failure_reason='',plot_objective='',num_lines=6):
         dialogue_turn_prompt = f"""
-            Given the established characters and the detailed narrative outline for the upcoming scene, please convert the outline into a script format with up to {num_lines} lines. Follow these guidelines:
+            Transform the narrative outline into performable script instructions using these directorial guidelines:
 
-            1. Ensure each line builds naturally on the previous events, maintaining narrative continuity.
-            2. Use keywords and brief instructions rather than explicit dialogue, allowing actors creative freedom in their performance.
-            3. Ensure that the transitions between lines are smooth and that the overall tone remains consistent with the show's style.
-            4. Use character dialogues to replace Narration wherever possible.
-            5. always instruct the characters to engage with the player if there is a message from the player.
-            6. Do not mention the Player in the narration.
-            6. If the outlined events are covered before reaching {num_lines} lines, you may stop early.
+            1. SCRIPT FRAMEWORK
+            • Create up to {num_lines} script elements
+            • Each element should be either character dialogue/action or brief narration
+            • Script should flow naturally from previous events in chat history
+            • If the outline objectives are met before reaching {num_lines}, conclude organically
 
-            Your output should be a JSON object with a key "scripts" whose value is a list of dictionaries. Each dictionary should have:
-            - "role": Either one of the characters in the scene or "Narration".
-            - "instruction" (or "content" if it is narration): A brief, keyword-driven guideline for how the line should be performed.
+            2. CHARACTER DIRECTION
+            • Prioritize player engagement - if player has spoken, address them first
+            • Provide emotional context and motivation rather than verbatim dialogue
+            • Instructions should suggest intent while allowing creative interpretation
+            • Ensure each character remains true to their established personality
 
-            Example format:
+            3. NARRATIVE TECHNIQUES
+            • Show, don't tell - minimize narration when character actions can convey the same information
+            • Create opportunities for meaningful player response
+            • Never narrate the player's feelings or decisions
+            • If addressing {plot_failure_reason}, incorporate subtle course correction
+
+            4. SCRIPT PROGRESSION
+            • Each line should meaningfully advance the outline's objectives
+            • Create natural transitions between speakers/actions
+            • Skip any elements from the outline that have already occurred in the chat history
+            • Focus exclusively on developing new narrative elements that haven't yet been covered
+            • Continue the story from where the chat history ends without redundancy
+
+            FORMAT YOUR RESPONSE AS:
+            ```json
+            {
+            "scripts": [
+                {"role": "Character_Name", "instruction": "Emotional context and action guidance"},
+                {"role": "Narration", "content": "Brief environmental or situational context"},
+                {"role": "Another_Character", "instruction": "Response with specific intent"}
+            ]
+            }
+            Return only valid JSON with no additional formatting or commentary.
             ```
-            {{"scripts": [{{"role": "Alice", "instruction": "..." }}, {{"role": "Bob", "instruction": "..." }}, {{"role": "Narration", "content": "..." }}, ...]}}
-            ```
-            
-            chat_history: {chat_history}
-            outline of upcoming plot: {outline}
-
-            Return only a valid JSON string without any markdown or additional formatting.
-
             """
         messages = [
             SystemMessage(content=self.system_prompt),

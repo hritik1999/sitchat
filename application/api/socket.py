@@ -39,7 +39,7 @@ def setup_socket_handlers(socketio):
                         try:
                             logger.info(f"Stopping stage for chat_id={chat_id} due to client disconnect")
                             # Call the stop method to properly terminate all operations
-                            active_stages[chat_id].stop()
+                            active_stages[chat_id]._cancel_all_operations()
                             # Remove from active stages to free up resources
                             active_stages.pop(chat_id)
                             stopped_chats.append(chat_id)
@@ -83,7 +83,7 @@ def setup_socket_handlers(socketio):
                 if chat_id in active_stages:
                     logger.info(f"Stopping stage for chat_id={chat_id} due to explicit leave")
                     # Call the stop method to properly terminate all operations
-                    active_stages[chat_id].stop()
+                    active_stages[chat_id]._cancel_all_operations()
                     # Remove from active stages
                     active_stages.pop(chat_id)
                     socketio.emit('status', {
@@ -171,7 +171,7 @@ def setup_socket_handlers(socketio):
                         # Run the stage in thread
                         def run_stage():
                             try:
-                                stage.run_sequence()
+                                stage.trigger_next_turn()
                             except Exception as e:
                                 logger.error(f"Error running stage: {str(e)}", exc_info=True)
                                 socketio.emit('error', {
@@ -195,7 +195,10 @@ def setup_socket_handlers(socketio):
             
             # Send the current objective info
             if stage:
-                current_obj = stage.current_objective()
+                try:
+                    current_obj = stage.plot_objectives[stage.current_objective_index]
+                except IndexError:
+                    current_obj = None
                 socketio.emit('objective_status', {
                     'story_completed': stage.story_completed,
                     'index': stage.current_objective_index,

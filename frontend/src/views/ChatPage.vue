@@ -529,7 +529,7 @@ export default {
       if (!actionData || !actionData.content) return;
       
       // Show a toast notification to nudge the player
-      this.toast.info("Your character can respond now. What would you like to say or do?", {
+      this.toast.info("Your character needs to respond now. What would you like to say or do?", {
         timeout: 8000,
         position: "top-center",
         closeButton: true,

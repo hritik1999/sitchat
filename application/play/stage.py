@@ -2,47 +2,16 @@ import json
 import re
 import time
 import threading
-from threading import Timer
-import logging
-import traceback
-from contextlib import contextmanager
 from application.database.db import db
 from application.play.player import Player
 from application.play.actor import Actor
 from application.play.director import Director
 from application.ai.llm import actor_llm, director_llm
 import math
-# Set root logger to WARNING level to suppress most library logs
-logging.basicConfig(
-    level=logging.WARNING,  # This makes all loggers use WARNING by default
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-
-# Create specific logger for Stage with its own level and handlers
-logger = logging.getLogger("Stage")
-logger.setLevel(logging.WARNING)  # Only Stage logs will show at DEBUG level
-
-# Clear any existing handlers to avoid duplicates
-if logger.handlers:
-    logger.handlers.clear()
-
-# Add file handler
-file_handler = logging.FileHandler("stage.log")
-file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-logger.addHandler(file_handler)
-
-# Add console handler
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-logger.addHandler(console_handler)
-
-# Make sure this logger doesn't propagate to root
-logger.propagate = False
 
 class Stage:
     def __init__(self, actors=None, director=None, socketio=None, chat_id=None):
         """Initialize a Stage with actors/director or load from database with chat_id"""
-        logger.info(f"Initializing Stage with chat_id={chat_id}")
         
         self.socketio = socketio
         self.dialogue_history = []
@@ -60,63 +29,48 @@ class Stage:
         self.cancellation_event = threading.Event() # Event for signaling cancellation
         
         self.story_completed = False
+        self.player_interrupted = False
         self.background = ''
-        self.full_chat = ''
         self.chat_id = None
-        self.operation_timeouts = {}  # Track operation timeouts
-        
-        # Default timeout values (seconds)
-        self.DEFAULT_TIMEOUT = 120  # 2 minutes
         
         if chat_id:
             try:
                 self._load_from_database(chat_id)
             except Exception as e:
-                logger.error(f"Error loading from database: {str(e)}", exc_info=True)
+                print('error loading from database:', e)
                 self.emit_event('error', {"message": f"Error loading chat: {str(e)}"})
                 raise
         else:
-            self._init_with_objects(actors, director)
-    
-    @contextmanager
-    def timed_operation(self, operation_name, timeout=None):
-        """Context manager to handle operation timeouts"""
-        if timeout is None:
-            timeout = self.DEFAULT_TIMEOUT
-                
+            with self.state_lock:
+                self.actors = actors
+                self.director = director
+                self.player = None
+                self.player_interrupted = False
+                self.plot_objectives = []
+                self.current_objective_index = 0
+                self.context = ""
+                self.plot_failure_reason = ''
+                self.chat_summary = ''
+                self.last_script_data = None
+                self.last_outline = None
+
+    def _parse_json_field(self, field):
+        """Parse a potential JSON string field with error handling"""
         try:
-            self.operation_timeouts[operation_name] = {
-                'start_time': time.time(),
-                'timeout': timeout
-            }
-            yield
-        except Exception as e:
-            logger.error(f"Error in {operation_name}: {str(e)}", exc_info=True)
-            raise
-        finally:
-            # Check if the operation is still in the dictionary
-            if operation_name in self.operation_timeouts:
-                elapsed = time.time() - self.operation_timeouts[operation_name]['start_time']
-                if elapsed > timeout:
-                    logger.warning(f"Operation {operation_name} took {elapsed:.2f}s, exceeded timeout of {timeout}s")
-                else:
-                    logger.debug(f"Operation {operation_name} completed in {elapsed:.2f}s")
-                self.operation_timeouts.pop(operation_name, None)
-            else:
-                logger.warning(f"Operation {operation_name} was cancelled or not found in timeouts dictionary")
-    
+            if isinstance(field, str):
+                return json.loads(field)
+            return field or []
+        except json.JSONDecodeError as e:
+            return []
     def _load_from_database(self, chat_id):
-        """Load stage data from database with error handling"""
-        logger.info(f"Loading stage data from database for chat_id={chat_id}")
+            """Load stage data from database with error handling"""
         
-        with self.timed_operation("load_from_database"):
             with self.db_lock:
                 self.chat_id = chat_id
                 chat_data = db.get_chat(chat_id)
                 
                 if not chat_data:
                     error_msg = f"Chat with ID {chat_id} not found in database"
-                    logger.error(error_msg)
                     raise ValueError(error_msg)
                 
                 # Load basic chat data
@@ -127,7 +81,6 @@ class Stage:
                     self.chat_summary = chat_data.get('chat_summary', '')
                     self.last_script_data = chat_data.get('last_script_data', None)
                     self.last_outline = chat_data.get('last_outline', None)
-                    self.full_chat = chat_data.get('full_chat', '')
                     self.story_completed = chat_data.get('story_completed', False) or chat_data.get('completed', False)
                 
                 # Create player
@@ -141,7 +94,6 @@ class Stage:
                 
                 if not episode_data:
                     error_msg = f"Episode with ID {episode_id} not found in database"
-                    logger.error(error_msg)
                     raise ValueError(error_msg)
                 
                 # Parse plot objectives
@@ -154,7 +106,6 @@ class Stage:
                 
                 if not show_data:
                     error_msg = f"Show with ID {show_id} not found in database"
-                    logger.error(error_msg)
                     raise ValueError(error_msg)
                 
                 self.show = show_data.get('name', '')
@@ -181,81 +132,9 @@ class Stage:
                 )
                 
                 # Load messages
-                self.load_messages_from_db()
-                logger.info(f"Successfully loaded stage for chat_id={chat_id}")
-    
-    def _init_with_objects(self, actors, director):
-        """Initialize with provided objects"""
-        logger.info("Initializing stage with provided objects")
-        
-        with self.state_lock:
-            self.actors = actors
-            self.director = director
-            self.player = None
-            self.plot_objectives = []
-            self.current_objective_index = 0
-            self.context = ""
-            self.plot_failure_reason = ''
-            self.chat_summary = ''
-            self.last_script_data = None
-            self.last_outline = None
-    
-    def _parse_json_field(self, field):
-        """Parse a potential JSON string field with error handling"""
-        try:
-            if isinstance(field, str):
-                return json.loads(field)
-            return field or []
-        except json.JSONDecodeError as e:
-            logger.warning(f"Error parsing JSON field: {str(e)}")
-            return []
-
-    def save_state_to_db(self):
-        """Save current state to database with error handling"""
-        if not self.chat_id:
-            logger.warning("Cannot save state: no chat_id provided")
-            self.emit_event('error', {"message": "Cannot save state: no chat_id provided"})
-            return False
-        
-        with self.timed_operation("save_state_to_db"):
-            with self.state_lock:
-                # Prepare data for save
-                chat_data = {
-                    'current_objective_index': self.current_objective_index,
-                    'plot_failure_reason': self.plot_failure_reason,
-                    'context': self.context,
-                    'chat_summary': self.chat_summary,
-                    'last_script_data': self.last_script_data,
-                    'last_outline': self.last_outline,
-                    'story_completed': self.story_completed,
-                    'full_chat': self.full_chat
-                }
+                messages = db.get_messages(self.chat_id)
             
-            try:
-                with self.db_lock:
-                    db.update_chat(self.chat_id, chat_data)
-                logger.debug(f"Successfully saved state to database for chat_id={self.chat_id}")
-                return True
-            except Exception as e:
-                error_msg = f"Error saving state: {str(e)}"
-                logger.error(error_msg, exc_info=True)
-                self.emit_event('error', {"message": error_msg})
-                return False
-            
-    def load_messages_from_db(self):
-        """Load messages from database into dialogue history with error handling"""
-        if not self.chat_id:
-            logger.warning("Cannot load messages: no chat_id provided")
-            self.emit_event('error', {"message": "Cannot load messages: no chat_id provided"})
-            return False
-        
-        with self.timed_operation("load_messages_from_db"):
-            try:
-                with self.db_lock:
-                    messages = db.get_messages(self.chat_id)
-                
                 if not messages:
-                    logger.info("No messages found in database")
                     return True
                 
                 with self.dialogue_lock:
@@ -280,33 +159,6 @@ class Stage:
                                 line = f"{msg['role']}: {msg['content']}"
                                 
                             self.context = f"{self.context}\n{line}" if self.context else line
-                
-                logger.info(f"Successfully loaded {len(messages)} messages from database")
-                return True
-                    
-            except Exception as e:
-                error_msg = f"Error loading messages: {str(e)}"
-                logger.error(error_msg, exc_info=True)
-                self.emit_event('error', {"message": error_msg})
-                return False
-
-    def add_to_chat_history(self, text):
-        """Add text to chat history and save state with thread safety"""
-        logger.debug(f"Adding to chat history: {text[:50]}...")
-        
-        with self.dialogue_lock:
-            self.context = f"{self.context}\n{text}" if self.context else text
-            self.full_chat = f"{self.full_chat}\n{text}" if self.full_chat else text
-        
-        if self.chat_id:
-            self.save_state_to_db()
-
-    def current_objective(self):
-        """Get the current objective or None if all completed"""
-        with self.state_lock:
-            if self.current_objective_index < len(self.plot_objectives):
-                return self.plot_objectives[self.current_objective_index]
-            return None
     
     def _clean_json(self, json_str):
         """Clean JSON string by removing markdown and fixing common issues"""
@@ -325,400 +177,232 @@ class Stage:
         # Remove trailing commas
         cleaned = re.sub(r",\s*([\]}])", r"\1", cleaned)
         return cleaned
-    
-    def check_objective_completion(self, check_result, current_obj):
-        """Check if an objective is completed and handle the transition with thread safety"""
-        logger.info(f"Checking objective completion: {current_obj}")
         
-        objective_status = None
-        is_completed = False
+    def save_state_to_db(self):
+        """Save current state to database with error handling"""
+        if not self.chat_id:
+            self.emit_event('error', {"message": "Cannot save state: no chat_id provided"})
+            return False
+        
+        with self.state_lock:
+            # Prepare data for save
+            chat_data = {
+                'current_objective_index': self.current_objective_index,
+                'plot_failure_reason': self.plot_failure_reason,
+                'context': self.context,
+                'chat_summary': self.chat_summary,
+                'last_script_data': self.last_script_data,
+                'last_outline': self.last_outline,
+                'story_completed': self.story_completed,
+            }
         
         try:
-            # First check outside the lock to avoid unnecessary locking
-            if not check_result.get("completed", False):
-                logger.info(f"Quick check: Objective '{current_obj}' not completed")
-            
-            with self.state_lock:
-                # Create a snapshot of current state to use outside the lock
-                current_index = self.current_objective_index
-                total_objectives = len(self.plot_objectives)
-                
-                if check_result.get("completed", False):
-                    # Update objective index atomically
-                    logger.info(f"Objective completed: {current_obj}")
-                    self.current_objective_index += 1
-                    self.plot_failure_reason = ''
-                    
-                    # Save state immediately after state change
-                    if self.chat_id:
-                        with self.db_lock:
-                            try:
-                                db.update_chat(self.chat_id, {'current_objective_index': self.current_objective_index})
-                                logger.debug(f"Updated objective index in database to {self.current_objective_index}")
-                            except Exception as e:
-                                logger.error(f"Database error updating objective index: {str(e)}", exc_info=True)
-                    
-                    # Get next objective
-                    next_objective = None
-                    if self.current_objective_index < total_objectives:
-                        next_objective = self.plot_objectives[self.current_objective_index]
-                        logger.debug(f"Next objective: {next_objective}")
-                    else:
-                        logger.debug("No more objectives remaining")
-                    
-                    # Check if final objective
-                    is_final = self.current_objective_index >= total_objectives
-                    
-                    # Create objective status
-                    status_msg = f"Objective '{current_obj}' completed: {check_result.get('reason', '')}"
-                    objective_status = {
-                        "completed": True,
-                        "message": status_msg,
-                        "reason": check_result.get('reason', ''),
-                        "index": self.current_objective_index,
-                        "current": next_objective,
-                        "total": total_objectives,
-                        "story_completed": is_final
-                    }
-                    
-                    is_completed = True
-                    
-                    # Handle story completion if final objective
-                    if is_final:
-                        logger.info("All objectives completed. Story complete.")
-                        self.story_completed = True
-                    
-                else:
-                    # Objective not completed
-                    logger.info(f"Objective not completed: {current_obj}")
-                    self.plot_failure_reason = 'Plot objective not met: ' + check_result.get('reason', '')
-                    
-                    status_msg = f"Objective '{current_obj}' not yet completed: {check_result.get('reason', '')}"
-                    objective_status = {
-                        "completed": False,
-                        "message": status_msg,
-                        "reason": check_result.get('reason', ''),
-                        "index": current_index,
-                        "current": current_obj,
-                        "total": total_objectives,
-                        "story_completed": False
-                    }
-                
-                # Save complete state
-                if self.chat_id:
-                    self.save_state_to_db()
-            
-            # Emit events outside the lock to avoid potential deadlocks
-            self.emit_event('objective_status', objective_status)
-            
-            # Handle story completion notification
-            if is_completed and self.current_objective_index >= len(self.plot_objectives):
-                self.emit_event('status', {"message": "All objectives completed. Story complete."})
-                self.emit_event('objective_status', {
-                    "completed": True,
-                    "message": "All objectives have been completed! Story is finished.",
-                    "index": self.current_objective_index,
-                    "total": len(self.plot_objectives),
-                    "final": True,
-                    "story_completed": True
-                })
-
-            # Whether completed or not, schedule the next turn (unless story is complete)
-            if not self.story_completed:
-                if is_completed:
-                    logger.info("Objective completed. Scheduling next turn with timer.")
-                else:
-                    logger.info("Objective not completed. Scheduling another attempt with timer.")
-                    
-                # Schedule next turn after a delay
-                timer = threading.Timer(0.5, self.trigger_next_turn)
-                timer.daemon = True
-                timer.start()
-                logger.debug(f"Scheduled next turn timer: {timer.name}")
-        
-            
-            return is_completed, objective_status
-            
+            with self.db_lock:
+                db.update_chat(self.chat_id, chat_data)
+            return True
         except Exception as e:
-            error_msg = f"Error checking objective completion: {str(e)}"
-            logger.error(error_msg, exc_info=True)
+            error_msg = f"Error saving state: {str(e)}"
             self.emit_event('error', {"message": error_msg})
-            return False, {"completed": False, "error": True, "message": str(e)}
-
+            return False
+        
+    def emit_event(self, event_type, data):
+        """Emit an event through Socket.IO if available"""
+        if self.socketio:
+            try:
+                self.socketio.emit(event_type, data, room=self.chat_id)
+            except Exception as e:
+                error_msg = f"Error emitting event: {str(e)}"
+                self.emit_event('error', {"message": error_msg})
+        
     def process_director_script(self, script_json):
         """Process the script from director with typing indicators and thread safety"""
-        logger.info("Processing director script")
-
-        # Store the cancellation state at the beginning to avoid race conditions
-        # during processing
-        initial_cancellation_state = self.cancellation_event.is_set()
-        if initial_cancellation_state:
-            logger.info("Script processing cancelled immediately - cancellation flag is set")
-            return []
-        
         dialogue_lines = []
-        messages_to_save = []
         
-        with self.timed_operation("process_director_script"):
-            # Check for cancellation again
-            if self.cancellation_event.is_set():
-                logger.info("Script processing cancelled - cancellation event is set")
-                return []
-                
-            # Parse the script first
-            try:
-                script_str = self._clean_json(script_json)
-                script_data = json.loads(script_str)
-            except json.JSONDecodeError as e:
-                error_msg = f"Error parsing script JSON: {str(e)}"
-                logger.error(error_msg, exc_info=True)
-                self.emit_event('error', {"message": error_msg})
-                script_data = {"scripts": []}
+        # Parse the script first
+        try:
+            script_str = self._clean_json(script_json)
+            script_data = json.loads(script_str)
+        except json.JSONDecodeError as e:
+            error_msg = f"Error parsing script JSON: {str(e)}"
+            self.emit_event('error', {"message": error_msg})
+            script_data = {"scripts": []}
+        
+        # Process each line in the script with proper locks
+        with self.dialogue_lock:
+            sequence_count = len(self.dialogue_history)
             
-            # Process each line in the script with proper locks
-            with self.dialogue_lock:
-                sequence_count = len(self.dialogue_history)
+            for line in script_data.get("scripts", []):
+                # Check for cancellation before processing each line
+                if self.cancellation_event.is_set():
+                    return dialogue_lines
                 
-                for line in script_data.get("scripts", []):
-                    # Check for cancellation before processing each line
-                    if self.cancellation_event.is_set():
-                        logger.info("Script processing cancelled during line processing")
-                        return dialogue_lines
-                        
-                    role = line.get("role", "")
-                    instructions = line.get("instruction", "") or line.get("content", "")
+                role = line.get("role", "")
+                instructions = line.get("instruction", "") or line.get("content", "")
+                
+                # Handle different role types
+                if role == "Player" or (self.player and role == self.player.name):
+                    # Handle player action prompt
+                    player_action_data = {
+                        "role": role,
+                        "content": instructions,
+                        "type": "player_prompt",
+                        "wait_for_response": True
+                    }
+                    self.emit_event('player_action', player_action_data)
                     
-                    logger.debug(f"Processing script line for role: {role}")
+                    # Wait for 10 seconds or until cancellation
+                    wait_time = 10  # seconds
+                    start_time = time.time()
                     
-                    # Check if role is player or player.name
-                    if role == "Player" or (self.player and role == self.player.name):
-                        # Handle player action prompt
-                        logger.info(f"Player action prompt: {instructions[:50]}...")
-                        
-                        # Emit the action prompt
-                        player_action_data = {
-                            "role": role,
-                            "content": instructions,
-                            "type": "player_prompt",
-                            "wait_for_response": True
-                        }
-                        self.emit_event('player_action', player_action_data)
-                        
-                        # Wait for 10 seconds or until cancellation
-                        wait_time = 10  # seconds
-                        start_time = time.time()
-                        
-                        while time.time() - start_time < wait_time:
-                            # Check for cancellation frequently
-                            if self.cancellation_event.is_set():
-                                logger.info("Player action wait cancelled")
-                                return dialogue_lines
-                            
-                            # Sleep a short time to avoid CPU spin
-                            time.sleep(0.1)
-                        
-                        # If we reach here, player didn't respond in time
-                        logger.info("Player didn't respond in time, continuing with script")
-                        
-
-                        
-                    elif role.lower() in [actor.name.lower() for actor in self.actors.values()]:
-                        # Handle actor dialogue
-                        self.emit_event('typing_indicator', {"role": role, "status": "typing"})
-                        try:
-                            actor = self.actors[role]
-                            # Release dialogue lock while waiting for actor reply
-                            context_snapshot = self.context  # Create snapshot
-                        except Exception as e:
-                            actor = self.actors[role.lower()]
-                            context_snapshot = self.context  # Create snapshot
-                            
-                        # Release the lock during the potentially long actor.reply
-                        reply_output = None
-                        try:
-                            # Check for cancellation before calling actor reply
-                            if self.cancellation_event.is_set():
-                                logger.info("Actor dialogue cancelled")
-                                return dialogue_lines
-                                
-                            # Get actor reply without holding the lock
-                            reply_output = actor.reply(context_snapshot, instructions)
-                            
-                            # Check again for cancellation
-                            if self.cancellation_event.is_set():
-                                logger.info("Actor dialogue cancelled after reply")
-                                return dialogue_lines
-                                
-                            time.sleep(math.floor(len(reply_output.split(' '))/2))
-                            
-                                
-                            # Re-acquire lock to update dialogue
-                            with self.dialogue_lock:
-                                dialogue_line = f"{role}: {reply_output}"
-                                self.dialogue_history.append(dialogue_line)
-                                self.context = f"{self.context}\n{dialogue_line}" if self.context else dialogue_line
-                                self.full_chat = f"{self.full_chat}\n{dialogue_line}" if self.full_chat else dialogue_line
-                                
-                                dialogue_entry = {
-                                    "role": role, 
-                                    "content": reply_output, 
-                                    "type": "actor_dialogue"
-                                }
-                                dialogue_lines.append(dialogue_entry)
-                                
-                                messages_to_save.append({
-                                    "role": role,
-                                    "content": reply_output,
-                                    "type": "actor_dialogue",
-                                    "sequence": sequence_count
-                                })
-                                sequence_count += 1
-                        except Exception as e:
-                            logger.error(f"Error getting reply from actor '{role}': {str(e)}", exc_info=True)
-                            self.emit_event('error', {"message": f"Error with actor reply {role}: {str(e)}"})
-                            continue
-                            
-                        self.emit_event('typing_indicator', {"role": role, "status": "idle"})
-                        self.emit_event('dialogue', dialogue_entry)
-                        
-                    elif role.lower() == "narration":
-                        # Handle narration
-                        self.emit_event('typing_indicator', {"role": "Narration", "status": "typing"})
-                        
-                        # Check for cancellation
+                    while time.time() - start_time < wait_time:
+                        # Check for cancellation frequently
                         if self.cancellation_event.is_set():
-                            logger.info("Narration cancelled")
                             return dialogue_lines
-                            
-                        content = line.get('content', instructions)
-                        dialogue_line = f"Narration: {content}"
-                        self.context = f"{self.context}\n{dialogue_line}" if self.context else dialogue_line
-                        self.full_chat = f"{self.full_chat}\n{dialogue_line}" if self.full_chat else dialogue_line
                         
-                        self.emit_event('typing_indicator', {"role": "Narration", "status": "idle"})
-                        
-                        dialogue_entry = {
-                            "role": "Narration", 
-                            "content": content, 
-                            "type": "narration"
-                        }
-                        dialogue_lines.append(dialogue_entry)
-                        
-                        messages_to_save.append({
-                            "role": "Narration",
-                            "content": content,
-                            "type": "narration",
-                            "sequence": sequence_count
-                        })
-                        sequence_count += 1
-                        
-                        self.emit_event('dialogue', dialogue_entry)
-                        
-                    else:
-                        # Handle other roles
-                        self.emit_event('typing_indicator', {"role": role, "status": "typing"})
-                        
-                        # Check for cancellation
-                        if self.cancellation_event.is_set():
-                            logger.info("Other role dialogue cancelled")
-                            return dialogue_lines
-                            
-                        time.sleep(1)  # Small delay for realism
-
-                        actor = Actor(role,'', '',self.background, llm=actor_llm)
-                        reply_output = actor.reply(self.context, instructions)
-                        
+                        # Sleep a short time to avoid CPU spin
+                        time.sleep(0.1)
+                
+                elif role.lower() in [actor.name.lower() for actor in self.actors.values()]:
+                    # Handle actor dialogue
+                    self.emit_event('typing_indicator', {"role": role, "status": "typing"})
+                    
+                    try:
+                        actor = self.actors[role]
+                        # Release dialogue lock while waiting for actor reply
+                        context_snapshot = self.context  # Create snapshot
+                    except Exception as e:
+                        actor = self.actors[role.lower()]
+                        context_snapshot = self.context  # Create snapshot
+                    
+                    # Release the lock during the potentially long actor.reply
+                    try:
                         # Check again for cancellation
                         if self.cancellation_event.is_set():
-                            logger.info("Other role dialogue cancelled after typing delay")
                             return dialogue_lines
                         
-                        dialogue_line = f"{role}: {reply_output}"
-                        self.context = f"{self.context}\n{dialogue_line}" if self.context else dialogue_line
-                        self.full_chat = f"{self.full_chat}\n{dialogue_line}" if self.full_chat else dialogue_line
+                        reply_output = actor.reply(context_snapshot, instructions)
                         
-                        self.emit_event('typing_indicator', {"role": role, "status": "idle"})
+                        db.add_message(
+                            chat_id=self.chat_id,
+                            role=role,
+                            content=reply_output,
+                            type="actor_dialogue",
+                            sequence=sequence_count
+                        )
+                        if self.context:
+                            time.sleep(math.floor(len(reply_output.split(' '))/2))
+                        else:
+                            pass
                         
-                        dialogue_entry = {
-                            "role": role, 
-                            "content": reply_output, 
-                            "type": "other"
-                        }
-                        dialogue_lines.append(dialogue_entry)
-                        
-                        messages_to_save.append({
-                            "role": role,
-                            "content": reply_output,
-                            "type": "other",
-                            "sequence": sequence_count
-                        })
-                        sequence_count += 1
-                        
-                        self.emit_event('dialogue', dialogue_entry)
-                
-                # Store dialogue history atomically 
-                self.dialogue_history.extend(dialogue_lines)
-            
-            # Final cancellation check before database operations
-            if self.cancellation_event.is_set():
-                logger.info("Script processing cancelled before database save")
-                return dialogue_lines
-            
-        # Save to database outside of lock to prevent long lock times
-        if self.chat_id and messages_to_save:
-            try:
-                with self.db_lock:
-                    db.add_messages_batch(self.chat_id, messages_to_save)
-            except Exception as e:
-                error_msg = f"Error saving messages: {str(e)}"
-                logger.error(error_msg, exc_info=True)
-                self.emit_event('error', {"message": error_msg})
+                        # Re-acquire lock to update dialogue
+                        with self.dialogue_lock:
+                            dialogue_line = f"{role}: {reply_output}"
+                            self.dialogue_history.append(dialogue_line)
+                            self.context = f"{self.context}\n{dialogue_line}" if self.context else dialogue_line
+                            
+                            dialogue_entry = {
+                                "role": role, 
+                                "content": reply_output, 
+                                "type": "actor_dialogue"
+                            }
+                            dialogue_lines.append(dialogue_entry)
+                            
+                            sequence_count += 1
+                    except Exception as e:
+                        self.emit_event('error', {"message": f"Error with actor reply {role}: {str(e)}"})
+                        continue
+                    
+                    self.emit_event('typing_indicator', {"role": role, "status": "idle"})
+                    self.emit_event('dialogue', dialogue_entry)
+                    
+                elif role.lower() == "narration":
+                    # Handle narration
+                    self.emit_event('typing_indicator', {"role": "Narration", "status": "typing"})
+                    
+                    # Check for cancellation
+                    if self.cancellation_event.is_set():
+                        return dialogue_lines
+                    
+                    content = line.get('content', instructions)
+                    dialogue_line = f"Narration: {content}"
+                    self.dialogue_history.append(dialogue_line)
+                    self.context = f"{self.context}\n{dialogue_line}" if self.context else dialogue_line
+                    
+                    self.emit_event('typing_indicator', {"role": "Narration", "status": "idle"})
+                    
+                    dialogue_entry = {
+                        "role": "Narration", 
+                        "content": content, 
+                        "type": "narration"
+                    }
+                    dialogue_lines.append(dialogue_entry)
+                    
+                    db.add_message(
+                        chat_id=self.chat_id,
+                        role="Narration",
+                        content=content,
+                        type="narration",
+                        sequence=sequence_count
+                    )
+                    
+                    sequence_count += 1
+                    self.emit_event('dialogue', dialogue_entry)
+                    
+                else:
+                    # Handle other roles
+                    self.emit_event('typing_indicator', {"role": role, "status": "typing"})
+                    
+                    # Check for cancellation
+                    if self.cancellation_event.is_set():
+                        return dialogue_lines
+                    
+                    actor = Actor(role, '', '', self.background, llm=actor_llm)
+                    reply_output = actor.reply(self.context, instructions)
+                    
+                    if self.context:
+                        time.sleep(math.floor(len(reply_output.split(' '))/2))
+                    else:
+                        pass
+                    
+                    dialogue_line = f"{role}: {reply_output}"
+                    self.dialogue_history.append(dialogue_line)
+                    self.context = f"{self.context}\n{dialogue_line}" if self.context else dialogue_line
+                    
+                    self.emit_event('typing_indicator', {"role": role, "status": "idle"})
+                    
+                    dialogue_entry = {
+                        "role": role, 
+                        "content": reply_output, 
+                        "type": "other"
+                    }
+                    dialogue_lines.append(dialogue_entry)
+                    
+                    db.add_message(
+                        chat_id=self.chat_id,
+                        role=role,
+                        content=reply_output,
+                        type="other",
+                        sequence=sequence_count
+                    )
+                    
+                    sequence_count += 1
+                    
+                    self.emit_event('dialogue', dialogue_entry)
         
         if self.chat_id:
             self.save_state_to_db()
             
-        logger.info(f"Processed {len(dialogue_lines)} dialogue lines from director script")
         return dialogue_lines
-
+    
     # Improved _cancel_all_operations method with more aggressive cancellation
     def _cancel_all_operations(self):
         """Cancel all running operations with enhanced cleanup"""
-        logger.info("Aggressively cancelling all running operations")
-        
         # Set cancellation event to signal all threads to stop
         self.cancellation_event.set()
         
-        # Force-clear any pending messages from being processed
-        with self.dialogue_lock:
-            # Save current state but don't process more messages
-            pass
-        
         # Emit an immediate cancellation status
         self.emit_event('status', {"message": "Processing interrupted and stopped"})
-        
-        # Cancel all pending operations timeouts
-        for op_name in list(self.operation_timeouts.keys()):
-            logger.warning(f"Cancelling operation timeout for: {op_name}")
-            self.operation_timeouts.pop(op_name, None)
-        
-        # Log all active threads for debugging
-        with self.thread_lock:
-            active_count = len(self.active_threads)
-            if active_count > 0:
-                thread_info = ", ".join([f"{tid}:{info['type']}" for tid, info in self.active_threads.items()])
-                logger.info(f"Cancellation requested for {active_count} active threads: {thread_info}")
-            else:
-                logger.info("No active threads to cancel")
-                
-        # Clear all typing indicators to improve UI experience
-        self.emit_event('typing_indicator', {"role": "all", "status": "idle"})
-        self.emit_event('director_status', {"status": "idle", "message": ""})
 
-    def flush_pending_operations(self):
-        """Force clear any pending operations"""
-        logger.info("Flushing pending operations")
-        
-        # Clear typing indicators
         for role in list(self.actors.keys()):
             self.emit_event('typing_indicator', {"role": role, "status": "idle"})
         
@@ -728,105 +412,62 @@ class Stage:
         # Signal status update
         self.emit_event('status', {"message": "Scene reset for player input"})
 
+
     def trigger_next_turn(self):
         """Trigger the next turn in a non-blocking way with proper thread safety"""
-        logger.info("Triggering next turn")
-        
-        # Check if we should proceed without acquiring the lock first
-        # to avoid potential deadlocks
         if self.current_objective_index >= len(self.plot_objectives) or self.story_completed:
-            logger.info("All objectives completed or story finished. Not triggering new turn.")
+            self.emit_event('status', {"message": "Story completed"})
             return
-            
+
         with self.processing_lock:
             if self.is_processing:
-                logger.warning("Already processing a turn. Not triggering new turn.")
                 return
-                
-            # Double-check after acquiring the lock
-            if self.current_objective_index >= len(self.plot_objectives) or self.story_completed:
-                logger.info("All objectives completed or story finished. Not triggering new turn.")
-                return
-                
-            logger.debug("Setting processing flag to True")
             self.is_processing = True
-            
-            # Clear cancellation event for new turn
             self.cancellation_event.clear()
-        
-        def run_turn():
-            thread_id = threading.current_thread().ident
+
+        def execute_turn():
+            current_thread_id = threading.current_thread().ident
             try:
-                # Register this thread
                 with self.thread_lock:
-                    self.active_threads[thread_id] = {
+                    self.active_threads[current_thread_id] = {
                         'type': 'turn_thread',
                         'start_time': time.time()
                     }
-                
-                logger.debug(f"Starting background turn processing in thread {thread_id}")
                 self.advance_turn()
-            except Exception as e:
-                error_msg = f"Error in turn: {str(e)}"
-                logger.error(error_msg, exc_info=True)
-                self.emit_event('error', {"message": error_msg})
+            except Exception as error:
+                self.emit_event('error', {"message": f"Error in turn: {str(error)}"})
             finally:
                 with self.processing_lock:
-                    was_processing = self.is_processing
                     self.is_processing = False
-                    logger.debug(f"Released processing lock. Was processing: {was_processing}")
-                
-                # Unregister this thread
                 with self.thread_lock:
-                    if thread_id in self.active_threads:
-                        self.active_threads.pop(thread_id)
-        
-        thread = threading.Thread(target=run_turn)
-        thread.daemon = True
-        thread.start()
-        logger.debug(f"Started thread {thread.name} for next turn")
+                    self.active_threads.pop(current_thread_id, None)
 
+        turn_thread = threading.Thread(target=execute_turn)
+        turn_thread.daemon = True
+        turn_thread.start()
+            
     def advance_turn(self):
         """Advance the game turn based on current objective with comprehensive error handling"""
-        thread_id = threading.current_thread().ident
-        logger.info(f"Advancing turn in thread {thread_id}")
-        
-        # Register this as active thread if not already done
+        current_thread_id = threading.current_thread().ident
         with self.thread_lock:
-            if thread_id not in self.active_threads:
-                self.active_threads[thread_id] = {
+            if current_thread_id not in self.active_threads:
+                self.active_threads[current_thread_id] = {
                     'type': 'advance_turn',
                     'start_time': time.time()
                 }
         
-        # Already checked in trigger_next_turn, but double-check for safety
-        with self.processing_lock:
-            if not self.is_processing:
-                logger.warning("Not currently processing. Setting processing flag.")
-                self.is_processing = True
-        
-        # Check if we've been cancelled
-        if self.cancellation_event.is_set():
-            logger.info("Turn cancelled - cancellation event is set")
-            with self.processing_lock:
-                self.is_processing = False
-            return {"status": "cancelled", "message": "Turn cancelled by player", "dialogue": []}
-        
-        result = {"status": "unknown", "message": "Turn not completed", "dialogue": []}
-
-        # Director generates outline and script
-        self.emit_event('director_status', {"status": "directing", "message": "Director is directing..."})
-        
         try:
-            with self.timed_operation("advance_turn", timeout=300):  # 5 minute timeout
+            if self.cancellation_event.is_set():
+                return {"status": "cancelled", "message": "Turn cancelled by player", "dialogue": []}
+            
+            self.emit_event('director_status', {"status": "directing", "message": "Director is directing..."})
+            
+            try:
                 with self.state_lock:
-                    objective = self.current_objective()
-                    if not objective:
-                        logger.info("No current objective. Story complete.")
+                    if self.current_objective_index >= len(self.plot_objectives):
                         self.story_completed = True
                         if self.chat_id:
                             self.save_state_to_db()
-                            
                         self.emit_event('status', {"message": "No current objective. Story complete."})
                         self.emit_event('objective_status', {
                             "message": "All objectives have been completed! Story is finished.",
@@ -837,466 +478,194 @@ class Stage:
                         })
                         return {"status": "complete", "message": "Story complete", "dialogue": []}
                 
-                # Get context snapshot to use outside locks
-                with self.dialogue_lock:
-                    context_snapshot = self.context
-                    current_objective = objective  # Keep local reference
-                    failure_reason = self.plot_failure_reason
+                context_snapshot = self.context
+                current_objective = self.plot_objectives[self.current_objective_index]
                 
                 # Check cancellation before outline generation
                 if self.cancellation_event.is_set():
-                    logger.info("Turn cancelled before outline generation")
                     return {"status": "cancelled", "message": "Turn cancelled", "dialogue": []}
                 
-                try:
-                    self.emit_event('director_status', {"status": "directing", "message": "Director is analyzing story progress..."})
-                    # Generate outline without holding locks
-                    logger.debug(f"Generating outline for objective: {current_objective}")
-                    outline_str = self.director.generate_outline(context_snapshot, current_objective, failure_reason)
+                # generate new outline only if the last objective was completed successfully else use the previous outline
+                if not self.plot_failure_reason and not self.player_interrupted:
+                    outline_str = self.director.generate_outline(context_snapshot, current_objective)
+                    outline = json.loads(self._clean_json(outline_str))
+                else:
+                    outline = self.last_outline
+                    self.player_interrupted = False
+                
+                # Check cancellation after outline generation
+                if self.cancellation_event.is_set():
+                    return {"status": "cancelled", "message": "Turn cancelled", "dialogue": []}
+                
+                self.emit_event('director_status', {"status": "directing", "message": "Director is writing next scene..."})
+                
+                with self.state_lock:
+                    self.last_outline = outline
+                    self.chat_summary = outline.get('previous_outline', '')
                     
-                    # Check cancellation after outline generation
-                    if self.cancellation_event.is_set():
-                        logger.info("Turn cancelled after outline generation")
-                        return {"status": "cancelled", "message": "Turn cancelled", "dialogue": []}
-                    
-                    try:
-                        outline = json.loads(self._clean_json(outline_str))
-                        self.emit_event('director_status', {"status": "directing", "message": "Director is writing next scene..."})
-                        
-                        with self.state_lock:
-                            self.last_outline = outline
-                            self.chat_summary = outline.get('previous_outline', '')
-
-                            # Reset context and update backgrounds
-                            with self.dialogue_lock:
-                                self.context = ''
-                            
+                    # Reset context and update backgrounds if the previous objective was successful else keep using the previous one
+                    with self.dialogue_lock:
+                        if not self.plot_failure_reason:
+                            self.context = ''
                             self.director.background = self.chat_summary
                             for actor_name in self.actors:
                                 self.actors[actor_name].background = self.chat_summary
-                        
-                        # Check cancellation
-                        if self.cancellation_event.is_set():
-                            logger.info("Turn cancelled after updating outline")
-                            return {"status": "cancelled", "message": "Turn cancelled", "dialogue": []}
-                                
-                        new_outline = outline.get('new_outline', outline)
-                        
-                        # Generate turn instructions without holding locks
-                        logger.debug("Generating turn instructions from outline")
-                        with self.dialogue_lock:
-                            latest_context = self.context  # Get fresh context
-
-                        self.emit_event('director_status', {"status": "directing", "message": "Director is cueing the actors..."})
-                        script_json = self.director.generate_turn_instructions(latest_context, new_outline)
-                        
-                        # Check cancellation after script generation
-                        if self.cancellation_event.is_set():
-                            logger.info("Turn cancelled after script generation")
-                            return {"status": "cancelled", "message": "Turn cancelled", "dialogue": []}
-                        
-                        with self.state_lock:
-                            self.last_script_data = script_json
-                        
-                        if self.chat_id:
-                            self.save_state_to_db()
-                        
-                        # Process the director's script
-                        logger.debug("Processing director script")
-                        self.emit_event('director_status', {"status": "idle", "message": ""})
-                        dialogue_lines = self.process_director_script(script_json)
-                        
-                        # Check cancellation after processing script
-                        if self.cancellation_event.is_set():
-                            logger.info("Turn cancelled after processing script")
-                            return {"status": "cancelled", "message": "Turn cancelled", "dialogue": []}
-                        
-                    except json.JSONDecodeError as e:
-                        error_msg = f"Error parsing outline JSON: {str(e)}"
-                        logger.error(error_msg, exc_info=True)
-                        self.emit_event('error', {"message": error_msg})
-                        return {"status": "error", "message": error_msg, "dialogue": []}
-                        
-                except Exception as e:
-                    error_msg = f"Error generating outline or script: {str(e)}"
-                    logger.error(error_msg, exc_info=True)
-                    self.emit_event('error', {"message": error_msg})
-                    return {"status": "error", "message": error_msg, "dialogue": []}
-
-                # Check objective completion
-                logger.debug(f"Checking objective completion for: {current_objective}")
-                with self.dialogue_lock:
-                    full_chat_snapshot = self.full_chat
-                
-                # Final cancellation check
-                if self.cancellation_event.is_set():
-                    logger.info("Turn cancelled before objective check")
-                    return {"status": "cancelled", "message": "Turn cancelled", "dialogue": dialogue_lines}
-                
-                try:
-                    self.emit_event('director_status', {"status": "writing", "message": "Checking objective completion..."})
-                    check_result_str = self.director.check_objective(full_chat_snapshot, current_objective)
-                    self.emit_event('director_status', {"status": "idle", "message": ""})
-                    check_result = json.loads(self._clean_json(check_result_str))
-                    completed, objective_status = self.check_objective_completion(check_result, current_objective)
+                        else:
+                            self.context = self.context
                     
-                except Exception as e:
-                    error_msg = f"Error checking objective: {str(e)}"
-                    logger.error(error_msg, exc_info=True)
-                    self.emit_event('error', {"message": error_msg})
-                    objective_status = {
-                        "completed": False,
-                        "message": error_msg,
-                        "error": True
-                    }
+                # Check cancellation
+                if self.cancellation_event.is_set():
+                    return {"status": "cancelled", "message": "Turn cancelled", "dialogue": []}
                 
-                result = {
-                    "status": "success",
-                    "dialogue": dialogue_lines,
-                    "objective": {
-                        "current": current_objective,
-                        "index": self.current_objective_index,
-                        "total": len(self.plot_objectives),
-                        "status": objective_status
-                    }
+                new_outline = outline.get('new_outline', outline)
+                
+                # Generate turn instructions without holding locks
+                latest_context = self.context  # Get fresh context
+                self.emit_event('director_status', {"status": "directing", "message": "Director is cueing the actors..."})
+                script_json = self.director.generate_turn_instructions(latest_context, new_outline)
+                
+                # Check cancellation after script generation
+                if self.cancellation_event.is_set():
+                    return {"status": "cancelled", "message": "Turn cancelled", "dialogue": []}
+                
+                with self.state_lock:
+                    self.last_script_data = script_json
+                
+                # Process the director's script
+                self.emit_event('director_status', {"status": "idle", "message": ""})
+                dialogue_lines = self.process_director_script(script_json)
+                
+                # Check cancellation after processing script
+                if self.cancellation_event.is_set():
+                    return {"status": "cancelled", "message": "Turn cancelled", "dialogue": []}
+                
+            except json.JSONDecodeError as e:
+                error_msg = f"Error parsing outline JSON: {str(e)}"
+                self.emit_event('error', {"message": error_msg})
+                return {"status": "error", "message": error_msg, "dialogue": []}
+                
+            except Exception as e:
+                error_msg = f"Error generating outline or script: {str(e)}"
+                self.emit_event('error', {"message": error_msg})
+                return {"status": "error", "message": error_msg, "dialogue": []}
+            
+            # Check objective completion
+            context_snapshot = self.context
+            try:
+                self.emit_event('director_status', {"status": "directing", "message": "Checking objective completion..."})
+                check_result_str = self.director.check_objective(context_snapshot, current_objective)
+                self.emit_event('director_status', {"status": "idle", "message": ""})
+                check_result = json.loads(self._clean_json(check_result_str))
+                completed = check_result.get('completed', False)
+                if completed:
+                    self.plot_failure_reason = ''
+                    self.current_objective_index += 1
+                    self.story_completed = self.current_objective_index == len(self.plot_objectives)
+                else:
+                    self.plot_failure_reason = check_result.get('reason', '')
+                objective_status = {
+                    "completed": completed,
+                    "reason": check_result.get('reason', ''),
+                    "error": False,
+                    "index": self.current_objective_index,
+                    "total": len(self.plot_objectives),
+                    "final": self.current_objective_index == len(self.plot_objectives),
+                    "story_completed": self.story_completed
                 }
-                
-                # Instead of triggering next turn directly, use a timer to schedule it after lock release
-                if completed and self.current_objective_index < len(self.plot_objectives):
-                    logger.info("Objective completed. Scheduling next turn with timer.")
-                    # Schedule next turn after a short delay (100ms)
-                    timer = threading.Timer(0.1, self.trigger_next_turn)
-                    timer.daemon = True
-                    timer.start()
-                    logger.debug(f"Scheduled next turn timer: {timer.name}")
-                
-                return result
-                
+                self.emit_event('objective_status', objective_status)
+                self.save_state_to_db()
+            except Exception as e:
+                error_msg = f"Error checking objective: {str(e)}"
+                self.emit_event('error', {"message": error_msg})
+                objective_status = {
+                    "completed": False,
+                    "message": error_msg,
+                    "error": True
+                }
+            
+            result = {
+                "status": "success",
+                "dialogue": dialogue_lines,
+                "objective": {
+                    "current": current_objective,
+                    "index": self.current_objective_index,
+                    "total": len(self.plot_objectives),
+                    "status": objective_status
+                }
+            }
+            
+            # Instead of triggering next turn directly, use a timer to schedule it after lock release
+            if self.current_objective_index < len(self.plot_objectives):
+                # Schedule next turn after a short delay (100ms)
+                timer = threading.Timer(0.1, self.trigger_next_turn)
+                timer.daemon = True
+                timer.start()
+            
+            return result
+        
         except Exception as e:
             error_msg = f"Unexpected error in advance_turn: {str(e)}"
-            logger.error(error_msg, exc_info=True)
             self.emit_event('error', {"message": error_msg})
             return {"status": "error", "message": error_msg, "dialogue": []}
         
         finally:
             with self.processing_lock:
-                was_processing = self.is_processing
                 self.is_processing = False
-                logger.debug(f"advance_turn finished. Was processing: {was_processing}")
             
             # Unregister thread if still registered
             with self.thread_lock:
-                if thread_id in self.active_threads:
-                    self.active_threads.pop(thread_id)
+                if current_thread_id in self.active_threads:
+                    self.active_threads.pop(current_thread_id)
 
     def player_interrupt(self, player_input):
         """Handle player interruption with new input and proper thread safety"""
-        logger.info(f"Player interrupt: {player_input[:50]}...")
-        
-        # Record the current cancellation state before changes
-        previous_cancellation_state = self.cancellation_event.is_set()
-        logger.debug(f"Cancellation state before interrupt: {previous_cancellation_state}")
-        
-        # Signal all running threads to stop - more aggressively
+
+        self.emit_event('director_status', {'status':'directing',"message": "Director is resetting scene for player input..."})
         self._cancel_all_operations()
-        self.flush_pending_operations()
-        
-        # Force reset processing state immediately
+
         with self.processing_lock:
-            was_processing = self.is_processing
             self.is_processing = False
-            logger.info(f"Force reset processing state from {was_processing} to False")
-        
-        # Clear any pending messages in the queue
+
         with self.dialogue_lock:
-            # Create a snapshot of the current dialogue for context
             current_context = self.context
-        
-        # Wait for cancellation to take effect
+
         time.sleep(0.1)
-        
-        # CRUCIAL FIX: Ensure cancellation event is cleared BEFORE continuing
-        # This prevents race conditions in process_director_script
         self.cancellation_event.clear()
-        logger.info("Cancellation event explicitly cleared for new player interrupt operation")
-        
-        # Ensure any active Socket.IO emissions are completed
-        if self.socketio:
-            try:
-                # Emit a clear message to signal client to prepare for fresh content
-                self.socketio.emit('status', {"message": "Resetting scene for player input..."}, room=self.chat_id)
-            except Exception as e:
-                logger.error(f"Error emitting reset message: {str(e)}")
-        
-        # Set processing state for this interrupt operation
+        self.player_interrupted = True
+
         with self.processing_lock:
             self.is_processing = True
-        
+
         try:
-            with self.timed_operation("player_interrupt", timeout=300):
-                self.emit_event('status', {"message": "Player interrupts"})
-                
-                # Add player input to history - with a clean slate approach
-                with self.dialogue_lock:
-                    player_name = self.player.name
-                    interrupt_line = f"{player_name}: {player_input}"
-                    
-                    # Add to context - keeping recent context but adding player input
-                    # This preserves some context but prevents overlong chains
-                    recent_lines = current_context.split('\n')
-                    recent_context = '\n'.join(recent_lines)
-                    self.context = f"{recent_context}\n{interrupt_line}" if recent_context else interrupt_line
-                    
-                    # Full chat should maintain the complete history
-                    self.full_chat = f"{self.full_chat}\n{interrupt_line}" if self.full_chat else interrupt_line
-                    
-                    player_dialogue = {
-                        "role": player_name,
-                        "content": player_input,
-                        "type": "player_input"
-                    }
-                    
-                    # Make this player message the most recent one
-                    self.dialogue_history.append(player_dialogue)
-                
-                # Save to database
-                if self.chat_id:
-                    with self.db_lock:
-                        sequence = len(self.dialogue_history) - 1
-                        try:
-                            db.add_message(
-                                self.chat_id,
-                                player_name,
-                                player_input,
-                                "player_input",
-                                sequence
-                            )
-                        except Exception as e:
-                            error_msg = f"Error saving player message: {str(e)}"
-                            logger.error(error_msg, exc_info=True)
-                            self.emit_event('error', {"message": error_msg})
-                    
-                    self.save_state_to_db()
-                
-                # Get current objective and last outline
-                with self.state_lock:
-                    current_obj = self.current_objective()
-                    last_outline = self.last_outline
-                
-                if not current_obj:
-                    logger.info("No current objective. Story complete.")
-                    with self.state_lock:
-                        self.story_completed = True
-                        if self.chat_id:
-                            self.save_state_to_db()
-                    self.emit_event('status', {"message": "No current objective."})
-                    return {"status": "error", "message": "No current objective", "dialogue": []}
-                
-                try:
-                    # Get context snapshot
-                    with self.dialogue_lock:
-                        context_snapshot = self.context
-                    
-                    # Generate new script
-                    self.emit_event('director_status', {"status": "directing", "message": "Director is responding to player input..."})
-                    
-                    if not last_outline:
-                        # Only generate outline if we don't have one
-                        logger.info("No last outline available, generating new outline")
-                        outline_str = self.director.generate_outline(context_snapshot, current_obj)
-                        try:
-                            last_outline = json.loads(self._clean_json(outline_str))
-                            with self.state_lock:
-                                self.last_outline = last_outline
-                        except json.JSONDecodeError as e:
-                            error_msg = f"Error parsing outline JSON: {str(e)}"
-                            logger.error(error_msg, exc_info=True)
-                            self.emit_event('error', {"message": error_msg})
-                            return {"status": "error", "message": error_msg, "dialogue": []}
-                    
-                    # Generate script using last outline
-                    script_json = self.director.generate_turn_instructions(context_snapshot, last_outline)
-                    script_json = self._clean_json(script_json)
-                    
-                    with self.state_lock:
-                        self.last_script_data = script_json
-                    
-                    if self.chat_id:
-                        self.save_state_to_db()
-                    
-                    self.emit_event('director_status', {"status": "idle", "message": ""})
-                    
-                    # IMPORTANT FIX: Double-check cancellation state before script processing
-                    if self.cancellation_event.is_set():
-                        logger.warning("Cancellation event still set before script processing, clearing it again")
-                        self.cancellation_event.clear()
-                    
-                    # Log the cancellation state for debugging
-                    logger.debug(f"Cancellation state before script processing: {self.cancellation_event.is_set()}")
-                    
-                    # Process the director's script
-                    dialogue_lines = self.process_director_script(script_json)
-                    
-                    # NEW CODE: Check objective completion after processing player interrupt
-                    with self.dialogue_lock:
-                        full_chat_snapshot = self.full_chat
-                    
-                    # Check if objective is completed after player's input and response
-                    self.emit_event('director_status', {"status": "writing", "message": "Checking objective completion..."})
+            self.emit_event('status', {"message": "Player interrupts"})
+
+            with self.dialogue_lock:
+                player_name = self.player.name
+                player_dialogue = {
+                    "role": player_name,
+                    "content": player_input,
+                    "type": "player_input"
+                }
+                interrupt_line = f"{player_name}: {player_input}"
+                self.context = f"{current_context}\n{interrupt_line}" if current_context else interrupt_line
+                self.dialogue_history.append(player_dialogue)
+
+            if self.chat_id:
+                with self.db_lock:
                     try:
-                        check_result_str = self.director.check_objective(full_chat_snapshot, current_obj)
-                        self.emit_event('director_status', {"status": "idle", "message": ""})
-                        check_result = json.loads(self._clean_json(check_result_str))
-                        completed, objective_status = self.check_objective_completion(check_result, current_obj)
-                        
-                        # Schedule next turn regardless of completion status
-                        # This ensures the story continues after player interrupt
-                        if not self.story_completed and self.current_objective_index < len(self.plot_objectives):
-                            logger.info("Scheduling next turn after player interrupt")
-                            timer = threading.Timer(0.5, self.trigger_next_turn)
-                            timer.daemon = True
-                            timer.start()
-                            logger.debug(f"Scheduled next turn timer after player interrupt: {timer.name}")
+                        db.add_message(self.chat_id, player_name, player_input, "player_input", len(self.dialogue_history) - 1)
                     except Exception as e:
-                        error_msg = f"Error checking objective after player interrupt: {str(e)}"
-                        logger.error(error_msg, exc_info=True)
-                        self.emit_event('error', {"message": error_msg})
-                    
-                    return {
-                        "status": "success",
-                        "dialogue": dialogue_lines,
-                        "player_input": player_input
-                    }
-                
-                except Exception as e:
-                    error_msg = f"Error generating script after player interrupt: {str(e)}"
-                    logger.error(error_msg, exc_info=True)
-                    self.emit_event('error', {"message": error_msg})
-                    return {"status": "error", "message": error_msg, "dialogue": []}
-                    
+                        self.emit_event('error', {"message": f"Error saving player message: {str(e)}"})
+                self.save_state_to_db()
+
         except Exception as e:
             error_msg = f"Unexpected error in player_interrupt: {str(e)}"
-            logger.error(error_msg, exc_info=True)
             self.emit_event('error', {"message": error_msg})
-            return {"status": "error", "message": error_msg, "dialogue": []}
-            
+
         finally:
             with self.processing_lock:
                 self.is_processing = False
-                logger.debug("player_interrupt finished")
-
-    def handle_player_response(self, player_input):
-        """Handle player's response to a player_action event"""
-        logger.info(f"Received player response: {player_input[:50]}...")
-        
-        # Process the player input as an interrupt
-        return self.player_interrupt(player_input)
-
-    def get_state(self):
-        """Get current state of the stage thread-safely"""
-        logger.debug("Getting current stage state")
-        
-        with self.state_lock:
-            completed = (self.current_objective_index >= len(self.plot_objectives) or self.story_completed)
-            
-            if self.current_objective_index >= len(self.plot_objectives):
-                self.story_completed = True
-                if self.chat_id:
-                    self.save_state_to_db()
-            
-            current_objective = self.current_objective()
-            total_objectives = len(self.plot_objectives)
-            plot_failure_reason = self.plot_failure_reason
-        
-        with self.dialogue_lock:
-            dialogue_history = list(self.dialogue_history)  # Create a copy
-        
-        return {
-            "current_objective_index": self.current_objective_index,
-            "total_objectives": total_objectives,
-            "current_objective": current_objective,
-            "plot_failure_reason": plot_failure_reason,
-            "completed": completed,
-            "story_completed": completed,
-            "dialogue_history": dialogue_history,
-            "is_processing": self.is_processing
-        }
-    
-    def emit_event(self, event_type, data):
-        """Emit an event through Socket.IO if available"""
-        if self.socketio:
-            try:
-                self.socketio.emit(event_type, data, room=self.chat_id)
-                logger.debug(f"Emitted {event_type} event: {str(data)[:100]}...")
-            except Exception as e:
-                logger.error(f"Error emitting {event_type} event: {str(e)}", exc_info=True)
-            
-    def run_sequence(self):
-        """Run through the entire sequence of plot objectives"""
-        logger.info("Starting story sequence")
-        with self.processing_lock:
-            if self.is_processing:
-                logger.warning("Already processing. Cannot start sequence.")
-                return {
-                    "status": "error",
-                    "message": "Already processing a turn"
-                }
-            self.is_processing = False  # Reset to ensure we can start
-            
-            # Clear cancellation event at sequence start
-            self.cancellation_event.clear()
-        
-        # Use a timer to schedule the first turn after a small delay
-        # This ensures any lock state changes have propagated
-        logger.info("Scheduling first turn with timer")
-        timer = Timer(0.1, self.trigger_next_turn)
-        timer.daemon = True
-        timer.start()
-        
-        return {
-            "status": "started",
-            "message": "Story sequence started"
-        }
-    
-    def stop(self):
-        """Stop all ongoing processing and cleanup resources"""
-        logger.info(f"Stopping stage for chat_id={self.chat_id}")
-        
-        # Signal all running threads to stop
-        self._cancel_all_operations()
-            
-        # Force reset processing state
-        with self.processing_lock:
-            if self.is_processing:
-                logger.info(f"Forcibly resetting processing flag for chat_id={self.chat_id}")
-                self.is_processing = False
-        
-        # Terminate all active threads
-        with self.thread_lock:
-            for thread_id, info in list(self.active_threads.items()):
-                logger.warning(f"Forcibly terminating thread {thread_id} of type {info['type']}")
-                # We can't actually terminate threads in Python, but we've set the cancellation flag
-                # which should cause them to exit gracefully
-                
-        # Final database update to save current state - only use existing fields
-        if self.chat_id:
-            try:
-                with self.db_lock:
-                    # Only update fields that exist in the database schema
-                    db.update_chat(self.chat_id, {
-                        'story_completed': self.story_completed
-                    })
-                logger.info(f"Successfully updated database for chat_id={self.chat_id} to stopped state")
-            except Exception as e:
-                logger.error(f"Error updating database during stop: {str(e)}", exc_info=True)
-                
-        # Emit a socket event to notify clients that processing has stopped
-        self.emit_event('status', {
-            'message': 'Chat processing has been stopped',
-            'story_completed': self.story_completed
-        })
-        
-        # Cleanup any remaining resources
-        self.flush_pending_operations()
-        
-        logger.info(f"Stage stopped for chat_id={self.chat_id}")
+            # Schedule next turn after a short delay (100ms)
+            timer = threading.Timer(0.1, self.trigger_next_turn)
+            timer.daemon = True
+            timer.start()
