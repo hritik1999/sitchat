@@ -235,31 +235,114 @@ export default {
       }).catch(err => { console.error('Auth error', err); this.errorMessage = 'Auth failed' })
     },
     
-    disconnectSocket() { if (this.socket) { if (this.chatId) this.socket.emit('leave_chat', { chat_id: this.chatId }); setTimeout(() => { this.socket.off(); this.socket.disconnect() }, 200) } },
-    handleConnect() { this.isConnected = true; this.errorMessage = ''; this.socket.emit('join_chat', { chat_id: this.chatId }) },
-    handleConnectionError(err) { console.error(err); this.isConnected = false; this.errorMessage = 'Server connection failed. Please refresh.' },
-    handleDisconnect(reason) { console.log('Disconnected:', reason); this.isConnected = false; if (reason === 'io server_disconnect') this.socket.connect() },
-    sendMessage() { if (!this.input.trim() || this.isSending || this.storyCompleted) return; this.isSending = true; this.messages.push({ role: 'Player', content: this.input, type: 'player_input' }); this.socket.emit('player_input', { chat_id: this.chatId, input: this.input }); this.input = ''; this.scrollToBottom(); this.isSending = false },
-    handleTyping() { if (this.typingTimeout) clearTimeout(this.typingTimeout); if (this.storyCompleted) return; this.typingTimeout = setTimeout(() => { this.isTyping = false }, 2000) },
-    handleDialogue(m) { if (m?.content) { this.messages.push({ role: m.role, content: m.content, type: m.type }); this.scrollToBottom() } },
-    handleStatus(d) {console.log(d); if (d.message) this.statusMessage = d.message; if (d.story_completed) this.storyCompleted = true },
-    handleError(e) { console.error(e); if (e.message) this.errorMessage = e.message },
-    handleObjectiveStatus(o) { console.log(o); this.objectiveIndex = o.index || 0; this.totalObjectives = o.total || 1; this.progress = this.objectiveIndex > 0 && this.totalObjectives > 0 ? Math.max(1, Math.floor((this.objectiveIndex / this.totalObjectives) * 100)) : 0; this.objectiveProgress = `${this.objectiveIndex}/${this.totalObjectives}`; if (o.story_completed || o.final) { this.storyCompleted = true; this.statusMessage = "Story completed! You've reached the end of this episode." } this.scrollToBottom() },
-    handleTypingIndicator(d) { if (d.role) { this.typingIndicators = { ...this.typingIndicators, [d.role]: d.status }; this.scrollToBottom() } },
-    handleDirectorStatus(d) { this.directorDirecting = d.status === 'directing'; if (d.message) this.director_message = d.message; this.scrollToBottom() },
-    handlePlayerAction(d) { if (d.content) this.toast.info("Your character needs to respond now.", { timeout: 8000, position: "top-center" }) },
+    disconnectSocket() { 
+      if (this.socket) 
+        { if (this.chatId) 
+          this.socket.emit('leave_chat', { chat_id: this.chatId }); 
+          setTimeout(() => { this.socket.off(); this.socket.disconnect() }, 200)
+         }
+    },
+    handleConnect() { 
+      this.isConnected = true; this.errorMessage = ''; 
+      this.socket.emit('join_chat', { chat_id: this.chatId }) 
+    },
+    handleConnectionError(err) { 
+      console.error(err); this.isConnected = false; 
+      this.errorMessage = 'Server connection failed. Please refresh.' 
+    },
+    handleDisconnect(reason) { 
+      console.log('Disconnected:', reason); 
+      this.isConnected = false; if (reason === 'io server_disconnect') 
+      this.socket.connect() 
+    },
+    sendMessage() { 
+      if (!this.input.trim() || this.isSending || this.storyCompleted) return; 
+      this.isSending = true; this.messages.push({ role: 'Player', content: this.input, type: 'player_input' }); 
+      this.socket.emit('player_input', { chat_id: this.chatId, input: this.input }); this.input = ''; 
+      this.scrollToBottom(); 
+      this.isSending = false 
+    },
+    handleTyping() { 
+      if (this.typingTimeout) clearTimeout(this.typingTimeout); 
+      if (this.storyCompleted) return; 
+      this.typingTimeout = setTimeout(() => { this.isTyping = false }, 2000) 
+    },
+    handleDialogue(m) { 
+      if (m?.content) 
+        { this.messages.push({ role: m.role, content: m.content, type: m.type }); 
+      this.scrollToBottom() } 
+    },
+    handleStatus(d) {
+      console.log(d); 
+      if (d.message) 
+        this.statusMessage = d.message; 
+      if (d.story_completed) 
+        this.storyCompleted = true 
+      },
+    handleError(e) { 
+      console.error(e); 
+      if (e.message) 
+        this.errorMessage = e.message 
+      },
+    handleObjectiveStatus(o) { 
+      console.log(o); 
+      this.objectiveIndex = o.index || 0; 
+      this.totalObjectives = o.total || 1; 
+      this.progress = this.objectiveIndex > 0 && this.totalObjectives > 0 ? Math.max(1, Math.floor((this.objectiveIndex / this.totalObjectives) * 100)) : 0; 
+      this.objectiveProgress = `${this.objectiveIndex}/${this.totalObjectives}`; 
+      if (o.story_completed || o.final) 
+        { this.storyCompleted = true; this.statusMessage = "Story completed! You've reached the end of this episode." } 
+      this.scrollToBottom() 
+      },
+    handleTypingIndicator(d) { 
+      if (d.role) { 
+          this.typingIndicators = { ...this.typingIndicators, [d.role]: d.status }; 
+        this.scrollToBottom() 
+      } 
+    },
+    handleDirectorStatus(d) { 
+      this.directorDirecting = d.status === 'directing'; 
+      if (d.message) this.director_message = d.message; 
+      this.scrollToBottom() 
+    },
+    handlePlayerAction(d) { 
+      if (d.content) 
+      this.toast.info("Your character needs to respond now.", { timeout: 8000, position: "top-center" }) 
+    },
     scrollToBottom() {
       this.
         $nextTick(() => { const c = this.$refs.messagesContainer; if (c) c.scrollTop = c.scrollHeight })
     },
     goBack() { this.$router.go(-1) },
-    getCharacterImageUrl(r) { return this.characterImages[r.trim().toLowerCase()] || '' },
-    getRoleColor(r) { const c = r.trim().toLowerCase(); if (this.characterColors[c]) return this.characterColors[c]; const m = { narration: 'text-purple-600 dark:text-purple-400', player: 'text-blue-600 dark:text-blue-400', system: 'text-gray-600 dark:text-gray-400' }; return m[c] || 'text-gray-600 dark:text-gray-400' },
-    getMessageStyle(t, r) { const m = { narration: 'bg-purple-100 dark:bg-purple-900/30 italic', player_input: 'bg-blue-100 dark:bg-blue-900/30 text-left', system: 'bg-gray-100 dark:bg-gray-800/50 text-sm' }; if (t === 'actor_dialogue') { const l = r.trim().toLowerCase(); if (this.characterColors[l]) { const b = this.characterColors[l].split(' ')[0].replace('text', 'bg'); return `${b}/20 dark:${b}/30` } } return m[t] || 'bg-gray-100 dark:bg-gray-800/30' }
+    getCharacterImageUrl(r) { 
+      return this.characterImages[r.trim().toLowerCase()] || '' 
+    },
+    getRoleColor(r) { 
+      const c = r.trim().toLowerCase(); 
+      if (this.characterColors[c]) 
+      return this.characterColors[c]; 
+      const m = { narration: 'text-purple-600 dark:text-purple-400', player: 'text-blue-600 dark:text-blue-400', system: 'text-gray-600 dark:text-gray-400' }; 
+      return m[c] || 'text-gray-600 dark:text-gray-400' 
+  },
+    getMessageStyle(t, r) { 
+      const m = { narration: 'bg-purple-100 dark:bg-purple-900/30 italic', player_input: 'bg-blue-100 dark:bg-blue-900/30 text-left', system: 'bg-gray-100 dark:bg-gray-800/50 text-sm' }; 
+      if (t === 'actor_dialogue') { const l = r.trim().toLowerCase(); 
+      if (this.characterColors[l]) 
+        { const b = this.characterColors[l].split(' ')[0].replace('text', 'bg'); 
+      return `${b}/20 dark:${b}/30` } } 
+      return m[t] || 'bg-gray-100 dark:bg-gray-800/30' 
+    }
   },
   watch: {
-    isConnected(v) { if (v && !this.isChatStarted && !this.storyCompleted) setTimeout(() => { this.isChatStarted = true }, 1000) },
-    storyCompleted(v) { if (v) { this.statusMessage = "Story completed! You've reached the end of this episode.";const chat_id = this.$route.params.chat_id; this.$router.push(`/end/${this.episodeId}/${chat_id}`) } }
+    isConnected(v) { 
+      if (v && !this.isChatStarted && !this.storyCompleted) 
+      setTimeout(() => { this.isChatStarted = true }, 1000)
+     },
+    storyCompleted(v) { 
+      if (v) { this.statusMessage = "Story completed! You've reached the end of this episode.";
+      const chat_id = this.$route.params.chat_id; 
+      this.$router.push(`/end/${this.episodeId}/${chat_id}`) } 
+    }
   }
 }
 </script>
