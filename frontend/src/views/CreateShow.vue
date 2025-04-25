@@ -94,7 +94,7 @@
         <!-- Character Cards -->
         <div
           v-for="(character, index) in showForm.characters"
-          :key="character.id || index"
+          :key="index"
           class="p-4 border rounded-lg relative space-y-2 mt-2"
         >
           <Button
@@ -125,6 +125,48 @@
               rows="2"
               class="w-full"
             />
+          </div>
+          <div class="space-y-2">
+            <Label>Character Image</Label>
+            <div class="grid grid-cols-1 gap-4">
+              <div
+                v-if="character.imagePreview"
+                class="relative aspect-square bg-muted rounded-md overflow-hidden"
+              >
+                <img :src="character.imagePreview" alt="Preview" class="object-cover w-full h-full" />
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  class="absolute top-2 right-2 h-8 w-8 rounded-full"
+                  @click="clearCharacterImage(index)"
+                >
+                  <XIcon class="h-4 w-4" />
+                </Button>
+              </div>
+              <div
+                v-else
+                class="border border-dashed rounded-md p-4 flex flex-col items-center justify-center"
+              >
+                <input
+                  type="file"
+                  accept="image/*"
+                  :ref="el => characterFileInputs[index] = el"
+                  class="hidden"
+                  @change="e => handleCharacterImageChange(e, index)"
+                />
+
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  @click="triggerCharacterFileInput(index)"
+                >
+                  <UploadIcon class="h-4 w-4 mr-2" />
+                  Upload Image
+                </Button>
+                <p class="text-xs text-muted-foreground mt-2">PNG, JPG or GIF, max 2MB</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -168,184 +210,170 @@ import { fetchApi } from '@/lib/utils'
 
 export default {
   name: 'CreateShow',
-  components: {
-    Button,
-    Input,
-    Label,
-    Textarea,
-    ImageIcon,
-    Loader2Icon,
-    PlusIcon,
-    UploadIcon,
-    XIcon
-  },
+  components: { Button, Input, Label, Textarea, ImageIcon, Loader2Icon, PlusIcon, UploadIcon, XIcon },
 
   setup() {
     const router = useRouter()
     const toast = useToast()
-    // Initialize showForm with proper reactive state
+
     const showForm = reactive({
       name: '',
       description: '',
       relations: '',
       characters: []
     })
-
     // Initialize with a default character
-    showForm.characters.push({ name: '', description: '' })
+    showForm.characters.push({ name: '', description: '', imagePreview: null, imageFile: null })
 
     const imagePreview = ref(null)
     const selectedFile = ref(null)
     const isSaving = ref(false)
     const isLoading = ref(false)
     const fileInput = ref(null)
-    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001'
-    // No longer storing session token directly
-    // fetchApi utility will handle authentication
+    const characterFileInputs = ref([null])
 
-    const isEditMode = computed(() => {
-      return !!router.currentRoute.value.params.showId
-    })
-
-    const showId = computed(() => {
-      return router.currentRoute.value.params.showId
-    })
+    const isEditMode = computed(() => !!router.currentRoute.value.params.showId)
+    const showId = computed(() => router.currentRoute.value.params.showId)
 
     const isFormValid = computed(() => {
       return (
-        showForm.name?.trim() !== '' &&
-        Array.isArray(showForm.characters) &&
+        showForm.name.trim() !== '' &&
         showForm.characters.length > 0 &&
-        showForm.characters.every(char => char && typeof char.name === 'string' && char.name.trim() !== '')
+        showForm.characters.every(char =>
+          char.name.trim() !== '' &&
+          (isEditMode.value ? true : char.imageFile)
+        )
       )
     })
 
     const fetchShowData = async () => {
       if (!isEditMode.value) return
-
       isLoading.value = true
       try {
         const data = await fetchApi(`api/shows/${showId.value}`)
         const show = data.show || data
 
-        // Reset the form with new data
         showForm.name = show.name || ''
         showForm.description = show.description || ''
         showForm.relations = show.relations || ''
-        
-        // Parse characters if it's a string
-        let charactersArray = []
-        try {
-          if (typeof show.characters === 'string') {
-            charactersArray = JSON.parse(show.characters)
-          } else if (Array.isArray(show.characters)) {
-            charactersArray = show.characters
-          }
-        } catch (e) {
-          charactersArray = []
+
+        let chars = []
+        if (typeof show.characters === 'string') {
+          try { chars = JSON.parse(show.characters) } catch {} 
+        } else if (Array.isArray(show.characters)) {
+          chars = show.characters
         }
 
-        // Update characters array
-        showForm.characters = charactersArray.length > 0
-          ? charactersArray
-          : [{ name: '', description: '' }]
-
-        // Set image preview if exists
-        if (show.image_url) {
-          imagePreview.value = show.image_url
+        if (chars.length) {
+          showForm.characters = chars.map(c => ({
+            name: c.name || '',
+            description: c.description || '',
+            imagePreview: c.image_url || null,
+            imageFile: null
+          }))
+          characterFileInputs.value = chars.map(() => null)
         }
-      } catch (error) {
+
+        if (show.image_url) imagePreview.value = show.image_url
+      } catch {
         toast.error('Failed to load show data')
       } finally {
         isLoading.value = false
       }
     }
 
-    // Call fetchShowData when component is created
-    if (isEditMode.value) {
-      fetchShowData()
-    }
+    if (isEditMode.value) fetchShowData()
 
     const addCharacter = () => {
-      showForm.characters.push({ name: '', description: '' })
+      showForm.characters.push({ name: '', description: '', imagePreview: null, imageFile: null })
+      characterFileInputs.value.push(null)
     }
 
-    const removeCharacter = (index) => {
+    const removeCharacter = index => {
       showForm.characters.splice(index, 1)
+      characterFileInputs.value.splice(index, 1)
     }
 
-    const triggerFileInput = () => {
-      fileInput.value.click()
-    }
+    const triggerFileInput = () => fileInput.value.click()
 
-    const handleImageChange = (e) => {
+    const handleImageChange = e => {
       const file = e.target.files[0]
-      if (file) {
-        if (file.size > 2 * 1024 * 1024) {
-          toast.error('Image size should be less than 2MB')
-          return
-        }
+      if (file && file.size <= 2 * 1024 * 1024) {
         selectedFile.value = file
         imagePreview.value = URL.createObjectURL(file)
+      } else {
+        toast.error('Image size should be less than 2MB')
       }
     }
 
     const clearImage = () => {
       imagePreview.value = null
       selectedFile.value = null
-      if (fileInput.value) {
-        fileInput.value.value = ''
+      if (fileInput.value) fileInput.value.value = ''
+    }
+
+    const handleCharacterImageChange = (e, index) => {
+      const file = e.target.files[0]
+      if (file && file.size <= 2 * 1024 * 1024) {
+        const reader = new FileReader()
+        reader.onload = ev => showForm.characters[index].imagePreview = ev.target.result
+        reader.readAsDataURL(file)
+        showForm.characters[index].imageFile = file
+      } else {
+        toast.error('Image size should be less than 2MB')
       }
+    }
+
+    const triggerCharacterFileInput = index => {
+      const inp = characterFileInputs.value[index]
+      if (inp) inp.click()
+    }
+
+    const clearCharacterImage = index => {
+      showForm.characters[index].imagePreview = null
+      showForm.characters[index].imageFile = null
+      const inp = characterFileInputs.value[index]
+      if (inp) inp.value = ''
     }
 
     const saveShow = async () => {
       if (!isFormValid.value) return
-
       if (!isEditMode.value && !selectedFile.value) {
         toast.error('Please select an image for the show')
         return
       }
-
       isSaving.value = true
-
       try {
         const formData = new FormData()
-        
-        if (selectedFile.value) {
-          formData.append('image', selectedFile.value)
-        }
-
         formData.append('data', JSON.stringify({
           name: showForm.name,
           description: showForm.description,
-          characters: showForm.characters,
+          characters: showForm.characters.map(char => ({
+            name: char.name,
+            description: char.description,
+            ...(isEditMode.value && !char.imageFile && { image_url: char.imagePreview })
+          })),
           relations: showForm.relations
         }))
-
-        const endpoint = isEditMode.value
-          ? `api/shows/${showId.value}`
-          : `api/shows`
-
+        if (selectedFile.value) formData.append('image', selectedFile.value)
+        showForm.characters.forEach((char, idx) => {
+          if (char.imageFile) formData.append(`characters[${idx}].image`, char.imageFile)
+        })
+        const endpoint = isEditMode.value ? `api/shows/${showId.value}` : `api/shows`
         await fetchApi(endpoint, {
           method: isEditMode.value ? 'PUT' : 'POST',
-          body: formData,
-          headers: {
-            // Don't set Content-Type here since FormData sets it automatically with boundary
-          }
+          body: formData
         })
-
         toast.success(`Show ${isEditMode.value ? 'updated' : 'created'} successfully!`)
         router.push('/shows')
-      } catch (error) {
-        toast.error(error.message || 'An error occurred while saving')
+      } catch (err) {
+        toast.error(err.message || 'An error occurred while saving')
       } finally {
         isSaving.value = false
       }
     }
 
-    const cancel = () => {
-      router.go(-1)
-    }
+    const cancel = () => router.go(-1)
 
     return {
       showForm,
@@ -356,11 +384,15 @@ export default {
       isEditMode,
       isFormValid,
       fileInput,
+      characterFileInputs,
       addCharacter,
       removeCharacter,
       triggerFileInput,
       handleImageChange,
       clearImage,
+      handleCharacterImageChange,
+      triggerCharacterFileInput,
+      clearCharacterImage,
       saveShow,
       cancel
     }

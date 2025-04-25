@@ -120,10 +120,8 @@
             class="text-center space-y-2"
           >
             <div class="relative w-full aspect-square rounded-full overflow-hidden bg-muted mx-auto">
-              <!-- Character image placeholder -->
-              <div class="flex items-center justify-center h-full bg-primary/10 text-primary text-2xl font-bold">
-                {{ character.name.charAt(0) }}
-              </div>
+              <!-- Character image-->
+              <img :src="character.image_url" alt="Character Image" class="object-cover w-full h-full" />
             </div>
             <h3 class="font-medium">{{ character.name }}</h3>
           </div>
@@ -349,7 +347,6 @@ export default {
         
         // Replace the entire show object to ensure reactivity
         this.show = { ...data.show }
-        
         // Now fetch episodes
         await this.getEpisodes()
         

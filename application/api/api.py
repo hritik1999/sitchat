@@ -141,89 +141,81 @@ class ShowsResource(Resource):
         return jsonify({"shows": shows})
         
     def post(self):
-        """Create a new show"""
-        # Get current user from the token
+        """Create a new show with character images"""
         user_id = get_current_user()
         if not user_id:
             return {"error": "Unauthorized. Please login again"}, 401
-            
-        # Check if image file is provided
-        if 'image' not in request.files:
-            return {"error": "No image file provided"}, 400
-            
-        # Get the image file
-        file = request.files['image']
-        if file.filename == '':
-            return {"error": "No selected file"}, 400
-            
-        # Get form data from the 'data' field
+
+        # Parse form and files
         form_data = request.form.get('data')
         if not form_data:
             return {"error": "No form data provided"}, 400
-            
-        # Parse the JSON data
         try:
             data = json.loads(form_data)
         except json.JSONDecodeError:
             return {"error": "Invalid form data format"}, 400
-            
-        # Validate file type (accept only images)
-        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
-        if '.' not in file.filename or \
-           file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
+
+        # Validate and upload main show image
+        public_urls = {}
+        if 'image' not in request.files:
+            return {"error": "No image file provided"}, 400
+        file = request.files['image']
+        if file.filename == '':
+            return {"error": "No selected file"}, 400
+        allowed = {'png','jpg','jpeg','gif'}
+        ext = file.filename.rsplit('.',1)[-1].lower()
+        if ext not in allowed:
             return {"error": "Invalid file type"}, 400
-            
+        filename = f"{uuid.uuid4()}.{ext}"
+        tmp = os.path.join('/tmp', filename)
+        file.save(tmp)
+        with open(tmp,'rb') as f:
+            content = f.read()
+        res = db.supabase.storage.from_('show-images').upload(path=filename, file=content)
+        os.remove(tmp)
+        if getattr(res, 'error', None):
+            return {"error": f"Upload failed: {res.error}"}, 500
+        pub = db.supabase.storage.from_('show-images').get_public_url(filename)
+        public_urls['show'] = pub
+
+        # Handle character images
+        chars = data.get('characters', [])
+        for idx, char in enumerate(chars):
+            key = f"characters[{idx}].image"
+            if key in request.files:
+                cfile = request.files[key]
+                if cfile and cfile.filename:
+                    cext = cfile.filename.rsplit('.',1)[-1].lower()
+                    if cext not in allowed:
+                        return {"error": f"Invalid file type for character {idx}"}, 400
+                    cname = f"{uuid.uuid4()}.{cext}"
+                    tmp_c = os.path.join('/tmp', cname)
+                    cfile.save(tmp_c)
+                    with open(tmp_c,'rb') as cf:
+                        ccontent = cf.read()
+                    cres = db.supabase.storage.from_('show-images').upload(path=cname, file=ccontent)
+                    os.remove(tmp_c)
+                    if getattr(cres, 'error', None):
+                        return {"error": f"Character {idx} upload failed: {cres.error}"}, 500
+                    cpub = db.supabase.storage.from_('show-images').get_public_url(cname)
+                    char['image_url'] = cpub
+            # else leave char as-is if no file provided
+
+        # Create show record
         try:
-            # Create a unique filename
-            file_ext = file.filename.rsplit('.', 1)[1].lower()
-            filename = f"{str(uuid.uuid4())}.{file_ext}"
-            
-            # Save file temporarily
-            temp_path = os.path.join('/tmp', filename)
-            file.save(temp_path)
-            
-            # Upload to Supabase storage
-            with open(temp_path, 'rb') as f:
-                file_content = f.read()
-                
-            # Upload to 'show-images' bucket
-            result = db.supabase.storage.from_('show-images').upload(
-                path=filename,
-                file=file_content
-            )
-            
-            # Clean up temp file
-            os.remove(temp_path)
-            
-            # Check for Supabase storage errors
-            if result and hasattr(result, 'error') and result.error:
-                return {"error": f"Upload failed: {result.error}"}, 500
-                
-            # Get public URL
-            public_url = db.supabase.storage.from_('show-images').get_public_url(filename)
-            
-        except Exception as e:
-            print(f"Upload error: {str(e)}")
-            return {"error": f"Upload failed: {str(e)}"}, 500
-        
-        try:
-            # Create the show in the database
             show = db.create_show(
                 creator_id=user_id,
                 name=data.get('name'),
                 description=data.get('description'),
-                characters=data.get('characters', []),
-                relations=data.get('relations', ''),
-                image_url=public_url
+                characters=chars,
+                relations=data.get('relations',''),
+                image_url=public_urls['show']
             )
         except Exception as e:
-            print(f"database error:{str(e)}")
-            return {"error":f'database problem: {str(e)}'}, 500
+            return {"error": f"Database problem: {str(e)}"}, 500
 
-        
         if not show:
             return {"error": "Failed to create show"}, 500
-            
         return jsonify({"show": show})
 class ShowResource(Resource):
     def get(self, show_id):
@@ -235,90 +227,79 @@ class ShowResource(Resource):
         return jsonify({"show": show})
     
     def put(self, show_id):
-        """Update a show"""
+        """Update a show with character images"""
         user_id = get_current_user()
         if not user_id:
             return {"error": "Unauthorized. Please login again"}, 401
-
-        # Verify ownership
         show = db.get_show(show_id)
         if not show or show.get('creator_id') != user_id:
             return {"error": "Not authorized to edit this show"}, 403
 
-        # Get form data from the 'data' field
         form_data = request.form.get('data')
         if not form_data:
             return {"error": "No form data provided"}, 400
-
-        # Parse the JSON data
         try:
             data = json.loads(form_data)
         except json.JSONDecodeError:
             return {"error": "Invalid form data format"}, 400
 
-        # Initialize public_url with existing image URL
+        # Initialize update payload
+        update_chars = data.get('characters', [])
+        allowed = {'png','jpg','jpeg','gif'}
+
+        # Handle main image replacement
         public_url = show.get('image_url')
-
-        # Handle image upload if provided
         if 'image' in request.files:
-            file = request.files['image']
-            if file.filename != '':
-                # Validate file type
-                allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
-                if '.' not in file.filename or \
-                file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
+            mf = request.files['image']
+            if mf and mf.filename:
+                ext = mf.filename.rsplit('.',1)[-1].lower()
+                if ext not in allowed:
                     return {"error": "Invalid file type"}, 400
-
+                fname = f"{uuid.uuid4()}.{ext}"
+                tmp = os.path.join('/tmp', fname)
+                mf.save(tmp)
+                with open(tmp,'rb') as f:
+                    cont = f.read()
+                mres = db.supabase.storage.from_('show-images').upload(path=fname, file=cont)
+                os.remove(tmp)
+                if getattr(mres,'error',None):
+                    return {"error": f"Upload failed: {mres.error}"}, 500
+                public_url = db.supabase.storage.from_('show-images').get_public_url(fname)
+                # cleanup old main image
                 try:
-                    # Create a unique filename
-                    file_ext = file.filename.rsplit('.', 1)[1].lower()
-                    filename = f"{str(uuid.uuid4())}.{file_ext}"
-                    
-                    # Save file temporarily
-                    temp_path = os.path.join('/tmp', filename)
-                    file.save(temp_path)
+                    old = show.get('image_url').split('/')[-1]
+                    db.supabase.storage.from_('show-images').remove(old)
+                except: pass
 
-                    # Upload to Supabase storage
-                    with open(temp_path, 'rb') as f:
-                        file_content = f.read()
-                    
-                    # Upload to 'show-images' bucket
-                    result = db.supabase.storage.from_('show-images').upload(
-                        path=filename,
-                        file=file_content
-                    )
+        # Handle character images replacement
+        for idx, char in enumerate(update_chars):
+            key = f"characters[{idx}].image"
+            if key in request.files:
+                cf = request.files[key]
+                if cf and cf.filename:
+                    cext = cf.filename.rsplit('.',1)[-1].lower()
+                    if cext not in allowed:
+                        return {"error": f"Invalid file type for character {idx}"}, 400
+                    cname = f"{uuid.uuid4()}.{cext}"
+                    tmp_c = os.path.join('/tmp', cname)
+                    cf.save(tmp_c)
+                    with open(tmp_c,'rb') as f:
+                        ccont = f.read()
+                    cres = db.supabase.storage.from_('show-images').upload(path=cname, file=ccont)
+                    os.remove(tmp_c)
+                    if getattr(cres,'error',None):
+                        return {"error": f"Character {idx} upload failed: {cres.error}"}, 500
+                    new_pub = db.supabase.storage.from_('show-images').get_public_url(cname)
+                    char['image_url'] = new_pub
+                    # Optionally delete old character image
 
-                    # Clean up temp file
-                    os.remove(temp_path)
-
-                    # Check for Supabase storage errors
-                    if result and hasattr(result, 'error') and result.error:
-                        return {"error": f"Upload failed: {result.error}"}, 500
-
-                    # Get new public URL
-                    public_url = db.supabase.storage.from_('show-images').get_public_url(filename)
-
-                    # Delete old image if it exists
-                    if show.get('image_url'):
-                        try:
-                            old_filename = show['image_url'].split('/')[-1]
-                            db.supabase.storage.from_('show-images').remove(old_filename)
-                        except Exception as e:
-                            print(f"Warning: Failed to delete old image: {str(e)}")
-
-                except Exception as e:
-                    print(f"Upload error: {str(e)}")
-                    return {"error": f"Upload failed: {str(e)}"}, 500
-
-        # Update the show data
+        # Build update data
         update_data = {
             'name': data.get('name'),
             'description': data.get('description'),
-            'characters': data.get('characters', []),
-            'relations': data.get('relations', ''),
+            'characters': update_chars,
+            'relations': data.get('relations',''),
         }
-        
-        # Only update image_url if a new image was uploaded
         if public_url != show.get('image_url'):
             update_data['image_url'] = public_url
 
@@ -328,8 +309,8 @@ class ShowResource(Resource):
                 return {"error": "Failed to update show"}, 500
             return jsonify({"show": updated_show})
         except Exception as e:
-            print(f"Database error: {str(e)}")
             return {"error": f"Database problem: {str(e)}"}, 500
+
     
     def delete(self, show_id):
         """Delete a show"""
