@@ -231,7 +231,7 @@ class Stage:
         with self.dialogue_lock:
             sequence_count = len(self.dialogue_history)
             
-            for line in script_data.get("scripts", []):
+            for i, line in enumerate(script_data.get("scripts", [])):
                 # Check for cancellation before processing each line
                 if self.cancellation_event.is_set():
                     return dialogue_lines
@@ -289,7 +289,7 @@ class Stage:
                             type="actor_dialogue",
                             sequence=sequence_count
                         )
-                        if self.context:
+                        if i != 0:
                             time.sleep(math.floor(len(reply_output.split(' '))/2))
                         else:
                             pass
@@ -359,7 +359,7 @@ class Stage:
                     actor = Actor(role, '', '', self.background, llm=actor_llm)
                     reply_output = actor.reply(self.context, instructions)
                     
-                    if self.context:
+                    if i != 0:
                         time.sleep(math.floor(len(reply_output.split(' '))/2))
                     else:
                         pass
