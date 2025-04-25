@@ -536,17 +536,6 @@ export default {
         icon: true
       });
       
-      // Optionally play a notification sound if you have one
-      try {
-        const audio = new Audio('/notification.mp3');
-        audio.volume = 0.5;
-        audio.play().catch(e => console.log('Audio play prevented:', e));
-      } catch (e) {
-        console.log('Audio notification not available');
-      }
-      
-      // Focus the input field automatically
-      this.$refs.messageInput.focus();
     },
 
     scrollToBottom() {

@@ -190,10 +190,8 @@
           )
           
           const episode = episodeData.episode || episodeData
-          
-          if (plotObjectives.length === 0) {
-              plotObjectives = ['']
-            }
+          let plotObjectives = []
+
           try {
             if (typeof episode.plot_objectives === 'string') {
               plotObjectives = JSON.parse(episode.plot_objectives)
@@ -201,9 +199,15 @@
               plotObjectives = episode.plot_objectives
             }
           } catch (e) {
-            this.toast.error('Error parsing episode data')
+            console.error('Error parsing plot objectives:', e)
+            this.toast.error('Error parsing episode objectives')
           }
-  
+
+          // Ensure we have at least one objective
+          if (plotObjectives.length === 0) {
+            plotObjectives = ['']
+          }
+
           this.episodeForm = {
             name: episode.name || '',
             description: episode.description || '',
@@ -212,6 +216,7 @@
           }
         } catch (error) {
           this.toast.error('Failed to load episode data')
+          console.error('Fetch episode error:', error)
         } finally {
           this.isLoading = false
         }
