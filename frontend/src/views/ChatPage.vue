@@ -3,9 +3,13 @@
     <!-- Header Section -->
     <div class="bg-background border-b p-4">
       <div class="container mx-auto flex justify-between items-center">
-        <div>
-          <h1 class="text-xl font-bold">{{ showName }}</h1>
-          <p class="text-sm text-muted-foreground">{{ episodeName }}</p>
+        <div class="flex items-center">
+          <!-- Show Thumbnail -->
+          <img v-if="showImageUrl" :src="showImageUrl" alt="Show Thumbnail" class="h-12 w-12 mr-4 rounded" />
+          <div>
+            <h1 class="text-xl font-bold inline-block">{{ showName }}</h1>
+            <p class="text-sm text-muted-foreground">{{ episodeName }}</p>
+          </div>
         </div>
         <Button variant="outline" @click="goBack" size="sm">
           <ArrowLeftIcon class="h-4 w-4 mr-2" />
@@ -22,24 +26,21 @@
           <span class="text-sm">{{ objectiveProgress }}</span>
         </div>
         <div class="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
-          <div 
-            class="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-            :style="{ width: `${progress}%` }"
-          ></div>
+          <div class="bg-blue-600 h-2 rounded-full transition-all duration-300" :style="{ width: `${progress}%` }">
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Director Directing Message - with loading bar -->
-<div v-if="directorDirecting" class="container mx-auto px-4 pt-2">
-  <div class="text-center text-sm text-white py-2 bg-indigo-600 dark:bg-indigo-800 rounded-md p-2 animate-pulse">
-    <span class="font-medium">{{ this.director_message }}</span>
-  </div>
-  <!-- Loading Bar -->
-  <div class="mt-2 h-1 bg-gray-200 dark:bg-gray-700 rounded-full">
-    <div class="h-full bg-indigo-500 dark:bg-indigo-400 rounded-full animate-director-progress"></div>
-  </div>
-</div>
+    <!-- Director Directing Message -->
+    <div v-if="directorDirecting" class="container mx-auto px-4 pt-2">
+      <div class="text-center text-sm text-white py-2 bg-indigo-600 dark:bg-indigo-800 rounded-md p-2 animate-pulse">
+        <span class="font-medium">{{ director_message }}</span>
+      </div>
+      <div class="mt-2 h-1 bg-gray-200 dark:bg-gray-700 rounded-full">
+        <div class="h-full bg-indigo-500 dark:bg-indigo-400 rounded-full animate-director-progress"></div>
+      </div>
+    </div>
 
     <!-- Chat Container -->
     <div class="flex-1 overflow-hidden container mx-auto p-4">
@@ -47,52 +48,41 @@
         <!-- Messages Area -->
         <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
 
-          <!-- Messages -->
-          <div v-for="(msg, index) in messages" :key="index" class="flex gap-3">
-            <div 
-              class="flex-1" 
-              :class="{
-                'flex justify-end': msg.role === 'Player'
-              }"
-            >
-              <div class="max-w-[90%]">
-                <!-- Role Label -->
-                <div class="flex items-center gap-2 mb-1" :class="{ 'justify-end': msg.role === 'Player' }">
-                  <span class="font-semibold text-sm" :class="getRoleColor(msg.role || '')">
-                    {{ msg.role === 'Player' ? player_name : msg.role }}
-                  </span>
-                </div>
-                
-                <!-- Message Bubble -->
-                <div 
-                  class="p-3 rounded-lg"
-                  :class="[
-                    getMessageStyle(msg.type || '', msg.role || ''),
-                    {
-                      'ml-auto': msg.role === 'Player',
-                      'whitespace-pre-wrap break-words': true
-                    }
-                  ]"
-                >
-                  {{ msg.content }}
-                </div>
+          <div v-for="(msg, index) in messages" :key="index" class="flex items-start gap-3"
+            :class="{ 'justify-end flex-row-reverse': msg.role === 'Player' }">
+            <!-- Avatar -->
+            <img
+              v-if="(msg.role !== 'Player' && getCharacterImageUrl(msg.role)) || (msg.role === 'Player' && playerImageUrl)"
+              :src="msg.role === 'Player' ? playerImageUrl : getCharacterImageUrl(msg.role)" alt="Avatar"
+              class="h-14 w-14 rounded-full flex-shrink-0" />
+
+            <!-- Content -->
+            <div class="flex-1 max-w-[70%]">
+              <div class="flex items-center -mb-1" :class="{ 'justify-between': msg.role === 'Player' }">
+                <span class="font-semibold text-sm" :class="getRoleColor(msg.role || '')">
+                  {{ msg.role === 'Player' ? player_name : msg.role }}
+                </span>
+              </div>
+              <div class="mt-1 p-2 rounded-lg whitespace-pre-wrap break-words"
+                :class="getMessageStyle(msg.type || '', msg.role || '')">
+                {{ msg.content }}
               </div>
             </div>
           </div>
-          <!-- Typing Indicators - Inside chat window -->
+
+          <!-- Typing Indicators -->
           <div v-if="hasActiveTypingIndicators" class="my-2">
             <div v-for="(status, role) in typingIndicators" :key="role">
-              <div 
-                v-if="status === 'typing'"
-                class="flex items-start gap-3"
-              >
-                <div class="flex-1 max-w-[90%]">
-                  <div class="flex items-center gap-2 mb-1">
+              <div v-if="status === 'typing'" class="flex items-start gap-3">
+                <img v-if="getCharacterImageUrl(role)" :src="getCharacterImageUrl(role)" alt="Typing Avatar"
+                  class="h-10 w-10 rounded-full flex-shrink-0" />
+                <div class="flex-1 max-w-[70%]">
+                  <div class="flex items-center">
                     <span class="font-semibold text-sm" :class="getRoleColor(role)">
                       {{ role === 'Player' ? player_name : role }}
                     </span>
                   </div>
-                  <div class="p-3 rounded-lg bg-gray-100 dark:bg-gray-800 inline-flex items-center">
+                  <div class="mt-1 p-3 rounded-lg bg-gray-100 dark:bg-gray-800 inline-flex items-center">
                     <div class="flex space-x-1">
                       <div class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 0ms" />
                       <div class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 150ms" />
@@ -104,35 +94,23 @@
             </div>
           </div>
 
-          <!-- Error Message -->
-          <div v-if="errorMessage" class="bg-red-100 dark:bg-red-900/30 p-3 rounded-lg text-red-700 dark:text-red-300 text-sm">
+          <div v-if="errorMessage"
+            class="bg-red-100 dark:bg-red-900/30 p-3 rounded-lg text-red-700 dark:text-red-300 text-sm">
             {{ errorMessage }}
           </div>
         </div>
 
         <!-- Input Area -->
         <div class="border-t p-4">
-          <div class="space-y-4">
-            <Textarea
-              ref="messageInput"
-              v-model="input"
-              placeholder="Type your response..."
-              class="resize-none"
-              rows="2"
-              :disabled="isSending || storyCompleted"
-              maxlength="500"
-              @keydown.enter.exact.prevent="sendMessage"
-              @keydown="handleTyping"
-            />
-            <div class="flex justify-between items-center">
-              <span class="text-sm text-muted-foreground">
-                {{ input.length }}/500
-              </span>
-              <Button @click="sendMessage" :disabled="!input.trim() || isSending || storyCompleted">
-                Send
-                <SendIcon class="h-4 w-4 ml-2" />
-              </Button>
-            </div>
+          <Textarea ref="messageInput" v-model="input" placeholder="Type your response..." class="resize-none" rows="2"
+            :disabled="isSending || storyCompleted" maxlength="500" @keydown.enter.exact.prevent="sendMessage"
+            @keydown="handleTyping" />
+          <div class="mt-2 flex justify-between items-center">
+            <span class="text-sm text-muted-foreground">{{ input.length }}/500</span>
+            <Button @click="sendMessage" :disabled="!input.trim() || isSending || storyCompleted">
+              Send
+              <SendIcon class="h-4 w-4 ml-2" />
+            </Button>
           </div>
         </div>
       </div>
@@ -152,15 +130,7 @@ import { useToast } from 'vue-toastification';
 
 export default {
   name: 'ChatPage',
-  
-  components: {
-    Button,
-    Progress,
-    Textarea,
-    ArrowLeftIcon,
-    SendIcon
-  },
-
+  components: { Button, Progress, Textarea, ArrowLeftIcon, SendIcon },
   data() {
     return {
       progress: 0,
@@ -171,14 +141,16 @@ export default {
       API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001',
       SOCKET_URL: import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001',
       showId: this.$route.params.show_id,
-      episodeId:'',
+      showImageUrl: '',
+      episodeId: '',
       chatId: this.$route.params.chat_id,
       showName: 'Loading...',
       episodeName: 'Loading...',
+      playerImageUrl: '',
       input: '',
       toast: null,
       characters: [],
-      player_name:'',
+      player_name: '',
       isSending: false,
       directorDirecting: false,
       typingIndicators: {},
@@ -191,9 +163,9 @@ export default {
       isChatStarted: false,
       storyCompleted: false,
       typingTimeout: null,
-      player_name: 'Player',
-      characterColors: {}, // New property to store character colors
-      colorPalette: [ // Predefined color classes for characters
+      characterColors: {},
+      characterImages: {},
+      colorPalette: [
         'text-red-600 dark:text-red-400',
         'text-yellow-600 dark:text-yellow-400',
         'text-blue-600 dark:text-blue-400',
@@ -205,410 +177,89 @@ export default {
       ],
     }
   },
-  
-  created() {
-    this.toast = useToast()
-  },
-
-  mounted() {
-    // Initialize Socket.io connection
-    this.connectToSocket()
-    
-    // Fetch show and episode details
-    this.fetchChatDetails()
-  },
-
-  beforeUnmount() {
-    this.disconnectSocket()
-  },
-
+  created() { this.toast = useToast() },
+  mounted() { this.connectToSocket(); this.fetchChatDetails() },
+  beforeUnmount() { this.disconnectSocket() },
   computed: {
-    hasActiveTypingIndicators() {
-      // Check if any indicator has 'typing' status
-      return Object.values(this.typingIndicators).some(status => status === 'typing');
-    }
+    hasActiveTypingIndicators() { return Object.values(this.typingIndicators).some(s => s === 'typing'); }
   },
-  
   methods: {
     async fetchChatDetails() {
       try {
-        // Get chat details
         const data = await fetchApi(`api/chats/${this.chatId}`)
-        
-        if (!data || !data.chat) {
-          throw new Error('Invalid chat data received')
-        }
-        
+        if (!data?.chat) throw new Error('Invalid chat data')
         const chatData = data.chat
-        this.player_name = chatData.player_name || 'Player' 
-        this.episodeId = chatData.episode_id 
+        this.player_name = chatData.player_name || 'Player'
+        this.episodeId = chatData.episode_id
         this.episodeName = chatData.episodes?.name || 'Unknown Episode'
-        this.objectiveIndex = chatData.current_objective_index
         this.totalObjectives = JSON.parse(chatData.episodes.plot_objectives).length
-        this.storyCompleted = chatData.story_completed || false
-        
-        // If we have a show ID from the episode
+        this.objectiveIndex = chatData.current_objective_index
+        this.objectiveProgress = `${this.objectiveIndex}/${this.totalObjectives}`
+        this.storyCompleted = chatData.story_completed
+        if (chatData.player_image_url) this.playerImageUrl = chatData.player_image_url
         if (chatData.episodes?.show_id) {
-          const showData = await fetchApi(`api/shows/${chatData.episodes.show_id}`)
-          if (showData && showData.show) {
-            this.showId = showData.show.id
-            this.showName = showData.show.name || 'Unknown Show'
-            
-            // Parse the characters JSON string into an array
-            let charactersArray = [];
-            try {
-              if (typeof showData.show.characters === 'string') {
-                charactersArray = JSON.parse(showData.show.characters);
-              } else if (Array.isArray(showData.show.characters)) {
-                charactersArray = showData.show.characters;
-              }
-            } catch (e) {
-              console.error('Error parsing characters:', e);
-              charactersArray = [];
-            }
-            
-            // Add characters to the component's data
-            for (const character of charactersArray) {
-              this.characters.push({
-                name: character.name,
-                description: character.description
-              })
-            }
-            
-            // Assign colors to characters
-            charactersArray.forEach((character, index) => {
-              const cleanedName = character.name.trim().toLowerCase();
-              this.characterColors[cleanedName] = 
-                this.colorPalette[index % this.colorPalette.length];
-              
-              // Add original name mapping for display purposes
-              this.characterColors[character.name.trim()] = 
-                this.colorPalette[index % this.colorPalette.length];
-            });
+          const showRes = await fetchApi(`api/shows/${chatData.episodes.show_id}`)
+          if (showRes?.show) {
+            const show = showRes.show
+            this.showName = show.name
+            this.showImageUrl = show.image_url || ''
+            let chars = []
+            try { chars = typeof show.characters === 'string' ? JSON.parse(show.characters) : show.characters || [] } catch { chars = [] }
+            chars.forEach((c, i) => {
+              const key = c.name.trim().toLowerCase()
+              this.characterColors[key] = this.colorPalette[i % this.colorPalette.length]
+              this.characterColors[c.name.trim()] = this.colorPalette[i % this.colorPalette.length]
+              this.characterImages[key] = c.image_url
+              this.characterImages[c.name.trim()] = c.image_url
+            })
           }
         }
-        const messages = data.messages
-        
-        for (const message of messages) {
-          this.messages.push({
-            role: message.role,
-            content: message.content,
-            type: message.type,
-            sequence: message.sequence
-          })
-          this.messages.sort((a, b) => a.sequence - b.sequence)
-        }
-      } catch (error) {
-        console.error('Error fetching chat details:', error)
-        this.errorMessage = 'Failed to load chat details. Please try refreshing the page.'
-      }
+        ; (data.messages || []).forEach(m => this.messages.push({ role: m.role, content: m.content, type: m.type, sequence: m.sequence }))
+        this.messages.sort((a, b) => a.sequence - b.sequence)
+      } catch (e) { console.error(e); this.errorMessage = 'Failed to load chat details. Please refresh.' }
     },
-
-    async connectToSocket() {
-      try {
-        // Get current session for authentication
-        const { data } = await supabase.auth.getSession();
-        const token = data.session?.access_token;
-
-        // Initialize Socket.io connection with auth token
-        this.socket = io(this.SOCKET_URL, {
-          auth: {
-            token: token
-          },
-          extraHeaders: {
-            Authorization: token ? `Bearer ${token}` : ''
-          }
-        });
-
-        // Connection events
-        this.socket.on('connect', this.handleConnect);
-        this.socket.on('connect_error', this.handleConnectionError);
-        this.socket.on('disconnect', this.handleDisconnect);
-        
-        // Chat events
-        this.socket.on('dialogue', this.handleDialogue);
-        this.socket.on('status', this.handleStatus);
-        this.socket.on('error', this.handleError);
-        this.socket.on('objective_status', this.handleObjectiveStatus);
-        this.socket.on('typing_indicator', this.handleTypingIndicator);
-        this.socket.on('director_status', this.handleDirectorStatus);
-        this.socket.on('player_action', this.handlePlayerAction);
-      } catch (error) {
-        console.error('Error connecting to socket:', error);
-        this.errorMessage = 'Connection error. Please try refreshing the page.';
-      }
+    connectToSocket() {
+      supabase.auth.getSession().then(({ data }) => {
+        const token = data.session?.access_token
+        this.socket = io(this.SOCKET_URL, { auth: { token }, extraHeaders: { Authorization: token ? `Bearer ${token}` : '' } })
+        this.socket.on('connect', this.handleConnect)
+        this.socket.on('connect_error', this.handleConnectionError)
+        this.socket.on('disconnect', this.handleDisconnect)
+        this.socket.on('dialogue', this.handleDialogue)
+        this.socket.on('status', this.handleStatus)
+        this.socket.on('error', this.handleError)
+        this.socket.on('objective_status', this.handleObjectiveStatus)
+        this.socket.on('typing_indicator', this.handleTypingIndicator)
+        this.socket.on('director_status', this.handleDirectorStatus)
+        this.socket.on('player_action', this.handlePlayerAction)
+      }).catch(err => { console.error('Auth error', err); this.errorMessage = 'Auth failed' })
     },
-
-    disconnectSocket() {
-  if (this.socket) {
-    // First explicitly leave the chat to ensure proper cleanup
-    if (this.chatId) {
-      this.socket.emit('leave_chat', { chat_id: this.chatId });
-      console.log(`Explicitly left chat: ${this.chatId}`);
-    }
     
-    // Short timeout to allow leave_chat to be processed
-    setTimeout(() => {
-      // Remove all event listeners
-      this.socket.off('connect');
-      this.socket.off('connect_error');
-      this.socket.off('disconnect');
-      this.socket.off('dialogue');
-      this.socket.off('status');
-      this.socket.off('error');
-      this.socket.off('objective_status');
-      this.socket.off('typing_indicator');
-      this.socket.off('director_status');
-      this.socket.off('player_action');
-      
-      // Then disconnect
-      this.socket.disconnect();
-      console.log('Socket disconnected');
-    }, 200); // Short delay to allow leave_chat to be processed
-  }
-},
-
-    handleConnect() {
-      this.isConnected = true
-      this.errorMessage = ''
-      console.log('Connected to socket server')
-      
-      // Join the chat room
-      this.socket.emit('join_chat', { chat_id: this.chatId })
-    },
-
-    handleConnectionError(error) {
-      this.isConnected = false
-      this.errorMessage = 'Connection to server failed. Please try refreshing the page.'
-      console.error('Socket connection error:', error)
-    },
-
-    handleDisconnect(reason) {
-      this.isConnected = false
-      console.log('Disconnected from socket server:', reason)
-      
-      if (reason === 'io server disconnect') {
-        // Server disconnected us, try to reconnect
-        this.socket.connect()
-      }
-    },
-
-    sendMessage() {
-      if (!this.input.trim() || this.isSending || this.storyCompleted) return
-
-      this.isSending = true
-      
-      // Add to local messages immediately for responsive UI
-      this.messages.push({
-        role: 'Player',
-        content: this.input,
-        type: 'player_input'
-      })
-      
-      // Send to server
-      this.socket.emit('player_input', {
-        chat_id: this.chatId,
-        input: this.input
-      })
-      
-      // Clear input and scroll
-      this.input = ''
-      this.scrollToBottom()
-      this.isSending = false
-    },
-
-    handleTyping() {
-      // Clear existing timeout
-      if (this.typingTimeout) {
-        clearTimeout(this.typingTimeout)
-      }
-      
-      // Do nothing if story is completed
-      if (this.storyCompleted) return
-      
-      // Set timeout for typing indicator
-      this.typingTimeout = setTimeout(() => {
-        this.isTyping = false
-      }, 2000)
-    },
-
-    handleDialogue(message) {
-      // Validate message before adding
-      if (message && typeof message === 'object' && message.content) {
-        // Add message to the chat
-        this.messages.push({
-          role: message.role || 'Unknown',
-          content: message.content,
-          type: message.type || ''
-        })
-        this.scrollToBottom()
-      }
-    },
-
-    handleStatus(statusData) {
-     
-      if (statusData && statusData.message) {
-        this.statusMessage = statusData.message
-        console.log('Status data:', statusData)
-      }
-      
-      if (statusData && statusData.story_completed) {
-        this.storyCompleted = true
-      }
-    },
-
-    handleError(errorData) {
-      console.error('Socket error:', errorData)
-      if (!errorData) return
-      
-      if (errorData.message) {
-        // If the error is related to a database column issue, handle it gracefully
-        if (typeof errorData.message === 'string' && 
-            (errorData.message.includes("column of 'chats' in the schema cache") || 
-             errorData.message.includes("full_chat"))) {
-          console.error('Database schema error:', errorData.message)
-          // Don't display this specific error to the user, it's a backend issue
-        } else {
-          this.errorMessage = errorData.message
-          console.error('Socket error:', errorData)
-        }
-      }
-    },
-
-    handleObjectiveStatus(objectiveData) {
-      if (!objectiveData) return
-      
-      // Update objective progress
-      this.objectiveIndex = objectiveData.index  || 0
-      this.totalObjectives = objectiveData.total || 1
-      console.log('Objective data:', objectiveData)
-      // Calculate progress percentage (fixed to ensure proper display)
-      // Make sure we have at least 1% visibility when there's any progress
-      if (this.objectiveIndex > 0 && this.totalObjectives > 0) {
-        this.progress = Math.max(1, Math.floor((this.objectiveIndex / this.totalObjectives) * 100));
-      } else {
-        this.progress = 0;
-      }
-      
-      // Update progress text
-      this.objectiveProgress = `${this.objectiveIndex} /${this.totalObjectives}`
-      
-      // Check if story is completed
-      if (objectiveData.story_completed || objectiveData.final) {
-        this.storyCompleted = true
-        this.statusMessage = "Story completed! You've reached the end of this episode."
-      }
-      
-      this.scrollToBottom()
-    },
-
-    handleTypingIndicator(typingData) {
-      if (!typingData || !typingData.role) return
-      
-      // Update typing indicators
-      this.typingIndicators = {
-        ...this.typingIndicators,
-        [typingData.role]: typingData.status || 'idle'
-      }
-      
-      this.scrollToBottom()
-    },
-
-    handleDirectorStatus(directorData) {
-      if (!directorData) return
-      
-      this.directorDirecting = directorData.status === 'directing'
-      
-      if (directorData.message) {
-        this.director_message = directorData.message
-      }
-      
-      this.scrollToBottom()
-    },
-    handlePlayerAction(actionData) {
-      if (!actionData || !actionData.content) return;
-      
-      // Show a toast notification to nudge the player
-      this.toast.info("Your character needs to respond now. What would you like to say or do?", {
-        timeout: 8000,
-        position: "top-center"
-      });
-      
-    },
-
+    disconnectSocket() { if (this.socket) { if (this.chatId) this.socket.emit('leave_chat', { chat_id: this.chatId }); setTimeout(() => { this.socket.off(); this.socket.disconnect() }, 200) } },
+    handleConnect() { this.isConnected = true; this.errorMessage = ''; this.socket.emit('join_chat', { chat_id: this.chatId }) },
+    handleConnectionError(err) { console.error(err); this.isConnected = false; this.errorMessage = 'Server connection failed. Please refresh.' },
+    handleDisconnect(reason) { console.log('Disconnected:', reason); this.isConnected = false; if (reason === 'io server_disconnect') this.socket.connect() },
+    sendMessage() { if (!this.input.trim() || this.isSending || this.storyCompleted) return; this.isSending = true; this.messages.push({ role: 'Player', content: this.input, type: 'player_input' }); this.socket.emit('player_input', { chat_id: this.chatId, input: this.input }); this.input = ''; this.scrollToBottom(); this.isSending = false },
+    handleTyping() { if (this.typingTimeout) clearTimeout(this.typingTimeout); if (this.storyCompleted) return; this.typingTimeout = setTimeout(() => { this.isTyping = false }, 2000) },
+    handleDialogue(m) { if (m?.content) { this.messages.push({ role: m.role, content: m.content, type: m.type }); this.scrollToBottom() } },
+    handleStatus(d) {console.log(d); if (d.message) this.statusMessage = d.message; if (d.story_completed) this.storyCompleted = true },
+    handleError(e) { console.error(e); if (e.message) this.errorMessage = e.message },
+    handleObjectiveStatus(o) { console.log(o); this.objectiveIndex = o.index || 0; this.totalObjectives = o.total || 1; this.progress = this.objectiveIndex > 0 && this.totalObjectives > 0 ? Math.max(1, Math.floor((this.objectiveIndex / this.totalObjectives) * 100)) : 0; this.objectiveProgress = `${this.objectiveIndex}/${this.totalObjectives}`; if (o.story_completed || o.final) { this.storyCompleted = true; this.statusMessage = "Story completed! You've reached the end of this episode." } this.scrollToBottom() },
+    handleTypingIndicator(d) { if (d.role) { this.typingIndicators = { ...this.typingIndicators, [d.role]: d.status }; this.scrollToBottom() } },
+    handleDirectorStatus(d) { this.directorDirecting = d.status === 'directing'; if (d.message) this.director_message = d.message; this.scrollToBottom() },
+    handlePlayerAction(d) { if (d.content) this.toast.info("Your character needs to respond now.", { timeout: 8000, position: "top-center" }) },
     scrollToBottom() {
-      this.$nextTick(() => {
-        const container = this.$refs.messagesContainer
-        if (container) {
-          container.scrollTop = container.scrollHeight
-        }
-      })
+      this.
+        $nextTick(() => { const c = this.$refs.messagesContainer; if (c) c.scrollTop = c.scrollHeight })
     },
-
-    goBack() {
-      this.$router.go(-1)
-    },
-    getRoleColor(role) {
-  // Clean the input role
-  const cleanedRole = role.trim().toLowerCase();
-  
-  // Check cleaned version first
-  if (this.characterColors[cleanedRole]) {
-    return this.characterColors[cleanedRole];
-  }
-  
-  // Fallback to original role check
-  if (this.characterColors[role]) {
-    return this.characterColors[role];
-  }
-
-  // Default colors for system roles
-  const colorMap = {
-    'narration': 'text-purple-600 dark:text-purple-400',
-    'player': 'text-blue-600 dark:text-blue-400',
-    'system': 'text-gray-600 dark:text-gray-400'
-  };
-  
-  return colorMap[cleanedRole] || 'text-gray-600 dark:text-gray-400';
-},
-    getMessageStyle(type, role) {
-      const styleMap = {
-        'narration': 'bg-purple-100 dark:bg-purple-900/30 italic',
-        'player_input': 'bg-blue-100 dark:bg-blue-900/30 text-left', // Add text-left here
-        'system': 'bg-gray-100 dark:bg-gray-800/50 text-sm'
-      }
-
-      // For actor dialogues
-      if (type === 'actor_dialogue') {
-        const lowerRole = role.toLowerCase()
-        if (this.characterColors[lowerRole]) {
-          const baseColor = this.characterColors[lowerRole].split(' ')[0]
-          return `${baseColor.replace('text', 'bg')}/20 dark:${baseColor.replace('text', 'bg')}/30`
-        }
-      }
-
-      return styleMap[type] || 'bg-gray-100 dark:bg-gray-800/30'
-    }
+    goBack() { this.$router.go(-1) },
+    getCharacterImageUrl(r) { return this.characterImages[r.trim().toLowerCase()] || '' },
+    getRoleColor(r) { const c = r.trim().toLowerCase(); if (this.characterColors[c]) return this.characterColors[c]; const m = { narration: 'text-purple-600 dark:text-purple-400', player: 'text-blue-600 dark:text-blue-400', system: 'text-gray-600 dark:text-gray-400' }; return m[c] || 'text-gray-600 dark:text-gray-400' },
+    getMessageStyle(t, r) { const m = { narration: 'bg-purple-100 dark:bg-purple-900/30 italic', player_input: 'bg-blue-100 dark:bg-blue-900/30 text-left', system: 'bg-gray-100 dark:bg-gray-800/50 text-sm' }; if (t === 'actor_dialogue') { const l = r.trim().toLowerCase(); if (this.characterColors[l]) { const b = this.characterColors[l].split(' ')[0].replace('text', 'bg'); return `${b}/20 dark:${b}/30` } } return m[t] || 'bg-gray-100 dark:bg-gray-800/30' }
   },
-  
   watch: {
-    // Auto-start chat when connected
-    isConnected(newVal) {
-    if (newVal && !this.isChatStarted && !this.storyCompleted) {
-      setTimeout(() => {
-        // Just set the flag, don't call the full method again
-        this.isChatStarted = true;
-      }, 1000)
-    }
-  },
-    
-    storyCompleted(newVal) {
-      if (newVal) {
-        this.statusMessage = "Story completed! You've reached the end of this episode."
-        const chat_id = this.$route.params.chat_id
-        this.$router.push(`/end/${this.episode_id}/${chat_id}`)
-      }
-    }
+    isConnected(v) { if (v && !this.isChatStarted && !this.storyCompleted) setTimeout(() => { this.isChatStarted = true }, 1000) },
+    storyCompleted(v) { if (v) { this.statusMessage = "Story completed! You've reached the end of this episode.";const chat_id = this.$route.params.chat_id; this.$router.push(`/end/${this.episodeId}/${chat_id}`) } }
   }
 }
 </script>
@@ -632,7 +283,6 @@ export default {
   background-color: rgba(156, 163, 175, 0.7);
 }
 
-/* Dark mode scrollbar */
 .dark .overflow-y-auto::-webkit-scrollbar-thumb {
   background-color: rgba(156, 163, 175, 0.3);
 }
@@ -643,8 +293,13 @@ export default {
 
 /* Director progress animation */
 @keyframes directorProgress {
-  from { width: 0%; }
-  to { width: 100%; }
+  from {
+    width: 0%;
+  }
+
+  to {
+    width: 100%;
+  }
 }
 
 .animate-director-progress {
