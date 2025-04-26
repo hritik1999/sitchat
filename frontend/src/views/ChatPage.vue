@@ -282,7 +282,7 @@ export default {
     handleError(e) { 
       console.error(e); 
       if (e.message) 
-        this.errorMessage = e.message 
+        this.toast.error(e.message);
       },
     handleObjectiveStatus(o) { 
       console.log(o); 
