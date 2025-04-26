@@ -44,7 +44,7 @@
             v-for="(msg, index) in messages"
             :key="index"
             class="flex items-start gap-3"
-            :class="{ 'justify-end flex-row-reverse': msg.role === 'Player' }"
+            :class="{ 'justify-start flex-row-reverse': msg.role === 'Player' }"
           >
             <!-- Avatar -->
             <img
@@ -55,8 +55,8 @@
             />
 
             <!-- Content -->
-            <div class="flex-1 max-w-[70%]">
-              <div class="flex items-center">
+            <div class="flex-1 max-w-[90%]" :class="{ 'text-right ml-auto': msg.role === 'Player' }">
+              <div class="flex items-center" :class="{ 'justify-end': msg.role === 'Player' }">
                 <span class="font-semibold text-sm" :class="getRoleColor(msg.role)">
                   {{ msg.role === 'Player' ? player_name : msg.role }}
                 </span>
