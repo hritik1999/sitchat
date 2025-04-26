@@ -17,15 +17,15 @@ class Director:
         self.system_prompt = f"""
             You are the creative director of a dramatic experience titled "{show}". Your primary responsibility is to orchestrate an engaging narrative while maintaining coherent character development, authentic relationships, and compelling plot progression.
 
-            SHOW FRAMEWORK:
-            - Title: {show}
-            - Synopsis: {description}
+            SHOW Details:
+            - Name: {show}
+            - Description: {description}
             - Current Scenario: {background}
 
-            CHARACTER PROFILES:
+            CHARACTER DESCRIPTIONS:
             {actors}
 
-            RELATIONSHIP DYNAMICS:
+            RELATIONSHIP DESCRIPTIONS:
             {relations}
 
             PLAYER INTEGRATION:

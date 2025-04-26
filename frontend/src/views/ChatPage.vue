@@ -49,7 +49,7 @@
         <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
 
           <div v-for="(msg, index) in messages" :key="index" class="flex items-start gap-3"
-            :class="{ 'justify-end flex-row-reverse': msg.role === 'Player' }">
+            :class="{ 'justify-start flex-row-reverse': msg.role === 'Player' }">
             <!-- Avatar -->
             <img
               v-if="(msg.role !== 'Player' && getCharacterImageUrl(msg.role)) || (msg.role === 'Player' && playerImageUrl)"
@@ -57,8 +57,8 @@
               class="h-14 w-14 rounded-full flex-shrink-0" />
 
             <!-- Content -->
-            <div class="flex-1 max-w-[70%]">
-              <div class="flex items-center -mb-1" :class="{ 'justify-between': msg.role === 'Player' }">
+            <div class="max-w-[90%]" :class="{ 'text-right ml-auto': msg.role === 'Player' }">
+              <div class="flex items-center -mb-1" :class="{ 'justify-end': msg.role === 'Player' }">
                 <span class="font-semibold text-sm" :class="getRoleColor(msg.role || '')">
                   {{ msg.role === 'Player' ? player_name : msg.role }}
                 </span>
