@@ -128,7 +128,7 @@ export default {
   data() {
     return {
       showId: null,
-      episodeId: this.$route.params.episode_id,
+      episodeId: '',
       chatId: this.$route.params.chat_id,
       showName: 'Loading...',
       episodeName: 'Loading...',
@@ -171,6 +171,7 @@ export default {
         this.player_name = chatData.player_name
         this.playerImageUrl = chatData.player_image_url || ''
         this.episodeName = chatData.episodes?.name
+        this.episodeId = chatData.episode_id
         this.showId = chatData.episodes?.show_id
         this.messages = (chatRes.messages || []).sort((a, b) => a.sequence - b.sequence)
         // Fetch show

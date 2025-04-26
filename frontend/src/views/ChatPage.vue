@@ -341,7 +341,7 @@ export default {
     storyCompleted(v) { 
       if (v) { this.statusMessage = "Story completed! You've reached the end of this episode.";
       const chat_id = this.$route.params.chat_id; 
-      this.$router.push(`/end/${this.episodeId}/${chat_id}`) } 
+      this.$router.push(`/end/${chat_id}`) } 
     }
   }
 }
