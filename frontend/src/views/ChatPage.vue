@@ -270,6 +270,7 @@ export default {
     handleDialogue(m) { 
       if (m?.content) 
         { this.messages.push({ role: m.role, content: m.content, type: m.type }); 
+        this.progress += 0.5
       this.scrollToBottom() } 
     },
     handleStatus(d) {
