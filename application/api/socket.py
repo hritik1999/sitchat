@@ -11,17 +11,13 @@ active_stages_lock = threading.RLock()
 def setup_socket_handlers(socketio):
     """Set up Socket.IO event handlers for chat interaction"""
     # Patch Stage class to track processing time
-    original_init = Stage.__init__
-    def patched_init(self, *args, **kwargs):
-        original_init(self, *args, **kwargs)
-        self.processing_started_at = None
-        self.is_processing_before = False
-        def update_timestamp(name, value):
-            if name == 'is_processing' and not self.is_processing_before and value:
-                self.processing_started_at = time.time()
-                self.is_processing_before = value
-        self.__setattr__ = update_timestamp if not hasattr(self, '__setattr__') else update_timestamp
-    Stage.__init__ = patched_init
+    # Patch Stage.__setattr__ to track processing timestamp
+    original_setattr = getattr(Stage, '__setattr__', object.__setattr__)
+    def tracking_setattr(self, name, value):
+        if name == 'is_processing' and not getattr(self, 'is_processing', False) and value:
+            object.__setattr__(self, 'processing_started_at', time.time())
+        return original_setattr(self, name, value)
+    Stage.__setattr__ = tracking_setattr
     
     # Start monitoring for stuck processes
     def run_scheduler():
@@ -29,7 +25,7 @@ def setup_socket_handlers(socketio):
         schedule.every(30).minutes.do(cleanup_inactive_stages)
         while True:
             schedule.run_pending()
-            time.sleep(60)
+            time.sleep(1)
     threading.Thread(target=run_scheduler, daemon=True).start()
     logger.info("Stage monitoring started")
     socketio.cleanup_inactive_stages = cleanup_inactive_stages
@@ -198,18 +194,17 @@ def setup_socket_handlers(socketio):
     def handle_heartbeat(): pass
 
 def monitor_active_stages(socketio):
-    """Check for stuck stages and reset them"""
     current_time = time.time()
     with active_stages_lock:
         for chat_id, stage in list(active_stages.items()):
-            if not hasattr(stage, 'processing_started_at'): stage.processing_started_at = None
-            if stage.is_processing and stage.processing_started_at and (current_time - stage.processing_started_at > 300):
-                stage.is_processing = False
-                stage.processing_started_at = None
-                socketio.emit('status', {'message': 'Processing reset. You can continue now.'}, room=chat_id)
+            if hasattr(stage, 'processing_started_at') and stage.is_processing:
+                if current_time - stage.processing_started_at > 300:
+                    stage.is_processing = False
+                    object.__setattr__(stage, 'processing_started_at', None)
+                    socketio.emit('status', {'message': 'Processing reset. You can continue now.'}, room=chat_id)
+
 
 def cleanup_inactive_stages():
-    """Remove completed stages from memory"""
     with active_stages_lock:
         for chat_id in list(active_stages.keys()):
             if active_stages[chat_id].story_completed:

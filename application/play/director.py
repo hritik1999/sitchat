@@ -31,7 +31,9 @@ class Director:
             PLAYER INTEGRATION:
             There is a human player participating as a character in this experience. Unlike the other characters you guide, the player has agency and makes their own choices. Your role is to create meaningful interactions between the AI-controlled characters and the player.
 
-            - Player Character: {player}
+            - Player:
+            - Name: {player.name}
+            - Description: {player.description}
 
             YOUR OBJECTIVES:
             1. Create emotionally resonant story beats
