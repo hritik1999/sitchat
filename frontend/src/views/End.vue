@@ -36,10 +36,10 @@
     </div>
 
     <!-- Chat History -->
-    <div class="flex-1 overflow-hidden container mx-auto p-4">
+    <div class="flex-1 overflow-hidden">
       <div class="h-full flex flex-col border rounded-lg bg-background dark:bg-gray-900">
         <!-- Messages Area -->
-        <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
+        <div ref="messagesContainer" class="flex-[5] overflow-y-auto p-4 space-y-4"> 
           <div
             v-for="(msg, index) in messages"
             :key="index"
@@ -72,7 +72,7 @@
         </div>
 
         <!-- Rating Section -->
-        <div class="border-t p-8">
+        <div class="flex-[1] border-t p-2"> 
           <div class="max-w-md mx-auto text-center">
             <h3 class="text-lg font-semibold mb-4">Rate This Experience</h3>
             <div class="flex justify-center gap-2 mb-4">
@@ -91,6 +91,18 @@
               >
                 <StarIcon class="w-8 h-8 fill-current" />
               </button>
+            </div>
+             <!-- Add Feedback Section Here -->
+            <div class="mt-4 text-left">
+              <label class="block text-sm font-medium text-foreground mb-2">
+                Additional Feedback (optional)
+              </label>
+              <textarea
+                v-model="feedback"
+                :disabled="ratingSubmitted"
+                rows="3"
+                class="w-full p-2 border rounded-md bg-background transition-colors focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+                placeholder="What did you think of this episode? Any Suggestions to improve the overall experience?"></textarea>
             </div>
             <Button
               @click="submitRating"
@@ -137,6 +149,7 @@ export default {
       playerImageUrl: '',
       showImageUrl: '',
       rating: 0,
+      feedback: '',
       isSubmitting: false,
       ratingSubmitted: false,
       toast: useToast(),
@@ -204,31 +217,37 @@ export default {
       }
     },
     async fetchExistingRating() {
-      try {
-        const res = await fetchApi(`api/ratings/${this.episodeId}`)
-        if (res.rating) {
-          this.rating = Number(res.rating.rating)
-          this.ratingSubmitted = true
-        }
-      } catch {}
-    },
+    try {
+      const res = await fetchApi(`api/ratings/${this.episodeId}`)
+      if (res.rating) {
+        this.rating = Number(res.rating.rating)
+        this.feedback = res.rating.feedback || '' // Add this line
+        this.ratingSubmitted = true
+      }
+    } catch {}
+  },
     setRating(val) { if (!this.ratingSubmitted) this.rating = val },
     async submitRating() {
-      if (!this.rating) return
-      this.isSubmitting = true
-      try {
-        await fetchApi(`api/ratings/${this.episodeId}`, {
-          method: 'POST',
-          body: JSON.stringify({ show_id: this.showId, episode_id: this.episodeId, rating: this.rating })
+    if (!this.rating) return
+    this.isSubmitting = true
+    try {
+      await fetchApi(`api/ratings/${this.episodeId}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          show_id: this.showId,
+          episode_id: this.episodeId,
+          rating: this.rating,
+          feedback: this.feedback // Add feedback to payload
         })
-        this.ratingSubmitted = true
-        this.toast.success('Rating submitted!')
-      } catch {
-        this.toast.error('Submit failed.')
-      } finally {
-        this.isSubmitting = false
-      }
-    },
+      })
+      this.ratingSubmitted = true
+      this.toast.success('Rating submitted!')
+    } catch {
+      this.toast.error('Submit failed.')
+    } finally {
+      this.isSubmitting = false
+    }
+  },
     scrollToBottom() {
       this.$nextTick(() => {
         const c = this.$refs.messagesContainer
@@ -273,4 +292,8 @@ export default {
 
 /* Star hover */
 button:hover .fill-current { transform: scale(1.2); }
+textarea {
+  min-height: 100px;
+  resize: vertical;
+}
 </style>

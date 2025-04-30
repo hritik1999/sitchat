@@ -463,11 +463,12 @@ class RatingResource(Resource):
         
         data = request.get_json()
         rating = data.get('rating')
+        feedback = data.get('feedback')
         if not rating:
             return {"error": "Rating not provided"}, 400
         # get show id
         show_id = db.get_episode(episode_id).get('show_id')
-        success = db.add_rating(episode_id,show_id, user_id, rating)
+        success = db.add_rating(episode_id,show_id, user_id, rating,feedback)
         if not success:
             return {"error": "Failed to add rating"}, 500
         
