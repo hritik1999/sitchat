@@ -212,8 +212,9 @@ class Stage:
                 # simulate typing delay
                 if index != 0:
                     start = time.time()
-                    while time.time() - start < math.floor(len(reply.split()) / 3):
+                    while time.time() - start < math.floor(len(reply.split()) / 2.5):
                         if self.cancellation_event.is_set() or gen != self._gen:
+                            self.emit_event('typing_indicator', {"role": role, "status": "typing"}, gen)
                             return dialogue_lines
                         time.sleep(0.1)
 
@@ -246,8 +247,9 @@ class Stage:
 
                 if index != 0:
                     start = time.time()
-                    while time.time() - start < math.floor(len(reply.split()) / 3):
+                    while time.time() - start < math.floor(len(reply.split()) / 2.5):
                         if self.cancellation_event.is_set() or gen != self._gen:
+                            self.emit_event('typing_indicator', {"role": role, "status": "typing"}, gen)
                             return dialogue_lines
                         time.sleep(0.1)
 
@@ -327,6 +329,7 @@ class Stage:
                 return {"status": "complete", "message": "Story complete", "dialogue": []}
 
             # outline generation or reuse
+            self.emit_event('director_status', {"status": "directing", "message": "Director is writing next scene..."}, gen)
             if not self.plot_failure_reason and not self.player_interrupted:
                 outline_str = self.director.generate_outline(self.context, self.plot_objectives[self.current_objective_index])
                 outline = json.loads(self._clean_json(outline_str))
@@ -338,7 +341,6 @@ class Stage:
                 outline = self.last_outline if isinstance(self.last_outline, dict) else json.loads(self._clean_json(self.last_outline))
 
             # writing next scene
-            self.emit_event('director_status', {"status": "directing", "message": "Director is writing next scene..."}, gen)
             self.last_outline = outline
             self.chat_summary = outline.get('previous_outline', '')
 
