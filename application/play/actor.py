@@ -30,13 +30,14 @@ class Actor:
 
     def reply(self,chat_history, instructions):
 
-        actor_prompt = f"""Current Script:
+        actor_prompt = f"""Current chat history:
             {chat_history}
 
             Director's Instructions:
             {instructions}
 
             Based on the above, please generate your next line of dialogue as {self.name}. Ensure that your response:
+            - is a single line
             - Reflects your character's personality and relationships.
             - Strictly adheres to the director's guidance.
             - Advances the scene naturally.

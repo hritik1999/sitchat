@@ -169,7 +169,7 @@ class Stage:
         self.emit_event('status', {"message": "Processing interrupted and stopped"}, my_gen)
         for role in self.actors:
             self.emit_event('typing_indicator', {"role": role, "status": "idle"}, my_gen)
-            self.emit_event('typing_indicator', {"role": role.lower(), "status": "idle"}, my_gen)
+            self.emit_event('typing_indicator', {"role": role.lower(), "status": "idle"}, my_gen - 1 )
         self.emit_event('typing_indicator', {"role": "Narration", "status": "idle"},my_gen)
         self.emit_event('director_status', {"status": "idle", "message": ""}, my_gen)
         self.emit_event('status', {"message": "Scene reset for player input"}, my_gen)
