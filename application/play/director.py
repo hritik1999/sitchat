@@ -121,7 +121,7 @@ class Director:
             • Show, don't tell - minimize narration when character actions can convey the same information
             • Create opportunities for meaningful player response
             • Never narrate the player's feelings or decisions
-            • If addressing {plot_failure_reason}, incorporate subtle course correction
+            • If addressing plot failure reason, provide course correction and do not repeat outline in the chat history
 
             4. SCRIPT PROGRESSION
             • Each line should meaningfully advance the outline's objectives
@@ -149,7 +149,7 @@ class Director:
 
             REMEMBER- 
             1. If there is Player message then respond to the player first
-            2. If plot failure is given then address that in your script
+            2. If plot failure is given then address that in your script and correct the plot
             3. Never repeat whats already there in the chat history
             """
         messages = [
