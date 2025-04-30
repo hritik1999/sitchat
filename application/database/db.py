@@ -169,13 +169,14 @@ class SupabaseDB:
         return response.data
     
     def create_episode(self, show_id: str, creator_id: str, name: str, 
-                      description: str, background: str, plot_objectives: list) -> dict:
+                      description: str,player_role:str, background: str, plot_objectives: list) -> dict:
         """Create a new episode"""
         episode_data = {
             'show_id': show_id,
             'creator_id': creator_id,
             'name': name,
             'description': description,
+            'player_role': player_role,
             'background': background,
             'plot_objectives': json.dumps(plot_objectives)
         }

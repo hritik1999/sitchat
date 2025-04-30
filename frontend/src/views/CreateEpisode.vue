@@ -40,6 +40,20 @@
             class="w-full"
           />
         </div>
+
+
+
+      <!-- Player Role (NEW FIELD) -->
+      <div class="space-y-2">
+        <Label for="episode-player-role">Player Role</Label>
+        <Textarea
+          id="episode-player-role"
+          v-model="episodeForm.player_role"
+          placeholder="Role the player will take in this episode for example friend of joey and chandler etc"
+          rows="3"
+          class="w-full"
+        />
+      </div>
   
         <!-- Scene Background -->
         <div class="space-y-2">
@@ -140,6 +154,7 @@
         episodeForm: {
           name: '',
           description: '',
+          player_role: '',
           background: '',
           plot_objectives: ['']
         },
@@ -211,6 +226,7 @@
           this.episodeForm = {
             name: episode.name || '',
             description: episode.description || '',
+            player_role: episode.player_role || '',
             background: episode.background || '',
             plot_objectives: plotObjectives
           }

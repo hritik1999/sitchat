@@ -27,8 +27,8 @@ export default {
               method: "POST",
               body: JSON.stringify({ access_token: session.access_token }),
             });
-            
-            console.log("Backend verification:", data);
+            // store username name in local storage data.user.user_metadata.full_name
+            localStorage.setItem("username", data.user.user_metadata.full_name);
             
             // Redirect to main app after verification
             this.$router.push("/");

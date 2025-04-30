@@ -159,33 +159,60 @@
       
     </div>
   </div>
-  <!-- Player Dialog -->
-  <Dialog :open="playerDialog" @update:open="closePlayerDialog">
-    <DialogContent class="sm:max-w-[600px]">
+ <!-- Player Dialog -->
+ <Dialog :open="playerDialog" @update:open="closePlayerDialog">
+    <DialogContent class="max-w-[95vw] sm:max-w-[650px] mx-2">
       <DialogHeader>
-        <DialogTitle>Start Episode</DialogTitle>
-        <DialogDescription>
-          Enter your character details to begin "{{ selectedEpisode?.name }}"
-        </DialogDescription>
+        <DialogTitle class="text-xl sm:text-2xl flex items-center gap-2 break-words">
+          <PlayIcon class="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+          <span>{{ selectedEpisode?.name }}</span>
+        </DialogTitle>
       </DialogHeader>
-      
-      <form @submit.prevent="startPlaying(selectedEpisode?.id)" class="space-y-4">
-        <div class="space-y-2">
-          <Label for="player-name">Your Character Name</Label>
-          <Input id="player-name" v-model="playerForm.player_name" placeholder="Your character's name" required />
+
+      <div class="space-y-4 sm:space-y-6">
+        <!-- Player Info Grid -->
+        <div class="grid grid-cols-1 xs:grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4 bg-muted/30 rounded-lg">
+          <div class="space-y-1">
+            <Label class="text-xs sm:text-sm font-medium text-muted-foreground">Your Name</Label>
+            <p class="text-sm sm:text-base text-foreground font-semibold flex items-center gap-1.5">
+              <span class="inline-block h-2 w-2 rounded-full bg-primary"></span>
+              {{ user_name }}
+            </p>
+          </div>
+          <div class="space-y-1">
+            <Label class="text-xs sm:text-sm font-medium text-muted-foreground">Your Role</Label>
+            <p class="text-sm sm:text-base text-foreground font-semibold">
+              {{ selectedEpisode?.player_role || 'Adventurer' }}
+            </p>
+          </div>
         </div>
-        
-        <div class="space-y-2">
-          <Label for="player-description">Character Description</Label>
-          <Textarea id="player-description" v-model="playerForm.player_description" placeholder="Brief description of your character" />
+
+        <!-- Initial Setup Section -->
+        <div class="space-y-3 sm:space-y-4">
+          <div class="flex items-center gap-2 text-muted-foreground">
+            <ScrollTextIcon class="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+            <h3 class="text-sm sm:text-base font-semibold text-foreground">Episode Setup</h3>
+          </div>
+          <div class="prose prose-sm dark:prose-invert p-3 sm:p-4 bg-muted/10 rounded-lg border 
+                    max-h-[40vh] overflow-y-auto text-sm sm:text-base">
+            <template v-if="selectedEpisode?.background">
+              {{ selectedEpisode.background }}
+            </template>
+            <span v-else class="text-muted-foreground italic">
+              No additional setup information provided.
+            </span>
+          </div>
         </div>
-      </form>
-      
-      <DialogFooter>
-        <Button @click="closePlayerDialog" variant="outline">Cancel</Button>
-        <Button @click="startPlaying(selectedEpisode?.id)" :disabled="isStarting">
+      </div>
+
+      <DialogFooter class="mt-4 flex flex-col sm:flex-row gap-2 sm:gap-4">
+        <Button @click="closePlayerDialog" variant="outline" class="w-full sm:w-auto px-4 sm:px-6">
+          Cancel
+        </Button>
+        <Button @click="startPlaying(selectedEpisode?.id)" :disabled="isStarting" 
+                class="w-full sm:w-auto px-4 sm:px-8">
           <Loader2Icon v-if="isStarting" class="h-4 w-4 mr-2 animate-spin" />
-          {{ isStarting ? 'Starting...' : 'Start Episode' }}
+          <span v-else>Begin Adventure</span>
         </Button>
       </DialogFooter>
     </DialogContent>
@@ -196,7 +223,7 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { PlayIcon, PlusIcon, ChevronRightIcon, Loader2Icon,StarIcon, EyeIcon, ClockIcon,ChevronDownIcon  } from 'lucide-vue-next'
+import { PlayIcon, PlusIcon, ChevronRightIcon, Loader2Icon,StarIcon, EyeIcon, ClockIcon,ChevronDownIcon, ScrollTextIcon  } from 'lucide-vue-next'
 import { useToast } from 'vue-toastification'
 import { fetchApi } from '@/lib/utils'
 import {
@@ -236,7 +263,8 @@ export default {
     StarIcon,
     EyeIcon, 
     ClockIcon,
-    ChevronDownIcon
+    ChevronDownIcon,
+    ScrollTextIcon
   },
   name: 'ShowDetailsPage',
   data() {
@@ -245,6 +273,7 @@ export default {
       error: null,   // Add error state
       show_id: this.$route.params.id,
       API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001',
+      user_name : localStorage.getItem('username').split(' ')[0] || 'player',
       show: {
         id: '',
         name: '',
@@ -258,10 +287,6 @@ export default {
       episodes: [],
       playerDialog: false,
       selectedEpisode: null,
-      playerForm: {
-        player_name: '',
-        player_description: ''
-      },
       isStarting: false,
       expandedDescriptions: {},
     }
@@ -305,15 +330,13 @@ export default {
       const toast = useToast()
       
       try {
-        console.log('Episode ID:', episodeId)
-        console.log('Player Data:', this.playerForm)
-        
-        // Your episode starting logic
-        // Use imported fetchApi utility function for consistent authentication
         const data = await fetchApi(`api/episodes/${episodeId}/chats`, {
           method: 'POST', 
-          body: JSON.stringify(this.playerForm)
-        });
+          body: JSON.stringify({
+            player_name: this.user_name,
+            player_description: this.selectedEpisode?.player_role || ''
+          })
+        })
         
         if (data.error) {
           toast.error(`Error starting episode: ${data.error}`)
@@ -337,11 +360,9 @@ export default {
     // Using imported fetchApi from utils.js
     async getShow() {
       const toast = useToast(); // Get the toast instance
-      
       try {
         this.loading = true
         this.error = null
-        
         // Using imported fetchApi which manages auth state properly
         const data = await fetchApi(`api/shows/${this.show_id}`)
         

@@ -343,6 +343,7 @@ class EpisodesResource(Resource):
             creator_id=user_id,
             name=data.get('name'),
             description=data.get('description', ''),
+            player_role=data.get('player_role', ''),
             background=data.get('background', ''),
             plot_objectives=data.get('plot_objectives', [])
         )
