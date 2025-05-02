@@ -1,5 +1,5 @@
 <template>
-  <div class="h-screen flex flex-col">
+  <div class="flex flex-col min-h-screen overflow-y-auto">
     <!-- Header Section -->
     <div class="bg-background border-b p-4">
       <div class="container mx-auto flex justify-between items-center">
@@ -35,11 +35,11 @@
       </div>
     </div>
 
-    <!-- Chat History -->
-    <div class="flex-1 overflow-hidden">
-      <div class="h-full flex flex-col border rounded-lg bg-background dark:bg-gray-900">
-        <!-- Messages Area -->
-        <div ref="messagesContainer" class="flex-[5] overflow-y-auto p-4 space-y-4"> 
+    <!-- Main Content -->
+    <div class="container mx-auto flex-grow flex flex-col p-4 space-y-4">
+      <!-- Chat History -->
+      <div class="h-[50vh] overflow-y-auto border rounded-lg bg-background dark:bg-gray-900">
+        <div ref="messagesContainer" class="p-4 space-y-4">
           <div
             v-for="(msg, index) in messages"
             :key="index"
@@ -70,62 +70,102 @@
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- Rating Section -->
-        <div class="flex-[1] border-t p-2"> 
-          <div class="max-w-md mx-auto text-center">
-            <h3 class="text-lg font-semibold mb-4">Rate This Experience</h3>
-            <div class="flex justify-center gap-2 mb-4">
-              <button
-                v-for="star in 5"
-                :key="star"
-                @click="!ratingSubmitted && setRating(star)"
-                :disabled="ratingSubmitted"
-                class="p-2 transition-all duration-150"
-                :class="[
-                  rating >= star
-                    ? 'text-yellow-400 dark:text-yellow-300 scale-110'
-                    : 'text-gray-300 dark:text-gray-600',
-                  !ratingSubmitted ? 'hover:text-yellow-300 hover:scale-125' : ''
-                ]"
-              >
-                <StarIcon class="w-8 h-8 fill-current" />
-              </button>
+      <!-- Achievements Section -->
+      <div v-if="Achievements.length > 0" class="border-t pt-4">
+        <h3 class="text-lg font-semibold mb-4 text-center">Your Achievements 🏆</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div
+            v-for="(achievement, index) in Achievements"
+            :key="index"
+            class="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg"
+          >
+            <div class="flex items-center gap-4">
+              <span class="text-2xl">
+                {{ getAchievementEmoji(achievement.score) }}
+              </span>
+              <div class="flex-1">
+                <div class="font-medium">{{ achievement.title }}</div>
+                <div class="flex items-center gap-1 mt-1">
+                  <span
+                    v-for="star in 5"
+                    :key="star"
+                    :class="[
+                      'text-lg',
+                      star <= achievement.score
+                        ? 'text-yellow-400'
+                        : 'text-gray-300 dark:text-gray-600'
+                    ]"
+                  >
+                    ★
+                  </span>
+                </div>
+              </div>
             </div>
-             <!-- Add Feedback Section Here -->
-            <div class="mt-4 text-left">
-              <label class="block text-sm font-medium text-foreground mb-2">
-                Additional Feedback (optional)
-              </label>
-              <textarea
-                v-model="feedback"
-                :disabled="ratingSubmitted"
-                rows="3"
-                class="w-full p-2 border rounded-md bg-background transition-colors focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
-                placeholder="What did you think of this episode? Any Suggestions to improve the overall experience?"></textarea>
-            </div>
-            <Button
-              @click="submitRating"
-              :disabled="!rating || ratingSubmitted || isSubmitting"
-              class="w-full max-w-xs mx-auto"
-            >
-              <template v-if="isSubmitting">
-                <LoaderIcon class="h-4 w-4 mr-2 animate-spin" />
-                Submitting...
-              </template>
-              <template v-else>
-                {{ ratingSubmitted ? 'Rating Submitted' : 'Submit Rating' }}
-              </template>
-            </Button>
-            <p v-if="ratingSubmitted" class="text-sm text-green-600 dark:text-green-400 mt-2">
-              Thank you for your rating!
-            </p>
           </div>
+        </div>
+      </div>
+
+      <!-- Rating Section -->
+      <div class="border-t pt-4">
+        <div class="max-w-md mx-auto text-center">
+          <h3 class="text-lg font-semibold mb-4">Rate This Experience</h3>
+          <div class="flex justify-center gap-2 mb-4">
+            <button
+              v-for="star in 5"
+              :key="star"
+              @click="!ratingSubmitted && setRating(star)"
+              :disabled="ratingSubmitted"
+              class="p-2 transition-all duration-150"
+              :class="[
+                rating >= star
+                  ? 'text-yellow-400 dark:text-yellow-300 scale-110'
+                  : 'text-gray-300 dark:text-gray-600',
+                !ratingSubmitted ? 'hover:text-yellow-300 hover:scale-125' : ''
+              ]"
+            >
+              <StarIcon class="w-8 h-8 fill-current" />
+            </button>
+          </div>
+
+          <!-- Feedback Section -->
+          <div class="mt-4 text-left">
+            <label class="block text-sm font-medium text-foreground mb-2">
+              Additional Feedback (optional)
+            </label>
+            <textarea
+              v-model="feedback"
+              :disabled="ratingSubmitted"
+              rows="3"
+              class="w-full p-2 border rounded-md bg-background transition-colors focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+              placeholder="What did you think of this episode? Any Suggestions to improve the overall experience?"
+            ></textarea>
+          </div>
+
+          <Button
+            @click="submitRating"
+            :disabled="!rating || ratingSubmitted || isSubmitting"
+            class="w-full max-w-xs mx-auto mt-4"
+          >
+            <template v-if="isSubmitting">
+              <LoaderIcon class="h-4 w-4 mr-2 animate-spin" />
+              Submitting...
+            </template>
+            <template v-else>
+              {{ ratingSubmitted ? 'Rating Submitted' : 'Submit Rating' }}
+            </template>
+          </Button>
+
+          <p v-if="ratingSubmitted" class="text-sm text-green-600 dark:text-green-400 mt-2">
+            Thank you for your rating!
+          </p>
         </div>
       </div>
     </div>
   </div>
 </template>
+
 
 <script>
 import { ArrowLeftIcon, StarIcon, LoaderIcon } from 'lucide-vue-next'
@@ -165,11 +205,13 @@ export default {
         'text-orange-600 dark:text-orange-400',
         'text-teal-600 dark:text-teal-400'
       ],
+    Achievements: [ ],
     }
   },
   async mounted() {
     await this.fetchChatDetails()
     this.scrollToBottom()
+    await this.getAchievements()
   },
   methods: {
     async fetchChatDetails() {
@@ -248,6 +290,27 @@ export default {
       this.isSubmitting = false
     }
   },
+  async getAchievements() {
+      try {
+        const res = await fetchApi(`api/achievements/${this.chatId}`)
+        if (res.achievements) {
+          this.Achievements = res.achievements
+        }
+      } catch {
+        this.toast.error('Failed to load achievements.')
+      }
+    },
+    getAchievementEmoji(score) {
+      const emojis = {
+        0: '😐',
+        1: '🙂',
+        2: '😊',
+        3: '🌟',
+        4: '🏆',
+        5: '🎉'
+      };
+      return emojis[score] || '🎯';
+    },
     scrollToBottom() {
       this.$nextTick(() => {
         const c = this.$refs.messagesContainer
