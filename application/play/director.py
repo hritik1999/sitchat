@@ -111,7 +111,7 @@ class Director:
             • If the outline objectives are met before reaching {num_lines}, conclude organically
 
             2. CHARACTER DIRECTION
-            • Prioritize player engagement - if player has spoken, address them first and be rude if required
+            • Prioritize player engagement - if player has spoken, address them first and even be rude if necessary
             • Ask the character to use the player's name
             • Provide emotional context and motivation rather than verbatim dialogue
             • Instructions should suggest intent while allowing creative interpretation
@@ -124,7 +124,7 @@ class Director:
             • If addressing plot failure reason, provide course correction and do not repeat outline in the chat history
 
             4. SCRIPT PROGRESSION
-            • Each line should meaningfully advance the outline's objectives
+            • Each line should meaningfully advance the chat and the outline's objectives
             • Create natural transitions between speakers/actions
             • Skip any elements from the outline that have already occurred in the chat history
             • Focus exclusively on developing new narrative elements that haven't yet been covered
@@ -148,7 +148,7 @@ class Director:
             Return only valid JSON with no additional formatting or commentary.
 
             REMEMBER- 
-            1. If there is Player message then respond to the player first
+            1. If there is Player message then respond to the player first and be rude if necessary
             2. If plot failure is given then address that in your script and correct the plot
             3. Never repeat whats already there in the chat history
             """
@@ -183,4 +183,86 @@ class Director:
         chain = chat_prompt | self.llm 
         objective_status = chain.invoke({})
         return objective_status.content
+    
+    def detect_achievements(self, chat_history, player_name):
+        achievement_prompt = f"""
+        Analyze the chat history of this "{self.show}" episode and identify noteworthy interactions 
+        or moments that would qualify as achievements for the player ({player_name}).
+        
+        Focus on character-specific interactions that align with the show's style and the characters' personalities.
+        For example, in Friends this might be "Got roasted by Chandler" or in Big Bang Theory "Been called dumb by Sheldon".
+        
+        Consider these achievement types:
+        1. Character-specific interactions (receiving a signature catchphrase, being part of a running gag)
+        2. Plot milestone achievements (meaningful participation in key scene moments)
+        3. Unique interactions based on the player's actions
+        
+        Output your result as a JSON array of achievement objects. Each achievement should include:
+        - "title": A catchy, iconic, show-appropriate title for the achievement that references catchphrases or memorable aspects of the show
+        - "score": A number from 0 to 5 indicating how impressive or significant this achievement is (0 being trivial, 5 being legendary)
+        
+        Only include genuine achievements that actually occurred in the chat history.
+        
+        Example output for Friends:
+        ```
+        [
+        {
+            "title": "PIVOT!!!",
+            "score": 5
+        },
+        {
+            "title": "Could I BE Any More Mocked?",
+            "score": 4
+        },
+        {
+            "title": "We Were On A Break!",
+            "score": 5
+        },
+        {
+            "title": "Joey Doesn't Share Food!",
+            "score": 3
+        },
+        {
+            "title": "Smelly Cat Duet",
+            "score": 4
+        }
+        ]
+        ```
+        
+        Example output for Big Bang Theory:
+        ```
+        [
+        {
+            "title": "Bazinga'd",
+            "score": 5
+        },
+        {
+            "title": "Soft Kitty, Warm Kitty",
+            "score": 4
+        },
+        {
+            "title": "That's My Spot",
+            "score": 3
+        },
+        {
+            "title": "Coitus Conversation With Sheldon",
+            "score": 5
+        }
+        ]
+        ```
+        
+        Chat history: {chat_history}
+        Player name: {player_name}
+        
+        Return only a valid JSON array without any markdown or additional formatting.
+        """
+        
+        messages = [
+            SystemMessage(content=self.system_prompt),
+            HumanMessage(content=achievement_prompt)
+        ]
+        chat_prompt = ChatPromptTemplate.from_messages(messages)
+        chain = chat_prompt | self.llm
+        achievements = chain.invoke({})
+        return achievements.content
     

@@ -201,7 +201,6 @@ class Stage:
                 while time.time() - start < 10:
                     if self.cancellation_event.is_set() or gen != self._gen:
                         return dialogue_lines
-                    time.sleep(0.1)
 
             elif role.lower() in [actor.name.lower() for actor in self.actors.values()]:
                 self.emit_event('typing_indicator', {"role": role, "status": "typing"}, gen)
@@ -214,7 +213,13 @@ class Stage:
                     start = time.time()
                     while time.time() - start < math.floor(len(reply.split()) / 2.5):
                         if self.cancellation_event.is_set() or gen != self._gen:
-                            self.emit_event('typing_indicator', {"role": role, "status": "typing"}, gen)
+                            entry = {"role": role, "content": reply, "type": "actor_dialogue"}
+                            dialogue_lines.append(entry)
+                            self.dialogue_history.append(f"{role}: {reply}")
+                            self.context = f"{self.context}\n{role}: {reply}" if self.context else f"{role}: {reply}"
+                            self.emit_event('typing_indicator', {"role": role, "status": "idle"}, self._gen)
+                            self.emit_event('dialogue', entry, self._gen)
+                            seq += 1
                             return dialogue_lines
                         time.sleep(0.1)
 
@@ -249,9 +254,14 @@ class Stage:
                     start = time.time()
                     while time.time() - start < math.floor(len(reply.split()) / 2.5):
                         if self.cancellation_event.is_set() or gen != self._gen:
-                            self.emit_event('typing_indicator', {"role": role, "status": "typing"}, gen)
+                            entry = {"role": role, "content": reply, "type": "other"}
+                            dialogue_lines.append(entry)
+                            self.dialogue_history.append(f"{role}: {reply}")
+                            self.context = f"{self.context}\n{role}: {reply}" if self.context else f"{role}: {reply}"
+                            self.emit_event('typing_indicator', {"role": role, "status": "idle"}, self._gen)
+                            self.emit_event('dialogue', entry, self._gen)
+                            seq += 1
                             return dialogue_lines
-                        time.sleep(0.1)
 
                 entry = {"role": role, "content": reply, "type": "other"}
                 dialogue_lines.append(entry)
@@ -359,6 +369,14 @@ class Stage:
             if self.cancellation_event.is_set() or gen != self._gen:
                 return dialogue_lines
 
+            # check player achievements using director.detect_achievements in the background using threading
+            def check_player_achievements():
+                acheivements = self.director.detect_achievements(self.context, self.plot_objectives[self.current_objective_index])
+                for achievement in acheivements:
+                    self.emit_event('achievement', achievement, self._gen)
+
+            threading.Thread(target=check_player_achievements, daemon=True).start()
+
             # check objective
             self.emit_event('director_status', {"status": "directing", "message": "Checking objective completion..."}, gen)
             check_str = self.director.check_objective(self.context, self.plot_objectives[self.current_objective_index])
@@ -415,10 +433,10 @@ class Stage:
         """Handle player interruption and trigger an immediate response"""
         # notify old gen
         self.emit_event('director_status', {'status': 'directing', 'message': 'Director is resetting for your input...'}, self._gen)
-        # cancel old work
-        self._cancel_all_operations()
         # bump generation so old threads won't emit
         self._gen += 1
+        # cancel old work
+        self._cancel_all_operations()
         # clear any lingering cancel flag
         self.cancellation_event.clear()
         self.player_interrupted = True

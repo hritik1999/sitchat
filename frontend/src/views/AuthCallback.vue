@@ -27,6 +27,7 @@ export default {
               method: "POST",
               body: JSON.stringify({ access_token: session.access_token }),
             });
+            localStorage.setItem('user_id', data.user.id);
             // store username name in local storage data.user.user_metadata.full_name
             localStorage.setItem("username", data.user.user_metadata.full_name);
             
