@@ -93,6 +93,39 @@
         </div>
       </CardHeader>
     </Card>
+
+      <!-- Achievements Section -->
+      <Card v-if="userAchievements.length > 0" class="mb-8">
+        <CardHeader>
+          <CardTitle class="text-xl">Achievements</CardTitle>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-4">
+            <div v-for="(achievement, index) in visibleAchievements" :key="achievement.id" 
+                class="p-4 bg-muted/50 rounded-lg">
+              <div class="flex justify-between items-start mb-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-2xl">{{ getAchievementEmoji(achievement.score) }}</span>
+                  <CardTitle class="text-base">{{ achievement.title }}</CardTitle>
+                </div>
+                <div class="flex items-center gap-1 text-amber-500">
+                  <span v-for="n in 5" :key="n" 
+                        :class="n <= achievement.score ? 'text-amber-500' : 'text-muted-foreground'">
+                    ★
+                  </span>
+                </div>
+              </div>
+              <CardDescription class="text-sm">
+                {{ getShowName(achievement.show_id) || 'General Achievement' }}
+              </CardDescription>
+            </div>
+          </div>
+          <Button v-if="hasMoreAchievements" @click="showAllAchievements = !showAllAchievements" 
+                  variant="ghost" class="mt-4 mx-auto">
+            {{ showAllAchievements ? 'Show less' : 'Show more' }}
+            <ChevronDownIcon class="h-4 w-4 ml-2 transition-transform" 
+                            :class="{ 'rotate-180': showAllAchievements }" />
+          </Button>
+        </CardHeader>
+      </Card>
   
       <!-- User's Shows Section -->
       <section class="mb-8">
@@ -236,9 +269,11 @@ import { fetchApi } from '@/lib/utils'
         // fetchApi utility will handle authentication
         userShows: [],
         userEpisodes: null, // Can be an object or array
+        userAchievements:[],
         loadingShows: true,
         loadingEpisodes: true,
-        error: null
+        error: null,
+        showAllAchievements: false,
       }
     },
     computed: {
@@ -288,7 +323,15 @@ import { fetchApi } from '@/lib/utils'
           }
 
           return stats;
-        }
+        },
+        visibleAchievements() {
+            return this.showAllAchievements 
+              ? this.userAchievements 
+              : this.userAchievements.slice(0, 3);
+          },
+          hasMoreAchievements() {
+            return this.userAchievements.length > 3;
+          }
         },
     mounted() {
       this.getUserDetails()
@@ -397,7 +440,8 @@ import { fetchApi } from '@/lib/utils'
             
             // Handle shows data
             this.userShows = Array.isArray(data.user_shows) ? data.user_shows : [];
-            
+            this.userAchievements = Array.isArray(data.user_achievements) ? data.user_achievements : [];
+            console.log('User shows:', this.userShows);
             // Handle episodes data - ensure it's always an array
             if (data.user_episodes) {
             // If it's a single object (not an array), convert to array
@@ -427,6 +471,14 @@ import { fetchApi } from '@/lib/utils'
             this.loadingShows = false;
             this.loadingEpisodes = false;
         }
+        },
+        getAchievementEmoji(score) {
+        const emojis = ['🎯', '🌟', '🏅', '🏆', '💎', '🚀'];
+        return emojis[Math.min(score, emojis.length - 1)];
+      },
+        getShowName(showId) {
+          const show = this.userShows.find(s => s.id === showId);
+          return show ? show.name : null;
         }
     }
   }

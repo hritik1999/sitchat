@@ -20,8 +20,9 @@ class UserResource(Resource):
             return {"error": "User not found"}, 404
         user_shows = db.get_shows_by_creator(user_id)
         user_episodes = db.get_episodes_by_creator(user_id)
+        user_achievements = db.get_achievements(user_id=user_id)
         # Return the user data as a JSON response
-        return jsonify({"user": user, "user_shows": user_shows, "user_episodes": user_episodes})
+        return jsonify({"user": user, "user_shows": user_shows, "user_episodes": user_episodes, "user_achievements": user_achievements})
     
     def put(self):
         """Update user profile including avatar"""
