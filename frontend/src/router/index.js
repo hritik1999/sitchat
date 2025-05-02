@@ -12,6 +12,7 @@ import Profile from '@/views/Profile.vue';
 import EditProfile from '@/views/EditProfile.vue';
 import End from '@/views/End.vue';
 import ChatHistoryPage from '@/views/ChatHistory.vue';
+import LeaderboardPage from '@/views/Leaderboard.vue';
 // Define routes with meta for layout and auth requirements
 const routes = [
   {
@@ -96,6 +97,12 @@ const routes = [
     path: '/chat/history',
     name:'ChatHistory',
     component:ChatHistoryPage,
+    meta: {requiresAuth:true,layout:'main'}
+  },
+  {
+    path: '/leaderboard',
+    name:'Leaderboard',
+    component:LeaderboardPage,
     meta: {requiresAuth:true,layout:'main'}
   },
   // Add more routes as needed

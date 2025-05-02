@@ -15,8 +15,8 @@
             <router-link to="/Chat/History" class="text-sm font-medium text-slate-900 dark:text-slate-50 hover:text-primary transition-colors">
               Chat History
             </router-link>
-            <router-link to="/leaderboards" class="text-sm font-medium text-slate-900 dark:text-slate-50 hover:text-primary transition-colors">
-              Leaderboards
+            <router-link to="/leaderboard" class="text-sm font-medium text-slate-900 dark:text-slate-50 hover:text-primary transition-colors">
+              Leaderboard
             </router-link>
           </div>
         </div>
@@ -78,11 +78,11 @@
           <span>Chat History</span>
         </router-link>
         <router-link 
-          to="/leaderboards"
+          to="/leaderboard"
           class="flex flex-col items-center gap-1 text-xs font-medium text-slate-900 dark:text-slate-50 hover:text-primary transition-colors"
         >
           <TrophyIcon class="h-5 w-5" />
-          <span>Leaderboards</span>
+          <span>Leaderboard</span>
         </router-link>
         <router-link 
           to="/profile"

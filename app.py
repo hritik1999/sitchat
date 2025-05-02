@@ -3,7 +3,7 @@ eventlet.monkey_patch()
 import os
 from flask import Flask, request, jsonify, session
 from application.auth.auth import supabase
-from application.api.api import ShowsResource, ShowResource, EpisodesResource, EpisodeResource, UserResource, ChatResource , RatingResource, AchievementsResource
+from application.api.api import ShowsResource, ShowResource, EpisodesResource, EpisodeResource, UserResource, ChatResource , RatingResource, AchievementsResource, LeaderboardResource
 from application.api.socket import  setup_socket_handlers, active_stages
 from flask_cors import CORS
 from flask_restful import Api
@@ -146,6 +146,8 @@ web_api.add_resource(UserResource, '/api/user')
 web_api.add_resource(ChatResource, '/api/chats', '/api/chats/<string:chat_id>', '/api/episodes/<string:episode_id>/chats')
 web_api.add_resource(RatingResource, '/api/ratings', '/api/ratings/<string:episode_id>')
 web_api.add_resource(AchievementsResource, '/api/achievements/<string:chat_id>')
+web_api.add_resource(LeaderboardResource, '/api/leaderboard')
+
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, port=5001, host='0.0.0.0',)

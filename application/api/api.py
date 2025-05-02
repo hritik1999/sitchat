@@ -497,5 +497,13 @@ class AchievementsResource(Resource):
             return {"error": "Unauthorized. Please login again"}, 401
         achievements = db.get_achievements(chat_id=chat_id)
         return jsonify({"achievements": achievements})
+    
+class LeaderboardResource(Resource):
+    def get(self):
+        user_id = get_current_user()
+        if not user_id:
+            return {"error": "Unauthorized. Please login again"}, 401
+        leaderboard = db.get_all_users()
+        return jsonify({"leaderboard": leaderboard})
         
     
