@@ -36,6 +36,7 @@ class Stage:
         self.last_outline = None
         self.background = ''
         self.chat_id = None
+        self.achievements = []
 
         if chat_id:
             try:
@@ -113,6 +114,10 @@ class Stage:
                 if msg['type'] != 'system':
                     prefix = 'Narration:' if msg['type']=='narration' else msg['role']+':'
                     line = f"{prefix} {msg['content']}"
+        
+        achievements = db.get_achievements(self.chat_id)
+        if achievements:
+            self.achievements = achievements
 
     def _clean_json(self, json_str):
         cleaned = json_str.strip()
@@ -371,8 +376,11 @@ class Stage:
 
             # check player achievements using director.detect_achievements in the background using threading
             def check_player_achievements():
-                acheivements = self.director.detect_achievements(self.context, self.plot_objectives[self.current_objective_index])
-                for achievement in acheivements:
+                achievements = self.director.detect_achievements(self.context,self.player.name,self.achievements)
+                achievements = json.loads(self._clean_json(achievements))
+                print(achievements)
+                for achievement in achievements:
+                    db.add_achievement(self.chat_id, achievement['title'], achievement['score'])
                     self.emit_event('achievement', achievement, self._gen)
 
             threading.Thread(target=check_player_achievements, daemon=True).start()

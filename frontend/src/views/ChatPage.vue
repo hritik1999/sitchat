@@ -127,6 +127,7 @@ import { fetchApi } from '@/lib/utils'
 import { supabase } from '@/composables/useSupabase'
 import io from 'socket.io-client'
 import { useToast } from 'vue-toastification';
+import AchievementToast from '@/layouts/AchievementToast.vue';
 
 export default {
   name: 'ChatPage',
@@ -232,6 +233,7 @@ export default {
         this.socket.on('typing_indicator', this.handleTypingIndicator)
         this.socket.on('director_status', this.handleDirectorStatus)
         this.socket.on('player_action', this.handlePlayerAction)
+        this.socket.on('achievement', this.handleAchievement)
       }).catch(err => { console.error('Auth error', err); this.errorMessage = 'Auth failed' })
     },
     
@@ -309,6 +311,33 @@ export default {
     handlePlayerAction(d) { 
       if (d.content) 
       this.toast.info("Your character needs to respond now.", { timeout: 8000, position: "top-center" }) 
+    },
+    handleAchievement(achievement) {
+      console.log(achievement);
+      
+      if (achievement.title) {
+        // Use the custom component for the toast with adjusted options to avoid "box in box" look
+        this.toast({
+          component: AchievementToast,
+          props: {
+            title: achievement.title,
+            score: achievement.score || 0
+          }
+        }, {
+          timeout: 8000,
+          position: "top-center",
+          closeButton: 'button',
+          closeOnClick: true,
+          pauseOnFocusLoss: true,
+          pauseOnHover: true,
+          draggable: true,
+          draggablePercent: 0.6,
+          showCloseButtonOnHover: false,
+          hideProgressBar: true,
+          icon: false,
+          containerClassName: "achievement-toast-container"
+        });
+      }
     },
     scrollToBottom() {
       this.

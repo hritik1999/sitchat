@@ -184,75 +184,107 @@ class Director:
         objective_status = chain.invoke({})
         return objective_status.content
     
-    def detect_achievements(self, chat_history, player_name):
+    def detect_achievements(self, chat_history, player_name, achievements):
         achievement_prompt = f"""
-        Analyze the chat history of this "{self.show}" episode and identify noteworthy interactions 
-        or moments that would qualify as achievements for the player ({player_name}).
+        Analyze the chat history of this "{self.show}" episode and identify the MOST noteworthy interaction 
+        or moment that would qualify as an achievement for the player {player_name}.
         
-        Focus on character-specific interactions that align with the show's style and the characters' personalities.
-        For example, in Friends this might be "Got roasted by Chandler" or in Big Bang Theory "Been called dumb by Sheldon".
+        Be EXTREMELY selective and strict. Only identify truly iconic, memorable moments that 
+        perfectly match the show's style and characters' personalities.
         
-        Consider these achievement types:
-        1. Character-specific interactions (receiving a signature catchphrase, being part of a running gag)
-        2. Plot milestone achievements (meaningful participation in key scene moments)
-        3. Unique interactions based on the player's actions
+        Output your result as a JSON array with AT MOST 2 achievements. If no truly significant 
+        achievement-worthy moments occurred, return an empty array [].
         
-        Output your result as a JSON array of achievement objects. Each achievement should include:
-        - "title": A catchy, iconic, show-appropriate title for the achievement that references catchphrases or memorable aspects of the show
-        - "score": A number from 0 to 5 indicating how impressive or significant this achievement is (0 being trivial, 5 being legendary)
+        Each achievement should include:
+        - "title": A catchy, social-media-shareable title that clearly indicates what the player experienced or accomplished. The title should reference specific catchphrases or iconic moments from the show while clearly conveying what happened.
+        - "score": A number from 0 to 5 indicating significance (only include achievements with score 4 or 5)
         
-        Only include genuine achievements that actually occurred in the chat history.
-        
-        Example output for Friends:
+        Examples of GOOD, SHAREABLE achievements for Friends:
         ```
         [
-        {
-            "title": "PIVOT!!!",
+        {{
+            "title": "Helped Ross PIVOT! A Couch Up The Stairs",
             "score": 5
-        },
-        {
-            "title": "Could I BE Any More Mocked?",
-            "score": 4
-        },
-        {
-            "title": "We Were On A Break!",
-            "score": 5
-        },
-        {
-            "title": "Joey Doesn't Share Food!",
-            "score": 3
-        },
-        {
-            "title": "Smelly Cat Duet",
-            "score": 4
-        }
+        }}
         ]
         ```
         
-        Example output for Big Bang Theory:
         ```
         [
-        {
-            "title": "Bazinga'd",
+        {{
+            "title": "Got Mocked By Chandler's 'Could I BE Any More...' Voice",
             "score": 5
-        },
-        {
-            "title": "Soft Kitty, Warm Kitty",
-            "score": 4
-        },
-        {
-            "title": "That's My Spot",
-            "score": 3
-        },
-        {
-            "title": "Coitus Conversation With Sheldon",
-            "score": 5
-        }
+        }}
         ]
         ```
+        
+        ```
+        [
+        {{
+            "title": "Witnessed Ross's Full 'WE WERE ON A BREAK!' Meltdown",
+            "score": 5
+        }}
+        ]
+        ```
+        
+        ```
+        [
+        {{
+            "title": "Joey Refused To Share His Sandwich With Me",
+            "score": 4
+        }}
+        ]
+        ```
+        
+        Examples of GOOD, SHAREABLE achievements for Big Bang Theory:
+        ```
+        [
+        {{
+            "title": "Got 'Bazinga'd' By Sheldon During Game Night",
+            "score": 5
+        }}
+        ]
+        ```
+        
+        ```
+        [
+        {{
+            "title": "Sat In Sheldon's Spot And Survived The Lecture",
+            "score": 5
+        }}
+        ]
+        ```
+        
+        ```
+        [
+        {{
+            "title": "Endured Sheldon Knocking 'Penny! Penny! Penny!' At 3AM",
+            "score": 4
+        }}
+        ]
+        ```
+        
+        Examples of BAD achievements (TOO GENERIC - DO NOT USE THESE):
+        - "Had a conversation with Ross"
+        - "Helped Monica clean"
+        - "Listened to Sheldon explain something"
+        - "Got coffee with Rachel"
+        
+        When nothing truly achievement-worthy happened:
+        ```
+        []
+        ```
+        
+        Do NOT include minor interactions or routine conversations. Only include truly special 
+        moments that a fan of the show would instantly recognize as significant.
+        
+        Achievement titles MUST be clear enough that someone reading them on social media would understand what happened in the scene without needing additional context.
+        
+        IMPORTANT: Do NOT give similar achivements that have already been given to the player. Reference Past Achievements before giving a new achievement.
         
         Chat history: {chat_history}
         Player name: {player_name}
+        Past Achievements: {achievements}
         
         Return only a valid JSON array without any markdown or additional formatting.
         """
@@ -265,4 +297,3 @@ class Director:
         chain = chat_prompt | self.llm
         achievements = chain.invoke({})
         return achievements.content
-    

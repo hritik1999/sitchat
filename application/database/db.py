@@ -315,6 +315,7 @@ class SupabaseDB:
         response = self.supabase.table('ratings').insert(rating_data).execute()
         return response.data[0] if response.data else None
     
+    
     def get_rating(self, episode_id: str,show_id: str, user_id: str) -> dict:
         """Get a rating for an episode"""
         response = self.supabase.table('ratings') \
@@ -324,6 +325,35 @@ class SupabaseDB:
             .eq('user_id', user_id) \
             .execute()
         
+        return response.data[0] if response.data else None
+    
+    def get_achievements(self, chat_id: str = None, user_id: str = None) -> List[dict]:
+        """Get all achievements for a chat"""
+        if chat_id:
+            response = self.supabase.table('achievements') \
+                .select('*') \
+                .eq('chat_id', chat_id) \
+                .execute()
+            return response.data
+        if user_id:
+            response = self.supabase.table('achievements') \
+                .select('*') \
+                .eq('user_id', user_id) \
+                .execute()
+            return response.data
+    
+    def add_achievement(self, chat_id: str, achievement_title: str,score: int) -> dict:
+        """Add an achievement for a user"""
+        data = self.supabase.table('chats').select('*').eq('id', chat_id).execute()
+        achievement_data = {
+            'chat_id': chat_id,
+            'user_id': data.data[0]['user_id'],
+            'show_id': data.data[0]['show_id'],
+            'title': achievement_title,
+            'score': score
+        }
+
+        response = self.supabase.table('achievements').insert(achievement_data).execute()
         return response.data[0] if response.data else None
     
     # ---- Authentication Operations ----
