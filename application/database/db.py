@@ -209,7 +209,7 @@ class SupabaseDB:
     
     # ---- Chat Operations ----
     
-    def get_chats(self, user_id: str = None, episode_id: str = None, limit: int = 20, offset: int = 0) -> List[dict]:
+    def get_chats(self, user_id: str = None, episode_id: str = None, limit: int = 1000, offset: int = 0) -> List[dict]:
         """Get a list of chats with optional filters"""
         query = self.supabase.table('chats').select('*, episodes(name), users(username)')
         
