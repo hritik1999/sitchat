@@ -20,7 +20,7 @@
       />
       <div class="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
       <div class="container mx-auto px-4 relative pt-8 sm:pt-32 h-full flex flex-col justify-end">
-        <div class="max-w-3xl">
+        <div class="max-w-3xl mt-20" >
           <h1 class="text-2xl sm:text-4xl lg:text-5xl font-bold text-white mb-3 sm:mb-4 drop-shadow-lg ">
             {{ show.name }}
           </h1>
