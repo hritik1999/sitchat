@@ -1,27 +1,35 @@
 <template>
   <div class="flex flex-col min-h-screen overflow-y-auto">
     <!-- Header Section -->
-    <div class="bg-background border-b p-4">
-      <div class="container mx-auto flex justify-between items-center">
-        <div class="flex items-center">
-          <!-- Show Thumbnail -->
-          <img
-            v-if="showImageUrl"
-            :src="showImageUrl"
-            alt="Show Thumbnail"
-            class="h-10 w-10 mr-4 rounded"
-          />
-          <div>
-            <h1 class="text-xl font-bold inline-block">{{ showName }}</h1>
-            <p class="text-sm text-muted-foreground">{{ episodeName }}</p>
-          </div>
-        </div>
-        <Button variant="outline" @click="goBack" size="sm">
-          <ArrowLeftIcon class="h-4 w-4 mr-2" />
-          Back to Shows
-        </Button>
+    <div class="bg-background border-b p-2 sm:p-4">
+  <div class="container mx-auto flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0">
+    <!-- Left Section -->
+    <div class="flex items-center gap-2 sm:gap-4">
+      <!-- Show Thumbnail -->
+      <img
+        v-if="showImageUrl"
+        :src="showImageUrl"
+        alt="Show Thumbnail"
+        class="h-8 w-8 sm:h-10 sm:w-10 rounded flex-shrink-0"
+      />
+      <div class="min-w-0">
+        <h1 class="text-lg sm:text-xl font-bold truncate">{{ showName }}</h1>
+        <p class="text-xs sm:text-sm text-muted-foreground truncate">{{ episodeName }}</p>
       </div>
     </div>
+
+    <!-- Button - moves to bottom on mobile -->
+    <Button 
+      variant="outline" 
+      @click="goBack" 
+      size="sm"
+      class="self-end sm:self-auto -mt-1 sm:mt-0"
+    >
+      <ArrowLeftIcon class="h-4 w-4 sm:mr-2" />
+      <span class="sr-only sm:not-sr-only">Back to Shows</span>
+    </Button>
+  </div>
+</div>
 
     <!-- Completion Message -->
     <div class="bg-green-100 dark:bg-green-900/30 border-b p-4">
@@ -138,7 +146,7 @@
               v-model="feedback"
               :disabled="ratingSubmitted"
               rows="3"
-              class="w-full p-2 border rounded-md bg-background transition-colors focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+              class="w-full p-2 border rounded-md bg-background transition-colors focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50 dark:bg-gray-800"
               placeholder="What did you think of this episode? Any Suggestions to improve the overall experience?"
             ></textarea>
           </div>

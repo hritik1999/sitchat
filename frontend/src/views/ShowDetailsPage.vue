@@ -12,24 +12,28 @@
   <!-- Content when loaded -->
   <div v-else class="bg-background min-h-screen">
     <!-- Hero Section -->
-    <div class="relative h-96 bg-muted">
+    <div class="relative min-h-[20rem] sm:h-96 bg-muted">
       <img
         :src="show.image_url || '/placeholder-show.jpg'"
-        class="w-full h-full object-cover absolute inset-0"
+        class="w-full h-full object-cover object-top sm:object-center absolute inset-0"
         alt="Show banner"
-      >
+      />
       <div class="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
-      <div class="container mx-auto px-4 relative pt-32 h-full flex flex-col justify-end">
+      <div class="container mx-auto px-4 relative pt-8 sm:pt-32 h-full flex flex-col justify-end">
         <div class="max-w-3xl">
-          <h1 class="text-5xl font-bold text-foreground mb-4 drop-shadow-lg text-white">{{ show.name }}</h1>
-          <p class="text-lg text-muted-foreground mb-6 text-white">{{ show.description }}</p>
-          <div class="flex gap-4 mb-8">
-            <Button @click="startRandomEpisode" size="lg" class="gap-2">
-              <PlayIcon class="h-6 w-6" />
+          <h1 class="text-2xl sm:text-4xl lg:text-5xl font-bold text-white mb-3 sm:mb-4 drop-shadow-lg ">
+            {{ show.name }}
+          </h1>
+          <p class="text-sm sm:text-lg text-white mb-4 sm:mb-6 line-clamp-3 sm:line-clamp-none">
+            {{ show.description }}
+          </p>
+          <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6 sm:mb-8">
+            <Button @click="startRandomEpisode" size="sm" class="sm:size-lg gap-2">
+              <PlayIcon class="h-5 w-5 sm:h-6 sm:w-6" />
               Play Random Episode
             </Button>
-            <Button @click="createEpisode" variant="outline" size="lg" class="gap-2">
-              <PlusIcon class="h-6 w-6" />
+            <Button @click="createEpisode" variant="outline" size="sm" class="sm:size-lg gap-2">
+              <PlusIcon class="h-5 w-5 sm:h-6 sm:w-6" />
               Add Episode
             </Button>
           </div>
@@ -42,11 +46,7 @@
       <!-- Episodes Section -->
       <section class="mb-12">
         <div class="flex justify-between items-center mb-6">
-          <h2 class="text-3xl font-bold">Episodes</h2>
-          <Button  @click="createEpisode" variant="ghost" class="gap-2">
-            View All
-            <ChevronRightIcon class="h-4 w-4" />
-          </Button>
+          <h2 class="text-2xl sm:text-3xl font-bold">Episodes</h2>
         </div>
         <div v-if="episodes.length" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           <Card
@@ -58,7 +58,9 @@
               <!-- Top accent bar -->
               <div class="absolute top-0 left-0 right-0 h-1 bg-primary/50"></div>
 
-              <CardTitle class="text-lg mt-3 font-semibold">{{ episode.name }}</CardTitle>
+              <CardTitle class="text-lg mt-3 font-semibold text-foreground">
+                {{ episode.name }}
+              </CardTitle>
               
               <!-- Expandable Description -->
               <div class="relative">
@@ -77,7 +79,7 @@
                 </button>
               </div>
 
-              <!-- Stats Row - Moved below description -->
+              <!-- Stats Row -->
               <div class="flex gap-4 mt-4 text-sm">
                 <div class="flex items-center gap-1.5 text-muted-foreground">
                   <StarIcon class="h-4 w-4 text-amber-500" />
@@ -112,7 +114,7 @@
       
       <!-- Characters Section -->
       <section class="mb-12">
-        <h2 class="text-3xl font-bold mb-6">Characters</h2>
+        <h2 class="text-2xl sm:text-3xl font-bold mb-6">Characters</h2>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
           <div
             v-for="character in parsedCharacters"
@@ -120,10 +122,9 @@
             class="text-center space-y-2"
           >
             <div class="relative w-full aspect-square rounded-full overflow-hidden bg-muted mx-auto">
-              <!-- Character image-->
               <img :src="character.image_url" alt="Character Image" class="object-cover w-full h-full" />
             </div>
-            <h3 class="font-medium">{{ character.name }}</h3>
+            <h3 class="font-medium text-foreground">{{ character.name }}</h3>
           </div>
           <div v-if="parsedCharacters.length === 0" class="col-span-full text-center py-8 text-muted-foreground">
             No characters defined for this show yet.
@@ -133,8 +134,8 @@
       
       <!-- Details Section -->
       <section class="mb-12">
-        <h2 class="text-3xl font-bold mb-6">Details</h2>
-        <div class="grid md:grid-cols-2 gap-8">
+        <h2 class="text-2xl sm:text-3xl font-bold mb-6">Details</h2>
+        <div class="grid grid-cols-1 gap-8">
           <Card>
             <CardHeader>
               <CardTitle>About the Show</CardTitle>
@@ -148,6 +149,14 @@
                 <div class="text-sm font-medium text-muted-foreground mb-1">Total Episodes</div>
                 <p class="text-foreground">{{ episodes.length }}</p>
               </div>
+              <div>
+                <div class="text-sm font-medium text-muted-foreground mb-1">Total Views</div>
+                <p class="text-foreground">{{ episodes.reduce((sum, ep) => sum + (ep.views || 0), 0).toLocaleString() }}</p>
+              </div>
+              <div>
+                <div class="text-sm font-medium text-muted-foreground mb-1">Average Rating</div>
+                <p class="text-foreground">{{ (episodes.reduce((sum, ep) => sum + (ep.average_ratings || 0), 0) / (episodes.length || 1)).toFixed(1) }}</p>
+              </div>
               <div v-if="show.relations">
                 <div class="text-sm font-medium text-muted-foreground mb-1">Relations</div>
                 <p class="text-foreground">{{ show.relations }}</p>
@@ -159,11 +168,11 @@
       
     </div>
   </div>
- <!-- Player Dialog -->
+   <!-- Player Dialog -->
  <Dialog :open="playerDialog" @update:open="closePlayerDialog">
     <DialogContent class="max-w-[95vw] sm:max-w-[650px] mx-2">
       <DialogHeader>
-        <DialogTitle class="text-xl sm:text-2xl flex items-center gap-2 break-words">
+        <DialogTitle class="text-xl sm:text-2xl flex items-center gap-2 break-words dark:text-white">
           <PlayIcon class="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
           <span>{{ selectedEpisode?.name }}</span>
         </DialogTitle>
@@ -173,15 +182,15 @@
         <!-- Player Info Grid -->
         <div class="grid grid-cols-1 xs:grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4 bg-muted/30 rounded-lg">
           <div class="space-y-1">
-            <Label class="text-xs sm:text-sm font-medium text-muted-foreground">Your Name</Label>
-            <p class="text-sm sm:text-base text-foreground font-semibold flex items-center gap-1.5">
-              <span class="inline-block h-2 w-2 rounded-full bg-primary"></span>
+            <Label class="text-xs sm:text-sm font-medium text-muted-foreground dark:text-white ">Your Name</Label>
+            <p class="text-sm sm:text-base text-foreground font-semibold flex items-center gap-1.5 dark:text-white">
+              <span class="inline-block h-2 w-2 rounded-full bg-primary dark:text-white"></span>
               {{ user_name }}
             </p>
           </div>
           <div class="space-y-1">
-            <Label class="text-xs sm:text-sm font-medium text-muted-foreground">Your Role</Label>
-            <p class="text-sm sm:text-base text-foreground font-semibold">
+            <Label class="text-xs sm:text-sm font-medium text-muted-foreground dark:text-white">Your Role</Label>
+            <p class="text-sm sm:text-base text-foreground font-semibold dark:text-white">
               {{ selectedEpisode?.player_role || 'Adventurer' }}
             </p>
           </div>
@@ -191,10 +200,10 @@
         <div class="space-y-3 sm:space-y-4">
           <div class="flex items-center gap-2 text-muted-foreground">
             <ScrollTextIcon class="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-            <h3 class="text-sm sm:text-base font-semibold text-foreground">Episode Setup</h3>
+            <h3 class="text-sm sm:text-base font-semibold text-foreground dark:text-white">Episode Setup</h3>
           </div>
           <div class="prose prose-sm dark:prose-invert p-3 sm:p-4 bg-muted/10 rounded-lg border 
-                    max-h-[40vh] overflow-y-auto text-sm sm:text-base">
+                    max-h-[40vh] overflow-y-auto text-sm sm:text-base dark:text-white">
             <template v-if="selectedEpisode?.background">
               {{ selectedEpisode.background }}
             </template>
@@ -206,7 +215,7 @@
       </div>
 
       <DialogFooter class="mt-4 flex flex-col sm:flex-row gap-2 sm:gap-4">
-        <Button @click="closePlayerDialog" variant="outline" class="w-full sm:w-auto px-4 sm:px-6">
+        <Button @click="closePlayerDialog" variant="outline" class="w-full sm:w-auto px-4 sm:px-6 dark:bg-white">
           Cancel
         </Button>
         <Button @click="startPlaying(selectedEpisode?.id)" :disabled="isStarting" 
@@ -218,6 +227,7 @@
     </DialogContent>
   </Dialog>
 </template>
+
 
 <script>
 import { Button } from '@/components/ui/button'

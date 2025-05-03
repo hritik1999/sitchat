@@ -1,48 +1,48 @@
 <template>
     <div class="py-8 container mx-auto px-4">
       <!-- User Profile Section -->
-      <Card class="mb-8">
-        <CardHeader class="relative">
-          <div class="flex items-center gap-4">
-            <Avatar class="h-16 w-16">
-              <AvatarImage v-if="userDetails.avatar_url" :src="userDetails.avatar_url" />
-              <AvatarFallback>{{ userInitials }}</AvatarFallback>
-            </Avatar>
-            <div>
-              <CardTitle class="text-2xl">{{ userDetails.username || 'User' }}</CardTitle>
-              <CardDescription v-if="userDetails.email">{{ userDetails.email }}</CardDescription>
-            </div>
-          </div>
-          <Button @click="editUser" variant="outline" class="absolute top-4 right-4">
-            <PencilIcon class="h-4 w-4 mr-2" />
-            Edit Profile
-          </Button>
-        </CardHeader>
-      </Card>
-  
-  <!-- Settings Section -->
     <Card class="mb-8">
-      <CardHeader>
-        <CardTitle class="text-xl">Settings</CardTitle>
-        <div class="flex flex-wrap items-center justify-between pt-4 gap-4">
-          <div>
-            <CardTitle class="text-sm">Theme</CardTitle>
-            <CardDescription>Toggle between dark and light mode</CardDescription>
-          </div>
-          <div class="flex items-center gap-2">
-            <Button @click="toggleDarkMode" variant="outline">
-              <SunIcon class="h-4 w-4 mr-2 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-              <MoonIcon class="h-4 w-4 mr-2 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-              Toggle Theme
-            </Button>
-            <Button @click="logout" variant="destructive" class="md:hidden">
-              <LogOutIcon class="h-4 w-4 mr-2" />
-              Logout
-            </Button>
+      <CardHeader class="flex flex-col md:flex-row md:items-start items-start justify-between gap-4">
+        <div class="flex items-center gap-4 w-full">
+          <Avatar class="h-16 w-16">
+            <AvatarImage v-if="userDetails.avatar_url" :src="userDetails.avatar_url" />
+            <AvatarFallback>{{ userInitials }}</AvatarFallback>
+          </Avatar>
+          <div class="min-w-0">
+            <CardTitle class="text-2xl truncate">{{ userDetails.username || 'User' }}</CardTitle>
+            <CardDescription v-if="userDetails.email" class="truncate">{{ userDetails.email }}</CardDescription>
           </div>
         </div>
+        <Button @click="editUser" variant="outline" class="w-full md:w-auto mt-4 md:mt-0 self-end md:self-auto">
+          <PencilIcon class="h-4 w-4 mr-2" />
+          Edit Profile
+        </Button>
       </CardHeader>
     </Card>
+  
+  <!-- Settings Section -->
+  <Card class="mb-8">
+    <CardHeader>
+      <CardTitle class="text-xl">Settings</CardTitle>
+      <div class="flex flex-wrap items-center justify-between pt-4 gap-4">
+        <div>
+          <CardTitle class="text-sm">Theme</CardTitle>
+          <CardDescription>Toggle between dark and light mode</CardDescription>
+        </div>
+        <div class="flex flex-col md:flex-row md:items-center gap-2 w-full md:w-auto">
+          <Button @click="toggleDarkMode" variant="outline" class="w-full md:w-auto">
+            <SunIcon class="h-4 w-4 mr-2 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+            <MoonIcon class="h-4 w-4 mr-2 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            Toggle Theme
+          </Button>
+          <Button @click="logout" variant="destructive" class="w-full md:hidden">
+            <LogOutIcon class="h-4 w-4 mr-2" />
+            Logout
+          </Button>
+        </div>
+      </div>
+    </CardHeader>
+  </Card>
 
     <!-- Writer Statistics Section -->
     <Card v-if="userShows.length > 0 || normalizedEpisodes.length > 0" class="mb-8">
@@ -189,9 +189,6 @@
                 <div class="flex gap-1">
                     <Button @click="editEpisode(episode.show_id, episode.id)" variant="ghost" size="icon">
                     <PencilIcon class="h-4 w-4" />
-                    </Button>
-                    <Button @click="deleteEpisode(episode.show_id, episode.id)" variant="ghost" size="icon">
-                    <Trash2Icon class="h-4 w-4 text-destructive" />
                     </Button>
                 </div>
                 </div>

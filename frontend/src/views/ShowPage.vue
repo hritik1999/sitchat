@@ -35,15 +35,17 @@
         :key="show.id"
         class="group relative overflow-hidden transition-transform hover:scale-105 hover:shadow-lg"
       >
-        <div class="aspect-video bg-muted relative">
+      <div class="relative w-full pb-[56.25%] bg-muted overflow-hidden">
           <img
             :src="show.imageUrl || '/placeholder-image.jpg'"
-            class="w-full h-full object-cover"
+            class="absolute inset-0 w-full h-full object-contain"
             :alt="`${show.name} thumbnail`"
             @error="handleImageError"
             loading="lazy"
-          >
-          <div class="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
+            @click="viewShowDetails(show.id)"
+          />
+          <!-- optional gradient overlay—if you still want it -->
+          <div class="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent pointer-events-none" />
         </div>
         <CardHeader>
           <CardTitle class="line-clamp-1">{{ show.name || 'Untitled Show' }}</CardTitle>
@@ -57,7 +59,7 @@
             <button
               v-if="show.description"
               @click="toggleDescription(show)"
-              class="text-primary underline hover:text-primary/80 text-sm mt-1"
+              class="text-primary underline hover:text-primary/80 text-md mt-1 font-bold text-blue-500"
             >
               {{ show.isExpanded ? 'Show less' : 'Read more' }}
             </button>

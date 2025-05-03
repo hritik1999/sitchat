@@ -1,17 +1,17 @@
 <template>
-  <div class="h-screen flex flex-col">
+  <div class="h-screen flex flex-col dark:bg-gray-900">
     <!-- Header Section -->
-    <div class="bg-background border-b p-4">
+    <div class="bg-background dark:bg-gray-900 border-b dark:border-gray-700 p-4">
       <div class="container mx-auto flex justify-between items-center">
         <div class="flex items-center">
           <!-- Show Thumbnail -->
           <img v-if="showImageUrl" :src="showImageUrl" alt="Show Thumbnail" class="h-12 w-12 mr-4 rounded" />
           <div>
-            <h1 class="text-xl font-bold inline-block">{{ showName }}</h1>
-            <p class="text-sm text-muted-foreground">{{ episodeName }}</p>
+            <h1 class="text-xl font-bold inline-block dark:text-white">{{ showName }}</h1>
+            <p class="text-sm text-muted-foreground dark:text-gray-400">{{ episodeName }}</p>
           </div>
         </div>
-        <Button variant="outline" @click="goBack" size="sm">
+        <Button variant="outline" @click="goBack" size="sm" class="dark:border-gray-600 dark:text-gray-300">
           <ArrowLeftIcon class="h-4 w-4 mr-2" />
           Back
         </Button>
@@ -19,14 +19,14 @@
     </div>
 
     <!-- Progress Bar -->
-    <div class="bg-background border-b p-4">
+    <div class="bg-background dark:bg-gray-900 border-b dark:border-gray-700 p-4">
       <div class="container mx-auto">
         <div class="flex justify-between items-center mb-2">
-          <span class="text-sm">Objective Progress</span>
-          <span class="text-sm">{{ objectiveProgress }}</span>
+          <span class="text-sm dark:text-gray-300">Objective Progress</span>
+          <span class="text-sm dark:text-gray-300">{{ objectiveProgress }}</span>
         </div>
-        <div class="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
-          <div class="bg-blue-600 h-2 rounded-full transition-all duration-300" :style="{ width: `${progress}%` }">
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+          <div class="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300" :style="{ width: `${progress}%` }">
           </div>
         </div>
       </div>
@@ -44,7 +44,7 @@
 
     <!-- Chat Container -->
     <div class="flex-1 overflow-hidden container mx-auto p-4">
-      <div class="h-full flex flex-col border rounded-lg bg-background dark:bg-gray-900">
+      <div class="h-full flex flex-col border rounded-lg bg-background dark:bg-gray-900 dark:border-gray-700">
         <!-- Messages Area -->
         <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
 
@@ -63,7 +63,7 @@
                   {{ msg.role === 'Player' ? player_name : msg.role }}
                 </span>
               </div>
-              <div class="mt-1 p-2 rounded-lg whitespace-pre-wrap break-words"
+              <div class="mt-1 p-2 rounded-lg whitespace-pre-wrap break-words dark:text-white"
                 :class="getMessageStyle(msg.type || '', msg.role || '')">
                 {{ msg.content }}
               </div>
@@ -83,7 +83,7 @@
                     </span>
                   </div>
                   <div class="mt-1 p-3 rounded-lg bg-gray-100 dark:bg-gray-800 inline-flex items-center">
-                    <div class="flex space-x-1">
+                    <div class="flex space-x-1 text-gray-600 dark:text-gray-300">
                       <div class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 0ms" />
                       <div class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 150ms" />
                       <div class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 300ms" />
@@ -101,13 +101,15 @@
         </div>
 
         <!-- Input Area -->
-        <div class="border-t p-4">
-          <Textarea ref="messageInput" v-model="input" placeholder="Type your response..." class="resize-none" rows="2"
+        <div class="border-t dark:border-gray-700 p-4">
+          <Textarea ref="messageInput" v-model="input" placeholder="Type your response..." 
+            class="resize-none dark:bg-gray-800 dark:text-white dark:border-gray-600" rows="2"
             :disabled="isSending || storyCompleted" maxlength="500" @keydown.enter.exact.prevent="sendMessage"
             @keydown="handleTyping" />
           <div class="mt-2 flex justify-between items-center">
-            <span class="text-sm text-muted-foreground">{{ input.length }}/500</span>
-            <Button @click="sendMessage" :disabled="!input.trim() || isSending || storyCompleted">
+            <span class="text-sm text-muted-foreground dark:text-gray-400">{{ input.length }}/500</span>
+            <Button @click="sendMessage" :disabled="!input.trim() || isSending || storyCompleted"
+              class="dark:bg-blue-600 dark:hover:bg-blue-700 dark:text-white">
               Send
               <SendIcon class="h-4 w-4 ml-2" />
             </Button>
@@ -377,45 +379,30 @@ export default {
 }
 </script>
 
-<style scoped>
-/* Custom scrollbar for messages container */
-.overflow-y-auto::-webkit-scrollbar {
-  width: 8px;
-}
-
-.overflow-y-auto::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.overflow-y-auto::-webkit-scrollbar-thumb {
-  background-color: rgba(156, 163, 175, 0.5);
-  border-radius: 4px;
-}
-
-.overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(156, 163, 175, 0.7);
-}
-
-.dark .overflow-y-auto::-webkit-scrollbar-thumb {
-  background-color: rgba(156, 163, 175, 0.3);
-}
-
-.dark .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(156, 163, 175, 0.5);
-}
-
-/* Director progress animation */
-@keyframes directorProgress {
-  from {
-    width: 0%;
-  }
-
-  to {
-    width: 100%;
-  }
+<style>
+/* Add custom animation for dark mode compatibility */
+@keyframes director-progress {
+  from { width: 0%; }
+  to { width: 100%; }
 }
 
 .animate-director-progress {
-  animation: directorProgress 6s linear;
+  animation: director-progress 3s linear forwards;
+}
+
+/* Ensure text readability in both modes */
+.dark .text-muted-foreground {
+  color: #9CA3AF;
+}
+
+/* Message bubble styles */
+.bg-gray-100 {
+  @apply dark:bg-gray-800;
+}
+.bg-blue-100 {
+  @apply dark:bg-blue-900;
+}
+.bg-white {
+  @apply dark:bg-gray-800;
 }
 </style>
