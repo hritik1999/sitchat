@@ -31,7 +31,7 @@
           :data-user-id="user.id"
           class="relative transition-colors"
           :class="{ 
-            'bg-blue-100 border-2 border-blue-300': isCurrentUser(user.id),
+            'bg-blue-100 border-2 border-blue-300 dark:bg-blue-900/50': isCurrentUser(user.id),
             'hover:bg-accent/10': !isCurrentUser(user.id)
           }"
         >
@@ -92,7 +92,6 @@
         
         try {
           const data = await fetchApi('api/leaderboard')
-          
           if (!data || !Array.isArray(data.leaderboard)) {
             throw new Error('Invalid leaderboard data format')
           }

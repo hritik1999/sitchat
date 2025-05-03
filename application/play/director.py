@@ -100,7 +100,7 @@ class Director:
         outline = chain.invoke({})
         return outline.content
     
-    def generate_turn_instructions(self,chat_history,outline,plot_failure_reason='',plot_objective='',num_lines=6):
+    def generate_turn_instructions(self,chat_history,outline,plot_failure_reason='',plot_objective='',num_lines=5):
         dialogue_turn_prompt = f"""
             Transform the narrative outline into performable script instructions using these directorial guidelines:
 
@@ -183,104 +183,92 @@ class Director:
         chain = chat_prompt | self.llm 
         objective_status = chain.invoke({})
         return objective_status.content
-    
+
     def detect_achievements(self, chat_history, player_name, achievements):
         achievement_prompt = f"""
         Analyze the chat history of this "{self.show}" episode and identify the MOST noteworthy interaction 
         or moment that would qualify as an achievement for the player {player_name}.
         
-        Be EXTREMELY selective and strict. Only identify truly iconic, memorable moments that 
+        Only identify truly iconic, memorable moments that 
         perfectly match the show's style and characters' personalities.
+        
+        Scoring guidelines:
+        - Assign a score of 5 to once-in-a-series, landmark moments that a superfan would instantly recognize.
+        - Assign a score of 4 to very memorable moments that stand out but may not redefine the episode.
+        - Assign a score of 3 to notable moments that contribute meaningfully but are less iconic.
+        - Assign a score of 2 to minor but still interesting moments that fans might recall.
+        - Assign a score of 1 only if no higher-scoring moment exists; avoid trivial interactions.
+        
+        Diversity requirement:
+        - Achievements must differ significantly in theme and content. Do not output two achievements of the same type.
+        
+        Past achievements check:
+        - Compare against Past Achievements, including those shared in the prompt. Do NOT repeat or closely mirror any previously awarded achievement.
         
         Output your result as a JSON array with AT MOST 2 achievements. If no truly significant 
         achievement-worthy moments occurred, return an empty array [].
         
         Each achievement should include:
-        - "title": A catchy, social-media-shareable title that clearly indicates what the player experienced or accomplished. The title should reference specific catchphrases or iconic moments from the show while clearly conveying what happened.
-        - "score": A number from 0 to 5 indicating significance (only include achievements with score 4 or 5)
+        - "title": A catchy, social-media-shareable title that clearly indicates what the player experienced or accomplished.
+        - "reason": A concise explanation of why this moment qualifies as an achievement and justification for the assigned score.
+        - "score": An integer from 1 to 5 based on the criteria above.
         
         Examples of GOOD, SHAREABLE achievements for Friends:
         ```
         [
         {{
             "title": "Helped Ross PIVOT! A Couch Up The Stairs",
+            "reason": "This was a once-in-series gag that became iconic and highlighted Ross's determination.",
             "score": 5
         }}
         ]
         ```
-        
-        ```
-        [
-        {{
-            "title": "Got Mocked By Chandler's 'Could I BE Any More...' Voice",
-            "score": 5
-        }}
-        ]
-        ```
-        
-        ```
-        [
-        {{
-            "title": "Witnessed Ross's Full 'WE WERE ON A BREAK!' Meltdown",
-            "score": 5
-        }}
-        ]
-        ```
-        
         ```
         [
         {{
             "title": "Joey Refused To Share His Sandwich With Me",
+            "reason": "Joey's obsession over his sandwich is memorable and fan-referenced, though not landmark.",
             "score": 4
         }}
         ]
         ```
-        
-        Examples of GOOD, SHAREABLE achievements for Big Bang Theory:
         ```
         [
         {{
-            "title": "Got 'Bazinga'd' By Sheldon During Game Night",
-            "score": 5
+            "title": "Saw Phoebe's Cat in the Apartment",
+            "reason": "A quirky, fun moment that fans familiar with Phoebe’s love for stray animals will appreciate.",
+            "score": 3
         }}
         ]
         ```
-        
         ```
         [
         {{
-            "title": "Sat In Sheldon's Spot And Survived The Lecture",
-            "score": 5
+            "title": "Got Chandler's Sarcastic One-Liner",
+            "reason": "A lighthearted quip that added humor but wasn't central to the plot.",
+            "score": 2
         }}
         ]
         ```
-        
         ```
         [
         {{
-            "title": "Endured Sheldon Knocking 'Penny! Penny! Penny!' At 3AM",
-            "score": 4
+            "title": "Sat at Central Perk for Coffee",
+            "reason": "A routine, everyday interaction that offered little novelty.",
+            "score": 1
         }}
         ]
         ```
-        
         Examples of BAD achievements (TOO GENERIC - DO NOT USE THESE):
         - "Had a conversation with Ross"
         - "Helped Monica clean"
-        - "Listened to Sheldon explain something"
-        - "Got coffee with Rachel"
-        
+
         When nothing truly achievement-worthy happened:
         ```
         []
         ```
         
-        Do NOT include minor interactions or routine conversations. Only include truly special 
-        moments that a fan of the show would instantly recognize as significant.
-        
-        Achievement titles MUST be clear enough that someone reading them on social media would understand what happened in the scene without needing additional context.
-        
-        IMPORTANT: Do NOT give similar achivements that have already been given to the player. Reference Past Achievements before giving a new achievement.
+        Achievement entries MUST be clear enough that someone reading them on social media would understand what happened without needing additional context.
         
         Chat history: {chat_history}
         Player name: {player_name}
@@ -288,7 +276,7 @@ class Director:
         
         Return only a valid JSON array without any markdown or additional formatting.
         """
-        
+
         messages = [
             SystemMessage(content=self.system_prompt),
             HumanMessage(content=achievement_prompt)

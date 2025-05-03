@@ -100,6 +100,7 @@ class Stage:
         self.actors = {}
         for character in characters:
             char_name = character.get('name') if isinstance(character, dict) else character.name
+            char_name = char_name.strip().lower() 
             char_desc = character.get('description') if isinstance(character, dict) else character.description
             self.actors[char_name] = Actor(char_name, char_desc, relations, self.background, actor_llm)
 
@@ -194,7 +195,7 @@ class Stage:
             if self.cancellation_event.is_set() or gen != self._gen:
                 return dialogue_lines
 
-            role = line.get('role', '')
+            role = line.get('role', '').strip().lower() 
             instructions = line.get('instruction') or line.get('content', '')
 
             if role.lower() == (self.player.name.lower() if self.player else 'player'):
@@ -209,7 +210,7 @@ class Stage:
 
             elif role.lower() in [actor.name.lower() for actor in self.actors.values()]:
                 self.emit_event('typing_indicator', {"role": role, "status": "typing"}, gen)
-                actor = self.actors.get(role) or self.actors.get(role.lower())
+                actor = self.actors.get(role) 
                 reply = actor.reply(self.context, instructions)
                 db.add_message(self.chat_id, role, reply, "actor_dialogue", seq)
 
