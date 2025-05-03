@@ -15,13 +15,9 @@
         <div class="space-y-3">
           <Button variant="outline" class="w-full h-11 gap-2 hover:bg-gray-100 transition-all" @click="signInWithProvider('google')">
             <img src="https://upload.wikimedia.org/wikipedia/commons/7/7e/Gmail_icon_%282020%29.svg" alt="Google Logo" class="h-4 w-4" />
-            <span class="text-sm text-black">Continue with Google</span>
+            <span class="text-sm text-black dark:text-white">Continue with Google</span>
           </Button>
           
-          <Button variant="outline" class="w-full h-11 gap-2 hover:bg-gray-100 transition-all" @click="signInWithProvider('apple')">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_logo_black.svg" alt="Apple Logo" class="h-4 w-4" />
-            <span class="text-sm text-black">Continue with Apple</span>
-          </Button>
   
           <div class="relative py-4">
             <div class="absolute inset-0 flex items-center">
