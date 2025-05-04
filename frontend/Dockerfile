@@ -1,5 +1,8 @@
 # Stage 1: Build
 FROM node:18-alpine as build-stage
+# Grab the VITE_API_URL from docker build
+ARG VITE_API_URL
+ENV VITE_API_URL=${VITE_API_URL}
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
