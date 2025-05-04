@@ -27,7 +27,7 @@ services:
     ports:
       - "8081:80"
     environment:
-      - VITE_API_URL=/api
+      - VITE_API_URL=http://g4gcws04gc0ogkow4g88kogg.18.233.87.186.sslip.io
     depends_on:
       - backend
     restart: unless-stopped
