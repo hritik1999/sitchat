@@ -6,11 +6,6 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: flask-backend
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=Host(`www.sitchat.ai`)"
-      - "traefik.http.routers.backend.entrypoints=websecure"
-      - "traefik.http.services.backend.loadbalancer.server.port=5001"
     ports:
       - "5001:5001"
     environment:
