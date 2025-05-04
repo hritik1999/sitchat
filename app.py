@@ -52,6 +52,11 @@ socketio = SocketIO(
     manage_session=True,                   # Let Socket.IO manage sessions
 )
 
+# health check
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'ok'})
+
 # Middleware to authenticate socket.io connections
 @socketio.on('connect')
 def authenticate_socket():
