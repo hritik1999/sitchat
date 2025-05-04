@@ -42,7 +42,8 @@ app.config['DEBUG'] = DEBUG
 # Initialize Socket.IO with more compatible settings
 socketio = SocketIO(
     app, 
-    cors_allowed_origins="*",              # Allow all origins for simplicity
+    cors_allowed_origins="*",
+    path="/socket.io",                     # Allow all origins for simplicity
     async_mode="eventlet",                 # Use eventlet for better websocket support
     logger=DEBUG,                          # Enable logging in debug
     engineio_logger=DEBUG,                 # Enable engine.io logging in debug
