@@ -142,7 +142,7 @@ export default {
       objectiveProgress: '0/1',
       isTyping: false,
       API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001',
-      SOCKET_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001',
+      SOCKET_URL: import.meta.env.VITE_API_BASE_URL|| 'http://localhost:5001',
       showId: this.$route.params.show_id,
       showImageUrl: '',
       episodeId: '',
