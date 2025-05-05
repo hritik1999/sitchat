@@ -36,7 +36,7 @@ class SupabaseDB:
     
     def get_all_users(self) -> List[dict]:
         """Get all users"""
-        response = self.supabase.table('users').select('*').execute()
+        response = self.supabase.table('users').select('*').limit(1000).execute()
         return response.data
     
     def create_user_profile(self, user_id: str, username: str, avatar_url: Optional[str] = None) -> dict:
