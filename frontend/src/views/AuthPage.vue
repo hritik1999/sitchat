@@ -5,27 +5,25 @@
       <div class="w-full max-w-[320px] space-y-6">
         <div class="text-center space-y-2">
           <div class="mb-6">
-            <!-- SitChat text logo -->
-            <span class="text-4xl font-bold text-black tracking-wider">SitChat</span>
+            <span class="text-4xl font-bold text-black tracking-wider dark:text-white">SitChat</span>
           </div>
-          <h1 class="text-2xl font-bold text-black">Begin Your Story</h1>
-          <p class="text-sm text-gray-500">Experience your Favourite Sitcoms!</p>
+          <h1 class="text-2xl font-bold text-black dark:text-white">Begin Your Story</h1>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Experience your Favourite Sitcoms!</p>
         </div>
 
         <div class="space-y-3">
-          <Button variant="outline" class="w-full h-11 gap-2 hover:bg-gray-100 transition-all" @click="signInWithProvider('google')">
+          <Button variant="outline" class="w-full h-11 gap-2 hover:bg-gray-100 transition-all dark:hover:bg-gray-800" @click="signInWithProvider('google')">
             <img src="https://upload.wikimedia.org/wikipedia/commons/7/7e/Gmail_icon_%282020%29.svg" alt="Google Logo" class="h-4 w-4" />
             <span class="text-sm text-black dark:text-white">Continue with Google</span>
           </Button>
           
-  
           <div class="relative py-4">
             <div class="absolute inset-0 flex items-center">
               <span class="w-full border-t border-gray-300" />
             </div>
           </div>
         </div>
-  
+
         <p class="text-center text-xs text-gray-500 px-4">
           By continuing, you agree to our 
           <Button variant="link" class="text-xs h-auto p-0 text-gray-500">Terms</Button> 
@@ -34,7 +32,7 @@
         </p>
       </div>
     </div>
-  
+
     <!-- Right Side - Immersive Preview (70%) -->
     <div class="w-full md:w-[70%] relative min-h-[60vh] bg-black">
       <div class="absolute inset-0 pattern-dots pattern-gray-500 pattern-opacity-20 pattern-size-4"></div>
@@ -47,8 +45,9 @@
             </h2>
             <p class="text-xl text-gray-300">Interactive stories powered by AI</p>
           </div>
-  
-          <div class="grid grid-cols-3 gap-6 mt-12">
+
+          <!-- Responsive Grid -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
             <div class="feature-card">
               <div class="icon-container">
                 <SparklesIcon class="h-6 w-6 text-white" />
@@ -56,7 +55,7 @@
               <h3 class="text-lg font-medium text-white mt-4">Dynamic Episodes</h3>
               <p class="text-sm text-gray-300 mt-2">Experience dynamic stories where you become part of the narrative.</p>
             </div>
-  
+
             <div class="feature-card">
               <div class="icon-container">
                 <GlobeIcon class="h-6 w-6 text-white" />
@@ -64,7 +63,7 @@
               <h3 class="text-lg font-medium text-white mt-4">Create Stories</h3>
               <p class="text-sm text-gray-300 mt-2">Design your shows with detailed characters, relationships, and plot objectives.</p>
             </div>
-  
+
             <div class="feature-card">
               <div class="icon-container">
                 <ShareIcon class="h-6 w-6 text-white" />
