@@ -185,6 +185,7 @@ export default {
     },
     async logout() {
       try {
+        localStorage.removeItem('sb-wpwichwnfgbpggcqujld-auth-token')
         await supabase.auth.signOut()
         // Force a full page reload to reset auth state
         window.location.href = '/login'
