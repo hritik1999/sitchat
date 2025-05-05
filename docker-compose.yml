@@ -21,7 +21,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: "https://www.sitchat.ai/v1"
+        VITE_API_URL: "https://www.sitchat.ai"
     container_name: vue-frontend
     volumes:
       - ./frontend:/app
@@ -29,7 +29,7 @@ services:
     ports:
       - "8081:80"
     environment:
-      - VITE_API_URL=https://www.sitchat.ai/v1
+      - VITE_API_URL="https://www.sitchat.ai"
     depends_on:
       - backend
     restart: unless-stopped

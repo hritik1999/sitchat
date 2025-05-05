@@ -225,7 +225,7 @@ export default {
       supabase.auth.getSession().then(({ data }) => {
         const token = data.session?.access_token
         this.socket = io(this.SOCKET_URL, 
-        { path: "/socket.io",transports: ["websocket"],reconnectionAttempts: 5,  secure: true,rejectUnauthorized: false,
+        { path: "/socket.io",transports: ["polling"],reconnectionAttempts: 5,  secure: true,rejectUnauthorized: false, autoConnect:true,
           auth: { token }, extraHeaders: { Authorization: token ? `Bearer ${token}` : '' } })
         this.socket.on('connect', this.handleConnect)
         this.socket.on('connect_error', this.handleConnectionError)
