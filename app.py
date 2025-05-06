@@ -3,6 +3,7 @@ eventlet.monkey_patch()
 import os
 from flask import Flask, request, jsonify, session
 from application.auth.auth import supabase
+from application.database.db import db
 from application.api.api import ShowsResource, ShowResource, EpisodesResource, EpisodeResource, UserResource, ChatResource , RatingResource, AchievementsResource, LeaderboardResource
 from application.api.socket import  setup_socket_handlers, active_stages
 from flask_cors import CORS
@@ -111,11 +112,6 @@ def auth_verify():
 
         # Extract user from response
         user = user_response.user if hasattr(user_response, 'user') else user_response
-
-        # With the updated Supabase SDK, explicit authentication happens when we call get_user()
-        # We don't need to set anything else for authentication to work
-
-        # Also get the refresh token and session expiry information
         session_data = {}
         try:
             session_response = supabase.auth.get_session()
@@ -131,7 +127,6 @@ def auth_verify():
 
         # Convert to a dict (if it's a Pydantic model)
         user_data = user.dict() if hasattr(user, "dict") else user
-        
         return jsonify({
             "message": "Login successful", 
             "user": user_data,
