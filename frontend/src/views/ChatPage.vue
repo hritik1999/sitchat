@@ -1,44 +1,47 @@
 <template>
   <div class="h-screen flex flex-col dark:bg-gray-900">
-    <!-- Header Section -->
-    <div class="bg-background dark:bg-gray-900 border-b dark:border-gray-700 p-4">
-      <div class="container mx-auto flex justify-between items-center">
-        <div class="flex items-center">
-          <!-- Show Thumbnail -->
-          <img v-if="showImageUrl" :src="showImageUrl" alt="Show Thumbnail" class="h-12 w-12 mr-4 rounded" />
-          <div>
-            <h1 class="text-xl font-bold inline-block dark:text-white">{{ showName }}</h1>
-            <p class="text-sm text-muted-foreground dark:text-gray-400">{{ episodeName }}</p>
+    <!-- Fixed Header Container -->
+    <div class="sticky top-0 z-10 flex flex-col">
+      <!-- Header Section -->
+      <div class="bg-background dark:bg-gray-900 border-b dark:border-gray-700 p-4">
+        <div class="container mx-auto flex justify-between items-center">
+          <div class="flex items-center">
+            <!-- Show Thumbnail -->
+            <img v-if="showImageUrl" :src="showImageUrl" alt="Show Thumbnail" class="h-12 w-12 mr-4 rounded" />
+            <div>
+              <h1 class="text-xl font-bold inline-block dark:text-white">{{ showName }}</h1>
+              <p class="text-sm text-muted-foreground dark:text-gray-400">{{ episodeName }}</p>
+            </div>
+          </div>
+          <Button variant="outline" @click="goBack" size="sm" class="dark:border-gray-600 dark:text-gray-300">
+            <ArrowLeftIcon class="h-4 w-4 mr-2" />
+            Back
+          </Button>
+        </div>
+      </div>
+
+      <!-- Progress Bar -->
+      <div class="bg-background dark:bg-gray-900 border-b dark:border-gray-700 p-4">
+        <div class="container mx-auto">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-sm dark:text-gray-300">Objective Progress</span>
+            <span class="text-sm dark:text-gray-300">{{ objectiveProgress }}</span>
+          </div>
+          <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+            <div class="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300" :style="{ width: `${progress}%` }">
+            </div>
           </div>
         </div>
-        <Button variant="outline" @click="goBack" size="sm" class="dark:border-gray-600 dark:text-gray-300">
-          <ArrowLeftIcon class="h-4 w-4 mr-2" />
-          Back
-        </Button>
       </div>
-    </div>
 
-    <!-- Progress Bar -->
-    <div class="bg-background dark:bg-gray-900 border-b dark:border-gray-700 p-4">
-      <div class="container mx-auto">
-        <div class="flex justify-between items-center mb-2">
-          <span class="text-sm dark:text-gray-300">Objective Progress</span>
-          <span class="text-sm dark:text-gray-300">{{ objectiveProgress }}</span>
+      <!-- Director Directing Message -->
+      <div v-if="directorDirecting" class="container mx-auto px-4 pt-2">
+        <div class="text-center text-sm text-white py-2 bg-indigo-600 dark:bg-indigo-800 rounded-md p-2 animate-pulse">
+          <span class="font-medium">{{ director_message }}</span>
         </div>
-        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-          <div class="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300" :style="{ width: `${progress}%` }">
-          </div>
+        <div class="mt-2 h-1 bg-gray-200 dark:bg-gray-700 rounded-full">
+          <div class="h-full bg-indigo-500 dark:bg-indigo-400 rounded-full animate-director-progress"></div>
         </div>
-      </div>
-    </div>
-
-    <!-- Director Directing Message -->
-    <div v-if="directorDirecting" class="container mx-auto px-4 pt-2">
-      <div class="text-center text-sm text-white py-2 bg-indigo-600 dark:bg-indigo-800 rounded-md p-2 animate-pulse">
-        <span class="font-medium">{{ director_message }}</span>
-      </div>
-      <div class="mt-2 h-1 bg-gray-200 dark:bg-gray-700 rounded-full">
-        <div class="h-full bg-indigo-500 dark:bg-indigo-400 rounded-full animate-director-progress"></div>
       </div>
     </div>
 
