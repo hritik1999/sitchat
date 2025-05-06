@@ -1,5 +1,5 @@
 <template>
-  <div class="h-screen flex flex-col dark:bg-gray-900">
+  <div class="mobile-container min-h-screen flex flex-col dark:bg-gray-900">
     <!-- Header Section -->
     <div class="bg-background dark:bg-gray-900 border-b dark:border-gray-700 p-4">
       <div class="container mx-auto flex justify-between items-center">
@@ -43,10 +43,10 @@
     </div>
 
     <!-- Chat Container -->
-    <div class="flex-1 overflow-hidden container mx-auto p-4">
+    <div class="flex-1 overflow-hidden container mx-auto p-4 min-h-0">
       <div class="h-full flex flex-col border rounded-lg bg-background dark:bg-gray-900 dark:border-gray-700">
         <!-- Messages Area -->
-        <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
+        <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4 pb-[300px] sm:pb-4">
 
           <div v-for="(msg, index) in messages" :key="index" class="flex items-start gap-3"
             :class="{ 'justify-start flex-row-reverse': msg.role === 'Player' }">
@@ -103,7 +103,7 @@
         <!-- Input Area -->
         <div class="border-t dark:border-gray-700 p-4">
           <Textarea ref="messageInput" v-model="input" placeholder="Type your response..." 
-            class="resize-none dark:bg-gray-800 dark:text-white dark:border-gray-600" rows="2"
+            class="resize-none dark:bg-gray-800 dark:text-white dark:border-gray-600 text-[16px]" rows="2"
             :disabled="isSending || storyCompleted" maxlength="500" @keydown.enter.exact.prevent="sendMessage"
             @keydown="handleTyping" />
           <div class="mt-2 flex justify-between items-center">
@@ -406,5 +406,19 @@ export default {
 }
 .bg-white {
   @apply dark:bg-gray-800;
+}
+@supports (-webkit-touch-callout: none) {
+  textarea, input {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+  }
+}
+
+/* Improve mobile layout */
+@media (max-width: 640px) {
+  .mobile-container {
+    height: 100dvh !important;
+    min-height: -webkit-fill-available;
+  }
 }
 </style>
