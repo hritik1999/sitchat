@@ -1,10 +1,9 @@
 <template>
-  <div class="h-screen flex flex-col dark:bg-gray-900">
+  <div class="flex flex-col dark:bg-gray-900" style="height: var(--app-height);">
     <!-- Header Section -->
     <div class="bg-background dark:bg-gray-900 border-b dark:border-gray-700 p-4">
       <div class="container mx-auto flex justify-between items-center">
         <div class="flex items-center">
-          <!-- Show Thumbnail -->
           <img v-if="showImageUrl" :src="showImageUrl" alt="Show Thumbnail" class="h-12 w-12 mr-4 rounded" />
           <div>
             <h1 class="text-xl font-bold inline-block dark:text-white">{{ showName }}</h1>
@@ -26,13 +25,12 @@
           <span class="text-sm dark:text-gray-300">{{ objectiveProgress }}</span>
         </div>
         <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-          <div class="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300" :style="{ width: `${progress}%` }">
-          </div>
+          <div class="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300" :style="{ width: `${progress}%` }"></div>
         </div>
       </div>
     </div>
 
-    <!-- Director Directing Message -->
+    <!-- Director Message -->
     <div v-if="directorDirecting" class="container mx-auto px-4 pt-2">
       <div class="text-center text-sm text-white py-2 bg-indigo-600 dark:bg-indigo-800 rounded-md p-2 animate-pulse">
         <span class="font-medium">{{ director_message }}</span>
@@ -45,18 +43,13 @@
     <!-- Chat Container -->
     <div class="flex-1 overflow-hidden container mx-auto p-4">
       <div class="h-full flex flex-col border rounded-lg bg-background dark:bg-gray-900 dark:border-gray-700">
-        <!-- Messages Area -->
+        <!-- Messages -->
         <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
-
           <div v-for="(msg, index) in messages" :key="index" class="flex items-start gap-3"
             :class="{ 'justify-start flex-row-reverse': msg.role === 'Player' }">
-            <!-- Avatar -->
-            <img
-              v-if="(msg.role !== 'Player' && getCharacterImageUrl(msg.role)) || (msg.role === 'Player' && playerImageUrl)"
-              :src="msg.role === 'Player' ? playerImageUrl : getCharacterImageUrl(msg.role)" alt="Avatar"
-              class="h-14 w-14 rounded-full flex-shrink-0" />
-
-            <!-- Content -->
+            <img v-if="(msg.role !== 'Player' && getCharacterImageUrl(msg.role)) || (msg.role === 'Player' && playerImageUrl)"
+              :src="msg.role === 'Player' ? playerImageUrl : getCharacterImageUrl(msg.role)"
+              alt="Avatar" class="h-14 w-14 rounded-full flex-shrink-0" />
             <div class="max-w-[90%]" :class="{ 'text-right ml-auto': msg.role === 'Player' }">
               <div class="flex items-center -mb-1" :class="{ 'justify-end': msg.role === 'Player' }">
                 <span class="font-semibold text-sm" :class="getRoleColor(msg.role || '')">
@@ -94,6 +87,7 @@
             </div>
           </div>
 
+          <!-- Error Message -->
           <div v-if="errorMessage"
             class="bg-red-100 dark:bg-red-900/30 p-3 rounded-lg text-red-700 dark:text-red-300 text-sm">
             {{ errorMessage }}
@@ -102,14 +96,25 @@
 
         <!-- Input Area -->
         <div class="border-t dark:border-gray-700 p-4">
-          <Textarea ref="messageInput" v-model="input" placeholder="Type your response..." 
-            class="resize-none dark:bg-gray-800 dark:text-white dark:border-gray-600" rows="2"
-            :disabled="isSending || storyCompleted" maxlength="500" @keydown.enter.exact.prevent="sendMessage"
-            @keydown="handleTyping" />
+          <Textarea
+            ref="messageInput"
+            v-model="input"
+            placeholder="Type your response..."
+            class="resize-none dark:bg-gray-800 dark:text-white dark:border-gray-600"
+            rows="2"
+            :disabled="isSending || storyCompleted"
+            maxlength="500"
+            @focus="scrollToInput"
+            @keydown.enter.exact.prevent="sendMessage"
+            @keydown="handleTyping"
+          />
           <div class="mt-2 flex justify-between items-center">
             <span class="text-sm text-muted-foreground dark:text-gray-400">{{ input.length }}/500</span>
-            <Button @click="sendMessage" :disabled="!input.trim() || isSending || storyCompleted"
-              class="dark:bg-blue-600 dark:hover:bg-blue-700 dark:text-white">
+            <Button
+              @click="sendMessage"
+              :disabled="!input.trim() || isSending || storyCompleted"
+              class="dark:bg-blue-600 dark:hover:bg-blue-700 dark:text-white"
+            >
               Send
               <SendIcon class="h-4 w-4 ml-2" />
             </Button>
@@ -166,6 +171,7 @@ export default {
       isChatStarted: false,
       storyCompleted: false,
       typingTimeout: null,
+      messageInput: null,
       characterColors: {},
       characterImages: {},
       colorPalette: [
@@ -180,13 +186,23 @@ export default {
       ],
     }
   },
-  created() { this.toast = useToast() },
-  mounted() { this.connectToSocket(); this.fetchChatDetails() },
+  created() { this.toast = useToast();window.removeEventListener('resize', this.updateAppHeight); },
+  mounted() { 
+    this.connectToSocket(); this.fetchChatDetails(); this.updateAppHeight(); },
   beforeUnmount() { this.disconnectSocket() },
   computed: {
     hasActiveTypingIndicators() { return Object.values(this.typingIndicators).some(s => s === 'typing'); }
   },
   methods: {
+    updateAppHeight () {
+  document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`)
+},
+scrollToInput (){
+  setTimeout(() => {
+    messageInput.value?.$el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, 300)
+},
+
     async fetchChatDetails() {
       try {
         const data = await fetchApi(`api/chats/${this.chatId}`)
@@ -382,22 +398,24 @@ export default {
 </script>
 
 <style>
-/* Add custom animation for dark mode compatibility */
 @keyframes director-progress {
-  from { width: 0%; }
-  to { width: 100%; }
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
 }
 
 .animate-director-progress {
   animation: director-progress 3s linear forwards;
 }
 
-/* Ensure text readability in both modes */
 .dark .text-muted-foreground {
   color: #9CA3AF;
 }
 
-/* Message bubble styles */
+/* Optional: Keep light/dark compatibility */
 .bg-gray-100 {
   @apply dark:bg-gray-800;
 }
