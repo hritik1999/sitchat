@@ -195,23 +195,6 @@
             </p>
           </div>
         </div>
-
-        <!-- Initial Setup Section -->
-        <div class="space-y-3 sm:space-y-4">
-          <div class="flex items-center gap-2 text-muted-foreground">
-            <ScrollTextIcon class="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-            <h3 class="text-sm sm:text-base font-semibold text-foreground dark:text-white">Episode Setup</h3>
-          </div>
-          <div class="prose prose-sm dark:prose-invert p-3 sm:p-4 bg-muted/10 rounded-lg border 
-                    max-h-[40vh] overflow-y-auto text-sm sm:text-base dark:text-white">
-            <template v-if="selectedEpisode?.background">
-              {{ selectedEpisode.background }}
-            </template>
-            <span v-else class="text-muted-foreground italic">
-              No additional setup information provided.
-            </span>
-          </div>
-        </div>
       </div>
 
       <DialogFooter class="mt-4 flex flex-col sm:flex-row gap-2 sm:gap-4">

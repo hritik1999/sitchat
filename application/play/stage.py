@@ -35,6 +35,7 @@ class Stage:
         self.last_script_data = None
         self.last_outline = None
         self.background = ''
+        self.initial_setup = ''
         self.chat_id = None
         self.achievements = []
 
@@ -82,6 +83,7 @@ class Stage:
             raise ValueError(f"Episode with ID {episode_id} not found in database")
 
         self.plot_objectives = self._parse_json_field(episode_data.get('plot_objectives', '[]'))
+        self.initial_setup = episode_data.get('background', '')
         if self.chat_summary:
             self.background = self.chat_summary
         else:
@@ -217,7 +219,7 @@ class Stage:
                 # simulate typing delay
                 if index != 0:
                     start = time.time()
-                    while time.time() - start < math.floor(len(reply.split()) / 2):
+                    while time.time() - start < math.floor(len(reply.split()) / 2.5):
                         if self.cancellation_event.is_set() or gen != self._gen:
                             entry = {"role": role, "content": reply, "type": "actor_dialogue"}
                             dialogue_lines.append(entry)
@@ -258,7 +260,7 @@ class Stage:
 
                 if index != 0:
                     start = time.time()
-                    while time.time() - start < math.floor(len(reply.split()) / 2):
+                    while time.time() - start < math.floor(len(reply.split()) / 2.5):
                         if self.cancellation_event.is_set() or gen != self._gen:
                             entry = {"role": role, "content": reply, "type": "other"}
                             dialogue_lines.append(entry)
@@ -328,6 +330,11 @@ class Stage:
                 return {"status": "cancelled", "message": "Turn cancelled by player", "dialogue": []}
 
             self.emit_event('director_status', {"status": "directing", "message": "Director is directing..."}, gen)
+
+            if self.current_objective_index == 0 and self.context == None:
+                entry = {"role": "Narration", "content": self.initial_setup, "type": "narration"}
+                self.emit_event('dialogue', entry, self._gen)
+                
 
             # check completion
             if self.current_objective_index >= len(self.plot_objectives):
