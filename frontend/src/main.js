@@ -5,7 +5,7 @@ import router from './router';
 import Toast from 'vue-toastification';
 import 'vue-toastification/dist/index.css';
 import './assets/index.css'
-import VueGtag from 'vue-gtag'
+import VueGtag from 'vue-gtag-next';
 
 const app = createApp(App);
 
