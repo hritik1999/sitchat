@@ -219,7 +219,7 @@ class Stage:
                 # simulate typing delay
                 if index != 0:
                     start = time.time()
-                    while time.time() - start < math.floor(len(reply.split()) / 2.5):
+                    while time.time() - start < math.floor(len(reply.split()) / 2.25):
                         if self.cancellation_event.is_set() or gen != self._gen:
                             entry = {"role": role, "content": reply, "type": "actor_dialogue"}
                             dialogue_lines.append(entry)
@@ -260,7 +260,7 @@ class Stage:
 
                 if index != 0:
                     start = time.time()
-                    while time.time() - start < math.floor(len(reply.split()) / 2.5):
+                    while time.time() - start < math.floor(len(reply.split()) / 2.25):
                         if self.cancellation_event.is_set() or gen != self._gen:
                             entry = {"role": role, "content": reply, "type": "other"}
                             dialogue_lines.append(entry)
