@@ -1,59 +1,62 @@
 <template>
-  <div class="flex flex-col h-[100dvh] dark:bg-gray-900">
-    <!-- Fixed Header -->
-    <div class="fixed top-0 left-0 right-0 z-50 bg-background dark:bg-gray-900 border-b dark:border-gray-700">
-      <div class="container mx-auto p-4">
-        <div class="flex justify-between items-center">
-          <div class="flex items-center">
-            <img v-if="showImageUrl" :src="showImageUrl" alt="Show Thumbnail" class="h-12 w-12 mr-4 rounded" />
-            <div>
-              <h1 class="text-xl font-bold inline-block dark:text-white">{{ showName }}</h1>
-              <p class="text-sm text-muted-foreground dark:text-gray-400">{{ episodeName }}</p>
-            </div>
+  <div class="h-screen flex flex-col dark:bg-gray-900">
+    <!-- Header Section -->
+    <div class="bg-background dark:bg-gray-900 border-b dark:border-gray-700 p-4">
+      <div class="container mx-auto flex justify-between items-center">
+        <div class="flex items-center">
+          <!-- Show Thumbnail -->
+          <img v-if="showImageUrl" :src="showImageUrl" alt="Show Thumbnail" class="h-12 w-12 mr-4 rounded" />
+          <div>
+            <h1 class="text-xl font-bold inline-block dark:text-white">{{ showName }}</h1>
+            <p class="text-sm text-muted-foreground dark:text-gray-400">{{ episodeName }}</p>
           </div>
-          <Button variant="outline" @click="goBack" size="sm" class="dark:border-gray-600 dark:text-gray-300">
-            <ArrowLeftIcon class="h-4 w-4 mr-2" />
-            Back
-          </Button>
         </div>
+        <Button variant="outline" @click="goBack" size="sm" class="dark:border-gray-600 dark:text-gray-300">
+          <ArrowLeftIcon class="h-4 w-4 mr-2" />
+          Back
+        </Button>
       </div>
     </div>
 
-    <!-- Fixed Progress Bar -->
-    <div class="fixed top-16 left-0 right-0 z-40 bg-background dark:bg-gray-900 border-b dark:border-gray-700">
-      <div class="container mx-auto p-4">
+    <!-- Progress Bar -->
+    <div class="bg-background dark:bg-gray-900 border-b dark:border-gray-700 p-4">
+      <div class="container mx-auto">
         <div class="flex justify-between items-center mb-2">
           <span class="text-sm dark:text-gray-300">Objective Progress</span>
           <span class="text-sm dark:text-gray-300">{{ objectiveProgress }}</span>
         </div>
         <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-          <div class="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300" :style="{ width: `${progress}%` }"></div>
+          <div class="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300" :style="{ width: `${progress}%` }">
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Fixed Director Message -->
-    <div v-if="directorDirecting" class="fixed top-28 left-0 right-0 z-30 bg-background dark:bg-gray-900">
-      <div class="container mx-auto px-4">
-        <div class="text-center text-sm text-white py-2 bg-indigo-600 dark:bg-indigo-800 rounded-md p-2 animate-pulse">
-          <span class="font-medium">{{ director_message }}</span>
-        </div>
-        <div class="mt-2 h-1 bg-gray-200 dark:bg-gray-700 rounded-full">
-          <div class="h-full bg-indigo-500 dark:bg-indigo-400 rounded-full animate-director-progress"></div>
-        </div>
+    <!-- Director Directing Message -->
+    <div v-if="directorDirecting" class="container mx-auto px-4 pt-2">
+      <div class="text-center text-sm text-white py-2 bg-indigo-600 dark:bg-indigo-800 rounded-md p-2 animate-pulse">
+        <span class="font-medium">{{ director_message }}</span>
+      </div>
+      <div class="mt-2 h-1 bg-gray-200 dark:bg-gray-700 rounded-full">
+        <div class="h-full bg-indigo-500 dark:bg-indigo-400 rounded-full animate-director-progress"></div>
       </div>
     </div>
 
     <!-- Chat Container -->
-    <div class="flex-1 overflow-hidden container mx-auto pt-32 pb-24 px-4">
+    <div class="flex-1 overflow-hidden container mx-auto p-4">
       <div class="h-full flex flex-col border rounded-lg bg-background dark:bg-gray-900 dark:border-gray-700">
         <!-- Messages Area -->
-        <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4 pt-4 pb-16">
+        <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
+
           <div v-for="(msg, index) in messages" :key="index" class="flex items-start gap-3"
-               :class="{ 'justify-start flex-row-reverse': msg.role === 'Player' }">
-            <img v-if="(msg.role !== 'Player' && getCharacterImageUrl(msg.role)) || (msg.role === 'Player' && playerImageUrl)"
-                 :src="msg.role === 'Player' ? playerImageUrl : getCharacterImageUrl(msg.role)" alt="Avatar"
-                 class="h-14 w-14 rounded-full flex-shrink-0" />
+            :class="{ 'justify-start flex-row-reverse': msg.role === 'Player' }">
+            <!-- Avatar -->
+            <img
+              v-if="(msg.role !== 'Player' && getCharacterImageUrl(msg.role)) || (msg.role === 'Player' && playerImageUrl)"
+              :src="msg.role === 'Player' ? playerImageUrl : getCharacterImageUrl(msg.role)" alt="Avatar"
+              class="h-14 w-14 rounded-full flex-shrink-0" />
+
+            <!-- Content -->
             <div class="max-w-[90%]" :class="{ 'text-right ml-auto': msg.role === 'Player' }">
               <div class="flex items-center -mb-1" :class="{ 'justify-end': msg.role === 'Player' }">
                 <span class="font-semibold text-sm" :class="getRoleColor(msg.role || '')">
@@ -61,17 +64,18 @@
                 </span>
               </div>
               <div class="mt-1 p-2 rounded-lg whitespace-pre-wrap break-words dark:text-white"
-                   :class="getMessageStyle(msg.type || '', msg.role || '')">
+                :class="getMessageStyle(msg.type || '', msg.role || '')">
                 {{ msg.content }}
               </div>
             </div>
           </div>
 
+          <!-- Typing Indicators -->
           <div v-if="hasActiveTypingIndicators" class="my-2">
             <div v-for="(status, role) in typingIndicators" :key="role">
               <div v-if="status === 'typing'" class="flex items-start gap-3">
                 <img v-if="getCharacterImageUrl(role)" :src="getCharacterImageUrl(role)" alt="Typing Avatar"
-                     class="h-10 w-10 rounded-full flex-shrink-0" />
+                  class="h-10 w-10 rounded-full flex-shrink-0" />
                 <div class="flex-1 max-w-[70%]">
                   <div class="flex items-center">
                     <span class="font-semibold text-sm" :class="getRoleColor(role)">
@@ -91,21 +95,21 @@
           </div>
 
           <div v-if="errorMessage"
-               class="bg-red-100 dark:bg-red-900/30 p-3 rounded-lg text-red-700 dark:text-red-300 text-sm">
+            class="bg-red-100 dark:bg-red-900/30 p-3 rounded-lg text-red-700 dark:text-red-300 text-sm">
             {{ errorMessage }}
           </div>
         </div>
 
-        <!-- Sticky Input Area -->
-        <div class="sticky bottom-0 border-t dark:border-gray-700 bg-background dark:bg-gray-900 p-4">
+        <!-- Input Area -->
+        <div class="border-t dark:border-gray-700 p-4">
           <Textarea ref="messageInput" v-model="input" placeholder="Type your response..." 
-                    class="resize-none dark:bg-gray-800 dark:text-white dark:border-gray-600 text-[16px]"
-                    rows="2" :disabled="isSending || storyCompleted" maxlength="500" 
-                    @keydown.enter.exact.prevent="sendMessage" @keydown="handleTyping" />
+            class="resize-none dark:bg-gray-800 dark:text-white dark:border-gray-600" rows="2"
+            :disabled="isSending || storyCompleted" maxlength="500" @keydown.enter.exact.prevent="sendMessage"
+            @keydown="handleTyping" />
           <div class="mt-2 flex justify-between items-center">
             <span class="text-sm text-muted-foreground dark:text-gray-400">{{ input.length }}/500</span>
             <Button @click="sendMessage" :disabled="!input.trim() || isSending || storyCompleted"
-                    class="dark:bg-blue-600 dark:hover:bg-blue-700 dark:text-white">
+              class="dark:bg-blue-600 dark:hover:bg-blue-700 dark:text-white">
               Send
               <SendIcon class="h-4 w-4 ml-2" />
             </Button>
@@ -177,34 +181,12 @@ export default {
     }
   },
   created() { this.toast = useToast() },
-  mounted() { this.connectToSocket(); this.fetchChatDetails();
-    this.calculateHeaderPadding();
-    window.addEventListener('resize', this.calculateHeaderPadding);
-   },
-   beforeDestroy() {
-    window.removeEventListener('resize', this.calculateHeaderPadding);
-  },
+  mounted() { this.connectToSocket(); this.fetchChatDetails() },
   beforeUnmount() { this.disconnectSocket() },
   computed: {
     hasActiveTypingIndicators() { return Object.values(this.typingIndicators).some(s => s === 'typing'); }
   },
   methods: {
-    calculateHeaderPadding() {
-      this.$nextTick(() => {
-        const header = document.querySelector('.fixed-header');
-        const progress = document.querySelector('.fixed-progress');
-        const director = document.querySelector('.fixed-director');
-        
-        const headerHeight = header ? header.offsetHeight : 0;
-        const progressHeight = progress ? progress.offsetHeight : 0;
-        const directorHeight = director ? director.offsetHeight : 0;
-        
-        const messagesContainer = this.$refs.messagesContainer;
-        if (messagesContainer) {
-          messagesContainer.style.paddingTop = `${headerHeight + progressHeight + directorHeight + 20}px`;
-        }
-      });
-    },
     async fetchChatDetails() {
       try {
         const data = await fetchApi(`api/chats/${this.chatId}`)
@@ -362,15 +344,8 @@ export default {
       }
     },
     scrollToBottom() {
-      this.$nextTick(() => {
-        const container = this.$refs.messagesContainer;
-        if (container) {
-          container.scrollTo({
-            top: container.scrollHeight,
-            behavior: 'smooth'
-          });
-        }
-      });
+      this.
+        $nextTick(() => { const c = this.$refs.messagesContainer; if (c) c.scrollTop = c.scrollHeight })
     },
     goBack() { this.$router.go(-1) },
     getCharacterImageUrl(r) { 
@@ -432,31 +407,4 @@ export default {
 .bg-white {
   @apply dark:bg-gray-800;
 }
-
-@supports (-webkit-touch-callout: none) {
-  /* iOS specific fixes */
-  .h-\[100dvh\] {
-    height: -webkit-fill-available !important;
-  }
-  textarea {
-    font-size: 16px !important;
-    -webkit-text-size-adjust: 100%;
-  }
-}
-
-/* Animation for director progress */
-@keyframes director-progress {
-  from { width: 0%; }
-  to { width: 100%; }
-}
-
-.animate-director-progress {
-  animation: director-progress 5s linear forwards;
-}
-
-/* Better mobile scrolling */
-html {
-  -webkit-overflow-scrolling: touch;
-}
-
 </style>
