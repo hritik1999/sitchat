@@ -58,14 +58,61 @@
     </div>
 
     <!-- Chat Container -->
-    <div class="flex-1 overflow-hidden container mx-auto p-2 sm:p-4">
+    <div class="flex-1 overflow-hidden container mx-auto p-4">
       <div class="h-full flex flex-col border rounded-lg bg-background dark:bg-gray-900 dark:border-gray-700">
         <!-- Messages Area -->
-        <div
-          ref="messagesContainer"
-          class="flex-1 overflow-y-auto p-2 sm:p-4 space-y-4"
-        >
-          <!-- ... existing message markup unchanged ... -->
+        <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
+
+          <div v-for="(msg, index) in messages" :key="index" class="flex items-start gap-3"
+            :class="{ 'justify-start flex-row-reverse': msg.role === 'Player' }">
+            <!-- Avatar -->
+            <img
+              v-if="(msg.role !== 'Player' && getCharacterImageUrl(msg.role)) || (msg.role === 'Player' && playerImageUrl)"
+              :src="msg.role === 'Player' ? playerImageUrl : getCharacterImageUrl(msg.role)" alt="Avatar"
+              class="h-14 w-14 rounded-full flex-shrink-0" />
+
+            <!-- Content -->
+            <div class="max-w-[90%]" :class="{ 'text-right ml-auto': msg.role === 'Player' }">
+              <div class="flex items-center -mb-1" :class="{ 'justify-end': msg.role === 'Player' }">
+                <span class="font-semibold text-sm" :class="getRoleColor(msg.role || '')">
+                  {{ msg.role === 'Player' ? player_name : msg.role }}
+                </span>
+              </div>
+              <div class="mt-1 p-2 rounded-lg whitespace-pre-wrap break-words dark:text-white"
+                :class="getMessageStyle(msg.type || '', msg.role || '')">
+                {{ msg.content }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Typing Indicators -->
+          <div v-if="hasActiveTypingIndicators" class="my-2">
+            <div v-for="(status, role) in typingIndicators" :key="role">
+              <div v-if="status === 'typing'" class="flex items-start gap-3">
+                <img v-if="getCharacterImageUrl(role)" :src="getCharacterImageUrl(role)" alt="Typing Avatar"
+                  class="h-10 w-10 rounded-full flex-shrink-0" />
+                <div class="flex-1 max-w-[70%]">
+                  <div class="flex items-center">
+                    <span class="font-semibold text-sm" :class="getRoleColor(role)">
+                      {{ role === 'Player' ? player_name : role }}
+                    </span>
+                  </div>
+                  <div class="mt-1 p-3 rounded-lg bg-gray-100 dark:bg-gray-800 inline-flex items-center">
+                    <div class="flex space-x-1 text-gray-600 dark:text-gray-300">
+                      <div class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 0ms" />
+                      <div class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 150ms" />
+                      <div class="h-2 w-2 bg-current rounded-full animate-bounce" style="animation-delay: 300ms" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="errorMessage"
+            class="bg-red-100 dark:bg-red-900/30 p-3 rounded-lg text-red-700 dark:text-red-300 text-sm">
+            {{ errorMessage }}
+          </div>
         </div>
 
         <!-- Input Area -->
