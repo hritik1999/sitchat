@@ -1,68 +1,55 @@
 <template>
   <div class="h-screen flex flex-col dark:bg-gray-900">
-    <!-- Header Section (Sticky) -->
-    <div class="sticky top-0 z-20 bg-background dark:bg-gray-900 border-b dark:border-gray-700 p-4 sm:p-2">
-      <div class="container mx-auto flex flex-wrap sm:flex-nowrap justify-between items-center">
+    <!-- Header Section (Fixed) -->
+    <div class="fixed top-0 inset-x-0 z-30 bg-background dark:bg-gray-900 border-b dark:border-gray-700 p-4 sm:p-2 mb-2" style="height: 56px;">
+      <div class="container mx-auto flex flex-nowrap justify-between items-center h-full">
+        <!-- Thumbnail & Title -->
         <div class="flex items-center">
-          <!-- Show Thumbnail -->
-          <img
-            v-if="showImageUrl"
-            :src="showImageUrl"
-            alt="Show Thumbnail"
-            class="h-12 w-12 mr-4 rounded"
-          />
+          <img v-if="showImageUrl" :src="showImageUrl" alt="Show Thumbnail" class="h-12 w-12 mr-4 rounded" />
           <div>
-            <h1 class="text-lg sm:text-xl font-bold inline-block dark:text-white">{{ showName }}</h1>
+            <h1 class="text-lg sm:text-xl font-bold dark:text-white">{{ showName }}</h1>
             <p class="text-xs sm:text-sm text-muted-foreground dark:text-gray-400">{{ episodeName }}</p>
           </div>
         </div>
-        <Button
-          variant="outline"
-          @click="goBack"
-          size="sm"
-          class="mt-2 sm:mt-0 dark:border-gray-600 dark:text-gray-300"
-        >
-          <ArrowLeftIcon class="h-4 w-4 mr-2" />
-          Back
+        <Button variant="outline" @click="goBack" size="sm" class="dark:border-gray-600 dark:text-gray-300">
+          <ArrowLeftIcon class="h-4 w-4 mr-2" /> Back
         </Button>
       </div>
     </div>
 
-    <!-- Progress Bar (Sticky) -->
-    <div class="sticky top-[4.5rem] z-10 bg-background dark:bg-gray-900 border-b dark:border-gray-700 p-4 sm:p-2">
-      <div class="container mx-auto">
+    <!-- Progress Bar (Fixed) -->
+    <div class="fixed inset-x-0 z-20 bg-background dark:bg-gray-900 border-b dark:border-gray-700 p-2" style="top:56px; height:48px;">
+      <div class="container mx-auto h-full flex flex-col justify-center">
         <div class="flex justify-between items-center mb-1">
           <span class="text-xs sm:text-sm dark:text-gray-300">Objective Progress</span>
           <span class="text-xs sm:text-sm dark:text-gray-300">{{ objectiveProgress }}</span>
         </div>
         <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-          <div
-            class="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300"
-            :style="{ width: `${progress}%` }"
-          ></div>
+          <div class="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300" :style="{ width: `${progress}%` }"></div>
         </div>
       </div>
     </div>
 
-    <!-- Director Directing Message -->
-    <div
-      v-if="directorDirecting"
-      class="container mx-auto px-4 pt-2"
-    >
-      <div class="text-center text-sm text-white py-2 bg-indigo-600 dark:bg-indigo-800 rounded-md p-2 animate-pulse">
-        <span class="font-medium">{{ director_message }}</span>
-      </div>
-      <div class="mt-2 h-1 bg-gray-200 dark:bg-gray-700 rounded-full">
-        <div class="h-full bg-indigo-500 dark:bg-indigo-400 rounded-full animate-director-progress"></div>
+    <!-- Director Directing Message (Fixed if active) -->
+    <div v-if="directorDirecting" class="fixed inset-x-0 z-10 bg-background dark:bg-gray-900 p-2" style="top:104px;">
+      <div class="container mx-auto">
+        <div class="text-center text-sm text-white py-2 bg-indigo-600 dark:bg-indigo-800 rounded-md animate-pulse">
+          <span class="font-medium">{{ director_message }}</span>
+        </div>
+        <div class="mt-2 h-1 bg-gray-200 dark:bg-gray-700 rounded-full">
+          <div class="h-full bg-indigo-500 dark:bg-indigo-400 rounded-full animate-director-progress"></div>
+        </div>
       </div>
     </div>
 
-    <!-- Chat Container -->
-    <div class="flex-1 overflow-hidden container mx-auto p-4">
+    <!-- Chat Container (Dynamic Offset) -->
+    <div
+      class="flex-1 overflow-hidden container mx-auto p-2 sm:p-4"
+      :style="{ marginTop: directorDirecting ? '160px' : '104px' }"
+    >
       <div class="h-full flex flex-col border rounded-lg bg-background dark:bg-gray-900 dark:border-gray-700">
-        <!-- Messages Area -->
-        <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
-
+        <!-- Messages -->
+        <div ref="messagesContainer" class="flex-1 overflow-y-auto p-2 sm:p-4 space-y-4">
           <div v-for="(msg, index) in messages" :key="index" class="flex items-start gap-3"
             :class="{ 'justify-start flex-row-reverse': msg.role === 'Player' }">
             <!-- Avatar -->
@@ -115,7 +102,7 @@
           </div>
         </div>
 
-        <!-- Input Area -->
+        <!-- Input -->
         <div class="border-t dark:border-gray-700 p-2 sm:p-4">
           <Textarea
             ref="messageInput"
@@ -130,13 +117,8 @@
           />
           <div class="mt-2 flex justify-between items-center">
             <span class="text-xs sm:text-sm text-muted-foreground dark:text-gray-400">{{ input.length }}/500</span>
-            <Button
-              @click="sendMessage"
-              :disabled="!input.trim() || isSending || storyCompleted"
-              class="dark:bg-blue-600 dark:hover:bg-blue-700 dark:text-white"
-            >
-              Send
-              <SendIcon class="h-4 w-4 ml-2" />
+            <Button @click="sendMessage" :disabled="!input.trim() || isSending || storyCompleted" class="dark:bg-blue-600 dark:hover:bg-blue-700 dark:text-white">
+              Send <SendIcon class="h-4 w-4 ml-2" />
             </Button>
           </div>
         </div>
