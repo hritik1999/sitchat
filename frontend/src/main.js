@@ -5,10 +5,14 @@ import router from './router';
 import Toast from 'vue-toastification';
 import 'vue-toastification/dist/index.css';
 import './assets/index.css'
+import VueGtag from 'vue-gtag'
 
 const app = createApp(App);
 
 app.use(router);
 app.use(Toast);
+app.use(VueGtag, {
+    config: { id: 'G-K30HLVRLW4' }
+  })
 
 app.mount('#app');
