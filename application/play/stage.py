@@ -30,6 +30,7 @@ class Stage:
         self.plot_objectives = []
         self.current_objective_index = 0
         self.context = ""
+        self.chat_speed = 2.25
         self.plot_failure_reason = ''
         self.chat_summary = ''
         self.last_script_data = None
@@ -72,7 +73,7 @@ class Stage:
         self.last_script_data = chat_data.get('last_script_data')
         self.last_outline = chat_data.get('last_outline')
         self.story_completed = chat_data.get('story_completed', False) or chat_data.get('completed', False)
-
+        self.chat_speed = chat_data.get('chat_speed', 2.25)
         player_name = chat_data.get('player_name', 'Player')
         player_description = chat_data.get('player_description', '')
         self.player = Player(name=player_name, description=player_description)
@@ -219,7 +220,7 @@ class Stage:
                 # simulate typing delay
                 if index != 0:
                     start = time.time()
-                    while time.time() - start < math.floor(len(reply.split()) / 2.25):
+                    while time.time() - start < math.floor(len(reply.split()) / self.chat_speed):
                         if self.cancellation_event.is_set() or gen != self._gen:
                             entry = {"role": role, "content": reply, "type": "actor_dialogue"}
                             dialogue_lines.append(entry)
@@ -260,7 +261,7 @@ class Stage:
 
                 if index != 0:
                     start = time.time()
-                    while time.time() - start < math.floor(len(reply.split()) / 2.25):
+                    while time.time() - start < math.floor(len(reply.split()) / self.chat_speed):
                         if self.cancellation_event.is_set() or gen != self._gen:
                             entry = {"role": role, "content": reply, "type": "other"}
                             dialogue_lines.append(entry)

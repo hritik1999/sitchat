@@ -168,8 +168,8 @@
       
     </div>
   </div>
-   <!-- Player Dialog -->
- <Dialog :open="playerDialog" @update:open="closePlayerDialog">
+  <!-- Player Dialog -->
+  <Dialog :open="playerDialog" @update:open="closePlayerDialog">
     <DialogContent class="max-w-[95vw] sm:max-w-[650px] mx-2">
       <DialogHeader>
         <DialogTitle class="text-xl sm:text-2xl flex items-center gap-2 break-words dark:text-white">
@@ -181,18 +181,44 @@
       <div class="space-y-4 sm:space-y-6">
         <!-- Player Info Grid -->
         <div class="grid grid-cols-1 xs:grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4 bg-muted/30 rounded-lg">
+          <!-- Username Input -->
           <div class="space-y-1">
-            <Label class="text-xs sm:text-sm font-medium text-muted-foreground dark:text-white ">Your Name</Label>
-            <p class="text-sm sm:text-base text-foreground font-semibold flex items-center gap-1.5 dark:text-white">
-              <span class="inline-block h-2 w-2 rounded-full bg-primary dark:text-white"></span>
-              {{ user_name }}
-            </p>
+            <Label class="text-xs sm:text-sm font-medium text-muted-foreground dark:text-white">Your Name</Label>
+            <Input 
+              v-model="tempUserName" 
+              class="text-sm sm:text-base text-foreground font-semibold"
+              placeholder="Enter your name"
+            />
           </div>
+          
+          <!-- Role Display -->
           <div class="space-y-1">
             <Label class="text-xs sm:text-sm font-medium text-muted-foreground dark:text-white">Your Role</Label>
             <p class="text-sm sm:text-base text-foreground font-semibold dark:text-white">
               {{ selectedEpisode?.player_role || 'Adventurer' }}
             </p>
+          </div>
+
+          <!-- Chat Speed Slider -->
+          <div class="col-span-1 xs:col-span-2 space-y-4">
+            <div class="space-y-1">
+              <Label class="text-xs sm:text-sm font-medium text-muted-foreground dark:text-white">
+                Chat Speed ({{ chatSpeed }}x)
+              </Label>
+              <div class="flex items-center gap-4">
+                <input
+                  type="range"
+                  v-model="chatSpeed"
+                  min="1"
+                  max="5"
+                  step="0.25"
+                  class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                />
+              </div>
+              <p class="text-xs text-muted-foreground">
+                Adjust how fast the AI generates responses
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -201,8 +227,11 @@
         <Button @click="closePlayerDialog" variant="outline" class="w-full sm:w-auto px-4 sm:px-6 dark:bg-white">
           Cancel
         </Button>
-        <Button @click="startPlaying(selectedEpisode?.id)" :disabled="isStarting" 
-                class="w-full sm:w-auto px-4 sm:px-8">
+        <Button 
+          @click="startPlaying(selectedEpisode?.id)" 
+          :disabled="isStarting" 
+          class="w-full sm:w-auto px-4 sm:px-8"
+        >
           <Loader2Icon v-if="isStarting" class="h-4 w-4 mr-2 animate-spin" />
           <span v-else>Begin Adventure</span>
         </Button>
@@ -267,6 +296,8 @@ export default {
       show_id: this.$route.params.id,
       API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001',
       user_name : localStorage.getItem('username').split(' ')[0] || 'player',
+      tempUserName: '',
+      chatSpeed : parseFloat(localStorage.getItem('chatSpeed')) || 2.5,
       show: {
         id: '',
         name: '',
@@ -315,33 +346,44 @@ export default {
       this.playerDialog = false
     },
     startEpisode(episode) {
-      this.selectedEpisode = episode
-      this.playerDialog = true
-    },
-    async startPlaying(episodeId) {
-      this.isStarting = true
-      const toast = useToast()
+    this.selectedEpisode = episode
+    this.tempUserName = this.user_name // Initialize with current username
+    this.playerDialog = true
+  },
+  async startPlaying(episodeId) {
+    this.isStarting = true
+    const toast = useToast()
+    
+    try {
+      // Save chat speed to localStorage
+      localStorage.setItem('chatSpeed', this.chatSpeed.toString())
       
-      try {
-        const data = await fetchApi(`api/episodes/${episodeId}/chats`, {
-          method: 'POST', 
-          body: JSON.stringify({
-            player_name: this.user_name,
-            player_description: this.selectedEpisode?.player_role || ''
-          })
-        })
-        
-        if (data.error) {
-          toast.error(`Error starting episode: ${data.error}`)
-        } else {
-          this.$router.push(`/show/${this.show_id}/chat/${data.chat.id}`)
-        }
-      } catch (error) {
-        toast.error(`Error starting episode: ${error.message}`)
-      } finally {
-        this.isStarting = false
+      // Update username in localStorage if changed
+      if (this.tempUserName !== this.user_name) {
+        localStorage.setItem('username', this.tempUserName)
+        this.user_name = this.tempUserName
       }
-    },
+
+      const data = await fetchApi(`api/episodes/${episodeId}/chats`, {
+        method: 'POST', 
+        body: JSON.stringify({
+          player_name: this.tempUserName,
+          player_description: this.selectedEpisode?.player_role || '',
+          chat_speed: this.chatSpeed
+        })
+      })
+      
+      if (data.error) {
+        toast.error(`Error starting episode: ${data.error}`)
+      } else {
+        this.$router.push(`/show/${this.show_id}/chat/${data.chat.id}`)
+      }
+    } catch (error) {
+      toast.error(`Error starting episode: ${error.message}`)
+    } finally {
+      this.isStarting = false
+    }
+  },
     startRandomEpisode() {
       if (this.episodes.length === 0) {
         alert('No episodes available')

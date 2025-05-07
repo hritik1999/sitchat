@@ -407,6 +407,7 @@ class ChatResource(Resource):
         data = request.get_json()
         player_name = data.get('player_name', 'Player')
         player_description = data.get('player_description', '')
+        chat_speed = data.get('chat_speed', 2.25)
         # Fetch episode details
         episode = db.get_episode(episode_id)
         if not episode:
@@ -418,7 +419,8 @@ class ChatResource(Resource):
             show_id=episode.get('show_id'),
             user_id=user_id,
             player_name=player_name,
-            player_description=player_description
+            player_description=player_description,
+            chat_speed=chat_speed
         )
         
         if not chat:

@@ -1,0 +1,6 @@
+{
+	"appId": "ai.shitchat.app",
+	"appName": "SitChat",
+	"webDir": "dist",
+	"packageClassList": []
+}
