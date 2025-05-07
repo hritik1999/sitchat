@@ -205,16 +205,16 @@
               <Label class="text-xs sm:text-sm font-medium text-muted-foreground dark:text-white">
                 Chat Speed ({{ chatSpeed }}x)
               </Label>
-              <div class="flex items-center gap-4">
+              <div class="flex items-center gap-4 py-2">
                 <input
-                    type="range"
-                    v-model="chatSpeed"
-                    min="1"
-                    max="5"
-                    step="0.25"
-                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 touch-action-manipulation"
-                    @touchstart="handleTouchStart"
-                  />
+                  type="range"
+                  v-model="chatSpeed"
+                  min="1"
+                  max="5"
+                  step="0.25"
+                  class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 touch-action-manipulation"
+                  @touchstart="handleTouchStart"
+                />
               </div>
               <p class="text-xs text-muted-foreground">
                 Adjust how fast the AI generates responses
