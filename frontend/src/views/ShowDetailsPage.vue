@@ -212,7 +212,7 @@
                   min="1"
                   max="5"
                   step="0.25"
-                  class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                  class="w-full h-2 bg-gray-200 rounded-lg cursor-pointer dark:bg-gray-700"
                 />
               </div>
               <p class="text-xs text-muted-foreground">
