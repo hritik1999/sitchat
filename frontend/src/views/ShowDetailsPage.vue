@@ -186,7 +186,7 @@
             <Label class="text-xs sm:text-sm font-medium text-muted-foreground dark:text-white">Your Name</Label>
             <Input 
               v-model="tempUserName" 
-              class="text-sm sm:text-base text-foreground font-semibold dark:text-white"
+              class="text-sm sm:text-base text-foreground font-semibold dark:"
               placeholder="Enter your name"
             />
           </div>
@@ -205,15 +205,14 @@
               <Label class="text-xs sm:text-sm font-medium text-muted-foreground dark:text-white">
                 Chat Speed ({{ chatSpeed }}x)
               </Label>
-              <div class="flex items-center gap-4 py-2">
+              <div class="flex items-center gap-4">
                 <input
                   type="range"
                   v-model="chatSpeed"
                   min="1"
                   max="5"
                   step="0.25"
-                  class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 touch-action-manipulation"
-                  @touchstart="handleTouchStart"
+                  class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
                 />
               </div>
               <p class="text-xs text-muted-foreground">
@@ -346,29 +345,6 @@ export default {
     closePlayerDialog() {
       this.playerDialog = false
     },
-    handleTouchStart(event) {
-    // Prevent default zoom behavior on iOS
-    event.preventDefault();
-    
-    // This helps ensure the slider responds properly to touch events
-    const input = event.target;
-    const rect = input.getBoundingClientRect();
-    const x = event.touches[0].clientX - rect.left;
-    const width = rect.width;
-    const percentage = Math.min(Math.max(x / width, 0), 1);
-    
-    // Calculate the new value based on percentage
-    const min = parseFloat(input.min);
-    const max = parseFloat(input.max);
-    const step = parseFloat(input.step);
-    
-    // Calculate the new value and round to nearest step
-    let newValue = min + percentage * (max - min);
-    newValue = Math.round(newValue / step) * step;
-    
-    // Update the model
-    this.chatSpeed = newValue;
-  },
     startEpisode(episode) {
     this.selectedEpisode = episode
     this.tempUserName = this.user_name // Initialize with current username
@@ -494,48 +470,5 @@ export default {
   transition-property: all;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
-}
-
-* iOS-specific styling for range input */
-input[type="range"] {
-  -webkit-appearance: none; /* Override default appearance */
-  margin: 10px 0;
-  width: 100%;
-  background: transparent; /* Important for iOS */
-}
-
-/* Track styles */
-input[type="range"]::-webkit-slider-runnable-track {
-  width: 100%;
-  height: 8px;
-  cursor: pointer;
-  background: #e2e8f0; /* light mode track */
-  border-radius: 10px;
-}
-
-.dark input[type="range"]::-webkit-slider-runnable-track {
-  background: #4b5563; /* dark mode track */
-}
-
-/* Thumb styles */
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  height: 20px;
-  width: 20px;
-  border-radius: 50%;
-  background: #3b82f6; /* primary color */
-  cursor: pointer;
-  margin-top: -6px; /* Center the thumb on the track */
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-}
-
-/* Focus styles */
-input[type="range"]:focus {
-  outline: none;
-}
-
-/* Add this class to your input */
-.touch-action-manipulation {
-  touch-action: manipulation;
 }
 </style>
