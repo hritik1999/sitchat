@@ -186,7 +186,7 @@
             <Label class="text-xs sm:text-sm font-medium text-muted-foreground dark:text-white">Your Name</Label>
             <Input 
               v-model="tempUserName" 
-              class="text-sm sm:text-base text-foreground font-semibold"
+              class="text-sm sm:text-base text-foreground font-semibold dark:text-white"
               placeholder="Enter your name"
             />
           </div>
