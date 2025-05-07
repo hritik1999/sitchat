@@ -186,7 +186,7 @@
             <Label class="text-xs sm:text-sm font-medium text-muted-foreground dark:text-white">Your Name</Label>
             <Input 
               v-model="tempUserName" 
-              class="text-sm sm:text-base text-foreground font-semibold dark:text-white"
+              class="text-sm sm:text-base text-foreground font-semibold dark:"
               placeholder="Enter your name"
             />
           </div>
@@ -210,9 +210,9 @@
                   type="range"
                   v-model="chatSpeed"
                   min="1"
-                  max="3.5"
+                  max="5"
                   step="0.25"
-                  class="ios-slider w-full h-3 bg-gray-200 rounded-full appearance-none cursor-pointer dark:bg-gray-700"
+                  class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
                 />
               </div>
               <p class="text-xs text-muted-foreground">
@@ -470,62 +470,5 @@ export default {
   transition-property: all;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
-}
-.ios-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 6px;
-}
-
-.ios-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 20px;
-  height: 20px;
-  background: #3b82f6; /* Primary color */
-  border-radius: 50%;
-  cursor: pointer;
-  transition: background 0.2s;
-  border: 2px solid white;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.ios-slider::-webkit-slider-thumb:hover {
-  background: #2563eb; /* Darker primary color */
-}
-
-.ios-slider::-webkit-slider-runnable-track {
-  width: 100%;
-  height: 6px;
-  cursor: pointer;
-  background: #e5e7eb; /* Track color */
-  border-radius: 9999px;
-}
-
-/* Firefox styles */
-.ios-slider::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
-  background: #3b82f6;
-  border-radius: 50%;
-  cursor: pointer;
-  border: 2px solid white;
-}
-
-.ios-slider::-moz-range-track {
-  width: 100%;
-  height: 6px;
-  cursor: pointer;
-  background: #e5e7eb;
-  border-radius: 9999px;
-}
-
-/* Dark mode adjustments */
-.dark .ios-slider::-webkit-slider-runnable-track {
-  background: #374151; /* Dark track color */
-}
-
-.dark .ios-slider::-moz-range-track {
-  background: #374151;
 }
 </style>
