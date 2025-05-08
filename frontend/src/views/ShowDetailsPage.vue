@@ -203,7 +203,7 @@
           <div class="col-span-1 xs:col-span-2 space-y-4">
             <div class="space-y-1">
               <Label class="text-xs sm:text-sm font-medium text-muted-foreground dark:text-white">
-                Chat Speed ({{ chatSpeed }}x)
+                Chat Speed ({{ ((chatSpeed -2.5)/2.5)+1}}x)
               </Label>
               <div class="flex items-center gap-4">
                 <input
