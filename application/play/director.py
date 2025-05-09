@@ -216,14 +216,13 @@ class Director:
             Analyze the chat history between the player {player_name} and game characters. Identify the MOST noteworthy interactions or moments that qualify as achievements.
 
             ## Core Requirements
-      
-            - Only create achievements for moments where the player ACTIVELY participated through their own messages or actions
+            - Only create achievements for moments where the player participated through their own messages that is "{player_name}:" is in the chat history.
             - Do NOT create achievements when the player was merely mentioned by characters
             - Do NOT create achievements for scenes where the player was passive or didn't send messages
             - Do NOT create achievements for generic interactions that lack specific memorable qualities
 
             ## Scoring Guidelines
-            - **Score 5**: Once-in-a-series, landmark moments that changed the course of interaction or created an iconic reference
+            - **Score 5**: landmark moments that changed the course of interaction or created an iconic reference
             - **Score 4**: Very memorable moments with unique player contributions that stand out but aren't series-defining
             - **Score 3**: Notable moments where the player had a meaningful role that advanced the interaction in an interesting way
             - **Score 2**: Minor but still interesting player-driven moments with some uniqueness
@@ -237,9 +236,8 @@ class Director:
             Before finalizing each achievement, verify:
             1. Did the player ACTIVELY participate with their own messages? If not, no achievement should be awarded
             2. Is the score truly justified by the rarity and memorability of the interaction?
-            3. Would this moment actually stand out to someone familiar with the show?
-            4. Does this achievement differ from past achievements already awarded?
-            5. Is the achievement specific and descriptive enough for social media sharing?
+            3. Does this achievement differ from past achievements already awarded?
+            4. Is the achievement specific and descriptive enough for social media sharing?
 
             # Output Format
             Return a JSON array with AT MOST 2 achievements. If no truly significant achievement-worthy moments occurred, return an empty array [].
@@ -254,33 +252,33 @@ class Director:
             ## Example 1: High-Scoring Achievement
             ```
             [
-            {
+            {{
             "title": "Helped Ross PIVOT! A Couch Up The Stairs",
             "reason": "Player actively participated in the iconic couch-moving scene by suggesting the pivot technique that became a series-defining moment.",
             "score": 5
-            }
+            }}
             ]
             ```
 
             ## Example 2: Medium-Scoring Achievement
             ```
             [
-            {
+            {{
             "title": "Helped Phoebe Name Her New Cat",
             "reason": "Player suggested the name that Phoebe ultimately chose, contributing to a quirky subplot in a meaningful way.",
             "score": 3
-            }
+            }}
             ]
             ```
 
             ## Example 3: Low-Scoring Achievement
             ```
             [
-            {
+            {{
             "title": "Exchanged Witty Banter with Chandler",
             "reason": "Player engaged in some back-and-forth humor with Chandler, though the interaction wasn't particularly significant to the overall story.",
             "score": 2
-            }
+            }}
             ]
             ```
 
