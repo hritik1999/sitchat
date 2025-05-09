@@ -374,7 +374,7 @@ class Stage:
                 self.player_interrupted = False
             else:
                 self.emit_event('director_status', {"status": "directing", "message": "Director is cueing the actors..."}, gen)
-            script_json = self.director.generate_turn_instructions(self.context, outline.get('new_outline', outline), self.plot_failure_reason)
+            script_json = self.director.generate_turn_instructions(self.context, outline.get('new_outline', outline), self.plot_failure_reason,self.plot_objectives[self.current_objective_index])
 
             # process script
             self.emit_event('director_status', {"status": "idle", "message": ""}, gen)
@@ -387,7 +387,6 @@ class Stage:
             def check_player_achievements():
                 achievements = self.director.detect_achievements(self.context,self.player.name,self.achievements)
                 achievements = json.loads(self._clean_json(achievements))
-                print(achievements)
                 for achievement in achievements:
                     db.add_achievement(self.chat_id, achievement['title'], achievement['score'])
                     self.emit_event('achievement', achievement, self._gen)

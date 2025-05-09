@@ -15,81 +15,69 @@ class Director:
         self.llm = llm
 
         self.system_prompt = f"""
-            You are the creative director of a dramatic experience titled "{show}". Your primary responsibility is to orchestrate an engaging narrative while maintaining coherent character development, authentic relationships, and compelling plot progression.
-
-            SHOW Details:
+            # role
+            You are the Creative Director of the TV show titled "{show}" on an interactive storytelling platform. The show unfolds as a group chat in which you guide AI-controlled characters. Your primary responsibility is to craft an engaging narrative for the player while maintaining coherent character development, authentic relationships, and compelling plot progression.
+            # Show Details
             - Name: {show}
             - Description: {description}
             - Current Scenario: {background}
+            - Characters: {actors}
+            - Character Relationships: {relations}
+            # PLAYER INTEGRATION
+            A human player participates as a character in this experience. Unlike the AI-controlled characters you direct, the player has full agency and makes their own choices. Your role is to create meaningful interactions between the AI characters and the player.
 
-            CHARACTER DESCRIPTIONS:
-            {actors}
+            Player Name: {player.name}
+            Player Description: {player.description}
 
-            RELATIONSHIP DESCRIPTIONS:
-            {relations}
+            # OBJECTIVES
 
-            PLAYER INTEGRATION:
-            There is a human player participating as a character in this experience. Unlike the other characters you guide, the player has agency and makes their own choices. Your role is to create meaningful interactions between the AI-controlled characters and the player.
-
-            - Player:
-            - Name: {player.name}
-            - Description: {player.description}
-
-            YOUR OBJECTIVES:
-            1. Create emotionally resonant story beats
-            2. Ensure character consistency while allowing growth
-            3. Balance scripted narrative with player agency
-            4. Adapt the story based on player actions
-            5. Maintain the established tone and world rules
-
-            Remember that exceptional direction creates moments of both conflict and connection, pushing characters to reveal their true selves while progressing the overarching narrative.
-            """
+            - Balance a scripted narrative with player agency
+            - Adapt the story dynamically based on player actions
+            - Deliver emotionally resonant story beats
+            - Preserve the established tone and rules of the world
+                        """
         
     def generate_outline(self,chat_history,plot_objective):
         outline_prompt = f"""
-                As the director, analyze the current chat history and develop the next story phase to achieve the plot objective following these steps:
+            # Instructions
 
-                1. CHAT HISTORY ANALYSIS
-                Synthesize the key events, character decisions, and emotional beats from the chat history. Focus on:
-                • Major character revelations
-                • Relationship developments
-                • Critical decisions and their consequences
-                • Player character's actions and their impact
-                • Emotional highs and lows
-                • Put then in previous outline
+            Given the current scenario, chat history, character details, and player interactions, please:
+            1. Create a Comprehensive Story Summary
+            - Provide a chronological narrative of all key events that have occurred
+            - Analyze character development arcs, including both AI characters and the player character
+            - Identify significant decisions, turning points, and their consequences
+            - Note established relationships, conflicts, and emotional dynamics
+            - Highlight the player's specific choices and their impact on the narrative
+            2. Develop the Next Scene Outline
+            - Create a natural progression from established events
+            - Maintain consistency with character motivations and personalities
+            - Integrate consequences of previous player choices
+            - Advance meaningfully toward the plot objective
+            - Include potential decision points for player agency
+            - Build appropriate tension that serves the overall narrative
+            3. Constraints for Scene Development
+            - Focus on narrative description rather than dialogue scripting
+            - Maintain established tone, world rules, and character voices
+            - Avoid forced plot developments or artificial twists
+            - Ensure continuity with previous events
+            - Create meaningful stakes that connect to the plot objective
+            - Provide organic opportunities for player choice and impact
+            # Context
+            ##Chat History:
+            {chat_history}
+            ##Plot Objective:
+            {plot_objective}
 
-                2. CHAT CONTINUATION
-                Create a compelling continuation that:
-                • Naturally progresses from established events
-                • Strategically advances toward the plot objective: {plot_objective}
-                • Incorporates authentic character reactions based on their established traits
-                • Creates opportunities for meaningful player involvement
-                • Introduces appropriate dramatic tension without forced plot twists
-                • Maintains all current characters in the scene
+            Output Format
+            Please provide your response as a properly formatted JSON object with two main sections:
 
-                3. NARRATIVE CONSTRAINTS
-                • Do not contradict established events or character traits
-                • Do not prematurely resolve the plot objective
-                • Do not introduce plot elements disconnected from the current trajectory
-                • Do not ignore the player's previous actions or choices
-
-                Chat history: 
-                {chat_history}
-
-                Plot objective: 
-                {plot_objective}
-
-                Output your result in JSON format. Example:
-                    ```
-                    {{"previous_outline": "Summary of the existing script", "new_outline": "Continuation for the upcoming script"}}
-                    ```
-
-                Return only valid JSON with no additional formatting or commentary.
-
-                remember -
-                1. Your response should be in JSON format.
-                2. Ensure the JSON is valid and contains the keys 'previous_outline' and 'new_outline'.
-                3. The 'previous_outline' should be a detailed summary of the existing script and 'new_outline' should be the continuation for the upcoming script.
+            json
+            ```
+            {{
+            "story_summary": "A comprehensive analysis of the narrative so far, including key events, character development, player choices, and their consequences.",
+            "next_scene_outline": "A detailed outline for the next scene that advances the story while providing meaningful player agency."
+            }}```
+            Note: Ensure your JSON is properly formatted with escaped quotes and valid syntax. Focus on creating content that maintains the established tone of the show while advancing naturally toward the plot objective.
                 """
         messages = [
             SystemMessage(content=self.system_prompt),
@@ -100,57 +88,76 @@ class Director:
         outline = chain.invoke({})
         return outline.content
     
-    def generate_turn_instructions(self,chat_history,outline,plot_failure_reason='',plot_objective='',num_lines=5):
+    def generate_turn_instructions(self,chat_history,outline,plot_failure_reason='None',plot_objective='',num_lines=5):
         dialogue_turn_prompt = f"""
-            Transform the narrative outline into performable script instructions using these directorial guidelines:
-
-            1. SCRIPT FRAMEWORK
-            • Create up to {num_lines} script elements
-            • Each element should be either character dialogue/action or brief narration
-            • Script should flow naturally from previous events in chat history
-            • If the outline objectives are met before reaching {num_lines}, conclude organically
-
-            2. CHARACTER DIRECTION
-            • Prioritize player engagement - if player has spoken, address them first and even be rude if necessary
-            • Ask the character to use the player's name
-            • Provide emotional context and motivation rather than verbatim dialogue
-            • Instructions should suggest intent while allowing creative interpretation
-            • Ensure each character remains true to their established personality
-
-            3. NARRATIVE TECHNIQUES
-            • Show, don't tell - minimize narration when character actions can convey the same information
-            • Create opportunities for meaningful player response
-            • Never narrate the player's feelings or decisions
-            • If addressing plot failure reason, provide course correction and do not repeat outline in the chat history
-
-            4. SCRIPT PROGRESSION
-            • Each line should meaningfully advance the chat and the outline's objectives
-            • Create natural transitions between speakers/actions
-            • Skip any elements from the outline that have already occurred in the chat history
-            • Focus exclusively on developing new narrative elements that haven't yet been covered
-            • Continue the story from where the chat history ends without redundancy
-
+            #Instruction for Script Creation
+            ##Core Task
+            Transform the provided outline into an actionable script that advances the narrative while prioritizing player engagement and narrative coherence.
             
-            Outline: 
-                {outline}
+            ##Script Parameters
+            - Generate exactly {num_lines} script elements (or fewer if the outline completes naturally)
+            - Each element must be either:
+                - Character instruction (role + action guidance)
+                - Brief narrative direction (scene-setting or transition)
 
-            Chat history: 
-                {chat_history}
-            
-            Plot failure reason: 
-                {plot_failure_reason}
+            ## Script Writing Guidelines
+            ### Character Instructions:
+                - Use concise, actionable direction rather than spelled-out dialogue
+                - Specify emotional tone, intent, and key information to convey
+                - Allow flexibility for natural performance and improvisation
 
-            FORMAT YOUR RESPONSE AS:
-            ```json
-                        {{"scripts": [{{"role": "Alice", "instruction": "..." }}, {{"role": "Bob", "instruction": "..." }}, {{"role": "Narration", "content": "..." }}, ...]}}
-            ```
+            ### Narrative Elements:
+                - Keep scene-setting brief and visual
+                - Focus on atmosphere, environment changes, and non-verbal action
+                - Use narration sparingly - prioritize character interactions
 
-            Return only valid JSON with no additional formatting or commentary.
+            ### Player Engagement (CRITICAL):
+                - If the player has contributed, address them in the first script element
+                - Ensure characters acknowledge player by name when interacting
+                - Create meaningful interaction opportunities that respect player agency
+                - Never dictate player emotions, thoughts, or decisions
 
-            REMEMBER- 
-            1. If there is Player message then respond to the player first and be rude if necessary
-            2. If plot failure is given then address that in your script and correct the plot
-            3. Never repeat whats already there in the chat history
+            ### Narrative Coherence:
+                - Follow logical progression from chat history and outline
+                - Maintain established character personalities and dynamics
+                - Address plot failure reasons subtly through character behavior
+                - Skip any outline elements already covered in chat history
+
+            ## Script Structure Priorities
+            - Address player input immediately if present
+            - Progress narrative according to outline
+            - Correct course if plot failure is identified
+            - Conclude naturally if outline is completed before reaching line limit
+
+            ## Content Constraints
+            - NEVER repeat scenes or dialogue already in chat history
+            - NEVER narrate the player's feelings, thoughts, or decisions
+            - NEVER ignore player contributions or agency
+            - NEVER include explicit dialogue - use intent-based instructions instead
+
+            # Context Resources
+
+                ## Outline: 
+                    {outline}
+                ## Chat History: 
+                    {chat_history}
+                ## Plot Objective:
+                    {plot_objective}
+                ## Plot Failure Reason: 
+                    {plot_failure_reason}
+
+            Output Format
+            Return only a valid JSON object with the following structure:
+            json
+            ```{{
+            "scripts": [
+                {{"role": "CHARACTER_NAME", "instruction": "ACTION_GUIDANCE"}},
+                {{"role": "Narration", "content": "BRIEF_SCENE_SETTING"}},
+                ...
+            ]
+            }}```
+
+            Ensure strict JSON formatting with proper escaping of special characters. Provide no additional commentary outside the JSON object.
             """
         messages = [
             SystemMessage(content=self.system_prompt),
@@ -163,18 +170,34 @@ class Director:
     
     def check_objective(self,chat_history,plot_objective):
         check_objective_prompt = f"""
-        Given the plot objective of this scene and chat history, please determine whether the existing script has achieved the plot objective or similar result as the plot objective.
+                # Instruction
 
-        You should output your answer in JSON format. Give your result in "completed", and explain your reason in "reason". Format example:
-        
-        chat_history: {chat_history}
-        plot objective: {plot_objective}
-        
-         {{"completed": true or false, "reason": "Your reason"}}
+                Given the plot objective of this scene and the chat history, determine whether the existing script has achieved the plot objective or a similar result.
 
-        Return only a valid JSON string without any markdown or additional formatting.
+                ## Output Format
 
-        """
+                Provide your answer as valid JSON in the following format:
+
+                ```
+                {{"completed": true or false, "reason": "Your reason"}}
+                ```
+
+                Return only a valid JSON string without any additional formatting or commentary.
+
+                ## Context Variables
+
+                chat_history: {chat_history}
+                plot objective: {plot_objective}
+
+                - `chat_history`: The dialogue and narration that has occurred so far.
+                - `plot_objective`: The intended goal or outcome of the scene.
+
+                Example:
+                ```
+                {{"completed": false, "reason": "The chat history does not clearly show the protagonist confronting their fears."}}
+                {{"completed": true, "reason": "The chat history clearly shows the protagonist confronting their fears, which matches the plot objective."}}
+                ```
+                """
         messages = [
             SystemMessage(content=self.system_prompt),
             HumanMessage(content=check_objective_prompt)
@@ -186,96 +209,99 @@ class Director:
 
     def detect_achievements(self, chat_history, player_name, achievements):
         achievement_prompt = f"""
-        Analyze the chat history of this "{self.show}" episode and identify the MOST noteworthy interaction 
-        or moment that would qualify as an achievement for the player {player_name}.
-        
-        Only identify truly iconic, memorable moments that 
-        perfectly match the show's style and characters' personalities.
-        
-        Scoring guidelines:
-        - Assign a score of 5 to once-in-a-series, landmark moments that a superfan would instantly recognize.
-        - Assign a score of 4 to very memorable moments that stand out but may not redefine the episode.
-        - Assign a score of 3 to notable moments that contribute meaningfully but are less iconic.
-        - Assign a score of 2 to minor but still interesting moments that fans might recall.
-        - Assign a score of 1 only if no higher-scoring moment exists; avoid trivial interactions.
-        
-        Diversity requirement:
-        - Achievements must differ significantly in theme and content. Do not output two achievements of the same type.
-        
-        Past achievements check:
-        - Compare against Past Achievements, including those shared in the prompt. Do NOT repeat or closely mirror any previously awarded achievement.
-        
-        Output your result as a JSON array with AT MOST 2 achievements. If no truly significant 
-        achievement-worthy moments occurred, return an empty array [].
-        
-        Each achievement should include:
-        - "title": A catchy, social-media-shareable title that clearly indicates what the player experienced or accomplished.
-        - "reason": A concise explanation of why this moment qualifies as an achievement and justification for the assigned score.
-        - "score": An integer from 1 to 5 based on the criteria above.
-        
-        Examples of GOOD, SHAREABLE achievements for Friends:
-        ```
-        [
-        {{
-            "title": "Helped Ross PIVOT! A Couch Up The Stairs",
-            "reason": "This was a once-in-series gag that became iconic and highlighted Ross's determination.",
-            "score": 5
-        }}
-        ]
-        ```
-        ```
-        [
-        {{
-            "title": "Joey Refused To Share His Sandwich With Me",
-            "reason": "Joey's obsession over his sandwich is memorable and fan-referenced, though not landmark.",
-            "score": 4
-        }}
-        ]
-        ```
-        ```
-        [
-        {{
-            "title": "Saw Phoebe's Cat in the Apartment",
-            "reason": "A quirky, fun moment that fans familiar with Phoebe’s love for stray animals will appreciate.",
-            "score": 3
-        }}
-        ]
-        ```
-        ```
-        [
-        {{
-            "title": "Got Chandler's Sarcastic One-Liner",
-            "reason": "A lighthearted quip that added humor but wasn't central to the plot.",
-            "score": 2
-        }}
-        ]
-        ```
-        ```
-        [
-        {{
-            "title": "Sat at Central Perk for Coffee",
-            "reason": "A routine, everyday interaction that offered little novelty.",
-            "score": 1
-        }}
-        ]
-        ```
-        Examples of BAD achievements (TOO GENERIC - DO NOT USE THESE):
-        - "Had a conversation with Ross"
-        - "Helped Monica clean"
+            # Role and Objective
+            You are an Achievement Analyzer for an interactive game experience. Your job is to identify memorable moments from the player's session that deserve recognition as achievements.
 
-        When nothing truly achievement-worthy happened:
-        ```
-        []
-        ```
-        
-        Achievement entries MUST be clear enough that someone reading them on social media would understand what happened without needing additional context.
-        
-        Chat history: {chat_history}
-        Player name: {player_name}
-        Past Achievements: {achievements}
-        
-        Return only a valid JSON array without any markdown or additional formatting.
-        """
+            # Instructions
+            Analyze the chat history between the player {player_name} and game characters. Identify the MOST noteworthy interactions or moments that qualify as achievements.
+
+            ## Core Requirements
+      
+            - Only create achievements for moments where the player ACTIVELY participated through their own messages or actions
+            - Do NOT create achievements when the player was merely mentioned by characters
+            - Do NOT create achievements for scenes where the player was passive or didn't send messages
+            - Do NOT create achievements for generic interactions that lack specific memorable qualities
+
+            ## Scoring Guidelines
+            - **Score 5**: Once-in-a-series, landmark moments that changed the course of interaction or created an iconic reference
+            - **Score 4**: Very memorable moments with unique player contributions that stand out but aren't series-defining
+            - **Score 3**: Notable moments where the player had a meaningful role that advanced the interaction in an interesting way
+            - **Score 2**: Minor but still interesting player-driven moments with some uniqueness
+            - **Score 1**: Basic player interactions with minimal significance; use as a last resort
+
+            ## Diversity and Past Achievements
+            - Each achievement must differ significantly in theme and content from others
+            - Compare against Past Achievements listed in the prompt and do NOT repeat or closely mirror any previously awarded achievement
+
+            # Reasoning Steps
+            Before finalizing each achievement, verify:
+            1. Did the player ACTIVELY participate with their own messages? If not, no achievement should be awarded
+            2. Is the score truly justified by the rarity and memorability of the interaction?
+            3. Would this moment actually stand out to someone familiar with the show?
+            4. Does this achievement differ from past achievements already awarded?
+            5. Is the achievement specific and descriptive enough for social media sharing?
+
+            # Output Format
+            Return a JSON array with AT MOST 2 achievements. If no truly significant achievement-worthy moments occurred, return an empty array [].
+
+            Each achievement must include:
+            - "title": A catchy, social-media-shareable title clearly indicating what the player accomplished
+            - "reason": A concise explanation of why this moment qualifies as an achievement and justification for the score
+            - "score": An integer from 1 to 5 based on the criteria above
+
+            # Examples
+
+            ## Example 1: High-Scoring Achievement
+            ```
+            [
+            {
+            "title": "Helped Ross PIVOT! A Couch Up The Stairs",
+            "reason": "Player actively participated in the iconic couch-moving scene by suggesting the pivot technique that became a series-defining moment.",
+            "score": 5
+            }
+            ]
+            ```
+
+            ## Example 2: Medium-Scoring Achievement
+            ```
+            [
+            {
+            "title": "Helped Phoebe Name Her New Cat",
+            "reason": "Player suggested the name that Phoebe ultimately chose, contributing to a quirky subplot in a meaningful way.",
+            "score": 3
+            }
+            ]
+            ```
+
+            ## Example 3: Low-Scoring Achievement
+            ```
+            [
+            {
+            "title": "Exchanged Witty Banter with Chandler",
+            "reason": "Player engaged in some back-and-forth humor with Chandler, though the interaction wasn't particularly significant to the overall story.",
+            "score": 2
+            }
+            ]
+            ```
+
+            ## Example 4: No Achievement
+            ```
+            []
+            ```
+
+            ## Example 5: Examples of BAD achievements (DO NOT USE)
+            - "Got mentioned by Ross during a conversation"
+            - "Was in the room when Monica cleaned"
+            - "Watched Phoebe sing Smelly Cat"
+
+            # Context
+            Chat history: {chat_history}
+            Player name: {player_name}
+            Past Achievements: {achievements}
+
+            # Final instructions
+            Think step by step when analyzing the chat history. Identify moments of active player participation first, then evaluate their significance based on the scoring guidelines. Carefully compare potential achievements against past ones to ensure diversity. Return only a valid JSON array without any markdown or additional formatting.
+            """
 
         messages = [
             SystemMessage(content=self.system_prompt),

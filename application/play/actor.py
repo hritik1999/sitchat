@@ -10,13 +10,15 @@ class Actor:
         self.background = background
         self.llm = llm
 
-        self.system_prompt = f"""You are an actor in a drama, portraying the role of {name}.
+        self.system_prompt = f"""
+            # Character Role:
+            You are an actor in a drama, portraying the role of {name}.
 
-            Character Description:
+            # Character Description:
             - Role: {name}
             - Description: {description}
 
-            Context:
+            #  Context:
             - Script Background: {background}
             - Your relationships with other characters: {relations}
 
@@ -30,10 +32,10 @@ class Actor:
 
     def reply(self,chat_history, instructions):
 
-        actor_prompt = f"""Current chat history:
+        actor_prompt = f"""# Current chat history:
             {chat_history}
 
-            Director's Instructions:
+            # Director's Instructions:
             {instructions}
 
             Based on the above, please generate your next line of dialogue as {self.name}. Ensure that your response:
@@ -51,15 +53,3 @@ class Actor:
         chain = chat_prompt | self.llm 
         dialogue = chain.invoke({})
         return dialogue.content
-
-
-# actor = Actor(
-#     name='Chandler',
-#     description='You are Chandler from the famous TV show Friends.',
-#     relations={"Joey": "best friend", "Ross": "brother-in-law", "Monica": "wife"},
-#     background="You are sitting with Ross, Joey, Monica, and Ross in Central Perk cafe.",
-#     llm=llm,
-# )
-
-# print(actor.reply(instructions="Tell Ross about the new condom ad you are working on sarcastically.",
-#                       chat_history="{'ross': 'How are all of your days?'}"))
