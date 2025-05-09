@@ -74,8 +74,8 @@ class Director:
             json
             ```
             {{
-            "story_summary": "A comprehensive analysis of the narrative so far, including key events, character development, player choices, and their consequences.",
-            "next_scene_outline": "A detailed outline for the next scene that advances the story while providing meaningful player agency."
+            "previous_outline": "A comprehensive analysis of the narrative so far, including key events, character development, player choices, and their consequences.",
+            "new_outline": "A detailed outline for the next scene that advances the story while providing meaningful player agency."
             }}```
             Note: Ensure your JSON is properly formatted with escaped quotes and valid syntax. Focus on creating content that maintains the established tone of the show while advancing naturally toward the plot objective.
                 """
