@@ -185,12 +185,7 @@ class Stage:
 
     def process_director_script(self, script_json, gen):
         dialogue_lines = []
-        try:
-            script_str = self._clean_json(script_json)
-            script_data = json.loads(script_str)
-        except json.JSONDecodeError:
-            print(f"Error decoding JSON: {script_json}")
-            script_data = {"scripts": []}
+        script_data = script_json
         seq = len(self.dialogue_history)
 
         for index, line in enumerate(script_data.get('scripts', [])):
@@ -356,7 +351,7 @@ class Stage:
             self.emit_event('director_status', {"status": "directing", "message": "Director is writing next scene..."}, gen)
             if not self.plot_failure_reason and not self.player_interrupted:
                 outline_str = self.director.generate_outline(self.context, self.plot_objectives[self.current_objective_index])
-                outline = json.loads(self._clean_json(outline_str))
+                outline = outline_str
                 self.context = ''
                 self.director.background = self.chat_summary
                 for actor_name in self.actors:
@@ -386,7 +381,8 @@ class Stage:
             # check player achievements using director.detect_achievements in the background using threading
             def check_player_achievements():
                 achievements = self.director.detect_achievements(self.context,self.player.name,self.achievements)
-                achievements = json.loads(self._clean_json(achievements))
+                achievements = achievements.get('achievements', [])
+                print(achievements)
                 for achievement in achievements:
                     db.add_achievement(self.chat_id, achievement['title'], achievement['score'])
                     self.emit_event('achievement', achievement, self._gen)
@@ -397,7 +393,7 @@ class Stage:
             self.emit_event('director_status', {"status": "directing", "message": "Checking objective completion..."}, gen)
             check_str = self.director.check_objective(self.context, self.plot_objectives[self.current_objective_index])
             self.emit_event('director_status', {"status": "idle", "message": ""}, gen)
-            check = json.loads(self._clean_json(check_str))
+            check = check_str
             completed = check.get('completed', False)
             if completed:
                 self.plot_failure_reason = ''

@@ -1,6 +1,32 @@
 from langchain.schema import HumanMessage, SystemMessage
 from langchain.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
+from pydantic import BaseModel, Field
+from typing import List, Optional
 from application.ai.llm import director_llm
+class ScriptStep(BaseModel):
+    role: str = Field(..., description="Character name or 'Narration'")
+    instruction: Optional[str] = Field(None, description="Instruction guidance for characters")
+    content: Optional[str] = Field(None, description="Scene setting for narration if applicable")
+
+class TurnOutput(BaseModel):
+    scripts: List[ScriptStep] = Field(..., description="List of script elements with role and instruction or content")
+
+class Achievement(BaseModel):
+    title: str = Field(..., description="Achievement title.")
+    reason: str = Field(..., description="Justification for the achievement and score.")
+    score: int = Field(..., description="Score from 1 to 5.")
+
+class AchievementsOutput(BaseModel):
+    achievements: List[Achievement] = Field(..., description="List of detected achievements.")
+
+class ObjectiveCheckOutput(BaseModel):
+    completed: bool = Field(..., description="Boolean indicating if objective achieved.")
+    reason: str = Field(..., description="Explanation of why or why not.")
+
+class OutlineOutput(BaseModel):
+    previous_outline: str = Field(..., description="A comprehensive analysis of the narrative so far, including key events, character development, player choices, and their consequences.")
+    new_outline: str = Field(..., description="A detailed outline for the next scene that advances the story while providing meaningful player agency.")
 
 class Director:
 
@@ -13,6 +39,12 @@ class Director:
         self.player = player
         self.relations = relations
         self.llm = llm
+
+         # Parsers using PydanticOutputParser
+        self.outline_parser = JsonOutputParser(pydantic_object=OutlineOutput)
+        self.turn_parser = JsonOutputParser(pydantic_object=TurnOutput)
+        self.check_parser = JsonOutputParser(pydantic_object=ObjectiveCheckOutput)
+        self.achievement_parser =JsonOutputParser(pydantic_object=AchievementsOutput)
 
         self.system_prompt = f"""
             # role
@@ -38,6 +70,7 @@ class Director:
                         """
         
     def generate_outline(self,chat_history,plot_objective):
+        fmt = self.outline_parser.get_format_instructions()
         outline_prompt = f"""
             # Instructions
 
@@ -68,27 +101,21 @@ class Director:
             ##Plot Objective:
             {plot_objective}
 
-            Output Format
-            Please provide your response as a properly formatted JSON object with two main sections:
-
-            json
-            ```
-            {{
-            "previous_outline": "A comprehensive analysis of the narrative so far, including key events, character development, player choices, and their consequences.",
-            "new_outline": "A detailed outline for the next scene that advances the story while providing meaningful player agency."
-            }}```
-            Note: Ensure your JSON is properly formatted with escaped quotes and valid syntax. Focus on creating content that maintains the established tone of the show while advancing naturally toward the plot objective.
+            # Output Format
+            Please output ONLY valid JSON that conforms to the format instructions below:
+            {fmt}
                 """
         messages = [
             SystemMessage(content=self.system_prompt),
             HumanMessage(content=outline_prompt)
         ]
         chat_prompt = ChatPromptTemplate.from_messages(messages)
-        chain = chat_prompt | self.llm 
+        chain = chat_prompt | self.llm | self.outline_parser
         outline = chain.invoke({})
-        return outline.content
+        return outline
     
     def generate_turn_instructions(self,chat_history,outline,plot_failure_reason='None',plot_objective='',num_lines=5):
+        fmt = self.turn_parser.get_format_instructions()
         dialogue_turn_prompt = f"""
             #Instruction for Script Creation
             ##Core Task
@@ -146,29 +173,21 @@ class Director:
                 ## Plot Failure Reason: 
                     {plot_failure_reason}
 
-            Output Format
-            Return only a valid JSON object with the following structure:
-            json
-            ```{{
-            "scripts": [
-                {{"role": "CHARACTER_NAME", "instruction": "ACTION_GUIDANCE"}},
-                {{"role": "Narration", "content": "BRIEF_SCENE_SETTING"}},
-                ...
-            ]
-            }}```
-
-            Ensure strict JSON formatting with proper escaping of special characters. Provide no additional commentary outside the JSON object.
+            # Output Format
+            Please output ONLY valid JSON that conforms to the format instructions below:
+            {fmt}
             """
         messages = [
             SystemMessage(content=self.system_prompt),
             HumanMessage(content=dialogue_turn_prompt)
         ]
         chat_prompt = ChatPromptTemplate.from_messages(messages)
-        chain = chat_prompt | self.llm 
+        chain = chat_prompt | self.llm | self.turn_parser
         script = chain.invoke({})
-        return script.content
+        return script
     
     def check_objective(self,chat_history,plot_objective):
+        fmt = self.check_parser.get_format_instructions()
         check_objective_prompt = f"""
                 # Instruction
 
@@ -197,17 +216,21 @@ class Director:
                 {{"completed": false, "reason": "The chat history does not clearly show the protagonist confronting their fears."}}
                 {{"completed": true, "reason": "The chat history clearly shows the protagonist confronting their fears, which matches the plot objective."}}
                 ```
+                # Output Format
+                Please output ONLY valid JSON that conforms to the format instructions below:
+                {fmt}
                 """
         messages = [
             SystemMessage(content=self.system_prompt),
             HumanMessage(content=check_objective_prompt)
         ]
         chat_prompt = ChatPromptTemplate.from_messages(messages)
-        chain = chat_prompt | self.llm 
+        chain = chat_prompt | self.llm | self.check_parser
         objective_status = chain.invoke({})
-        return objective_status.content
+        return objective_status
 
     def detect_achievements(self, chat_history, player_name, achievements):
+        fmt = self.achievement_parser.get_format_instructions()
         achievement_prompt = f"""
             # Role and Objective
             You are an Achievement Analyzer for an interactive game experience. Your job is to identify memorable moments from the player's session that deserve recognition as achievements.
@@ -297,6 +320,10 @@ class Director:
             Player name: {player_name}
             Past Achievements: {achievements}
 
+            # Output Format
+            Please output ONLY valid JSON that conforms to the format instructions below:
+            {fmt}
+
             # Final instructions
             Think step by step when analyzing the chat history. Identify moments of active player participation first, then evaluate their significance based on the scoring guidelines. Carefully compare potential achievements against past ones to ensure diversity. Return only a valid JSON array without any markdown or additional formatting.
             """
@@ -306,6 +333,6 @@ class Director:
             HumanMessage(content=achievement_prompt)
         ]
         chat_prompt = ChatPromptTemplate.from_messages(messages)
-        chain = chat_prompt | self.llm
+        chain = chat_prompt | self.llm | self.achievement_parser
         achievements = chain.invoke({})
-        return achievements.content
+        return achievements
