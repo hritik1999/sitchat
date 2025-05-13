@@ -334,5 +334,5 @@ class Director:
         ]
         chat_prompt = ChatPromptTemplate.from_messages(messages)
         chain = chat_prompt | self.llm | self.achievement_parser
-        achievements = chain.invoke({})
-        return achievements
+        new_achievements = chain.invoke({})
+        return new_achievements
