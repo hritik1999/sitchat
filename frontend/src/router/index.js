@@ -13,8 +13,57 @@ import EditProfile from '@/views/EditProfile.vue';
 import End from '@/views/End.vue';
 import ChatHistoryPage from '@/views/ChatHistory.vue';
 import LeaderboardPage from '@/views/Leaderboard.vue';
+import About from '@/pages/about.vue';
+import Terms from '@/pages/terms.vue';
+import Privacy from '@/pages/privacy.vue';
+import Blogs from '@/pages/blogs.vue';
+import createShowBlog from '@/pages/create-show-blog.vue';
+import createEpisodeBlog from '@/pages/create-episode-blog.vue';
+import Career from '@/pages/career.vue';
 // Define routes with meta for layout and auth requirements
 const routes = [
+  {
+    path: '/about',
+    name: 'About',
+    component: About,
+    meta: { requiresAuth: false, layout: 'main' }
+  },
+  {
+    path: '/blogs',
+    name: 'Blogs',
+    component: Blogs,
+    meta: { requiresAuth: false, layout: 'main' }
+  },
+  {
+    path: '/career',
+    name: 'Career',
+    component: Career,
+    meta: { requiresAuth: false, layout: 'main' }
+  },
+  {
+    path: '/blog/create-show',
+    name: 'CreateShowBlog',
+    component: createShowBlog,
+    meta: { requiresAuth: false, layout: 'main' }
+  },
+  {
+    path: '/blog/create-episode',
+    name: 'CreateEpisodeBlog',
+    component: createEpisodeBlog,
+    meta: { requiresAuth: false, layout: 'main' }
+  },
+  {
+    path: '/terms',
+    name: 'Terms',
+    component: Terms,
+    meta: { requiresAuth: false, layout: 'main' }
+  },
+  {
+    path: '/privacy',
+    name: 'Privacy',
+    component: Privacy,
+    meta: { requiresAuth: false, layout: 'main' }
+  },
   {
     path: '/login',
     name: 'Login',

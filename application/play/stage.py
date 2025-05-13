@@ -385,6 +385,7 @@ class Stage:
                 print(achievements)
                 for achievement in achievements:
                     db.add_achievement(self.chat_id, achievement['title'], achievement['score'])
+                    self.achievements.append(achievement)
                     self.emit_event('achievement', achievement, self._gen)
 
             threading.Thread(target=check_player_achievements, daemon=True).start()

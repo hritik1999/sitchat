@@ -100,23 +100,38 @@
       <slot></slot>
     </main>
 
-    <!-- Footer -->
-    <footer class="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hidden md:block">
+        <!-- Footer -->
+        <footer class="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hidden md:block">
       <div class="container mx-auto px-4 py-8">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+          <!-- Brand Info -->
           <div>
             <h3 class="text-lg font-semibold mb-4 text-slate-900 dark:text-slate-50">Sitchat</h3>
             <p class="text-sm text-slate-500 dark:text-slate-400">
               Bringing stories to life through interactive AI experiences
             </p>
           </div>
+
+          <!-- Company Links -->
+          <div>
+            <h3 class="text-lg font-semibold mb-4 text-slate-900 dark:text-slate-50">Company</h3>
+            <ul class="space-y-2 text-sm">
+              <li><router-link to="/about" class="text-slate-500 dark:text-slate-400 hover:text-primary transition-colors">About Us</router-link></li>
+              <li><router-link to="/career" class="text-slate-500 dark:text-slate-400 hover:text-primary transition-colors">Careers</router-link></li>
+              <li><router-link to="/blogs" class="text-slate-500 dark:text-slate-400 hover:text-primary transition-colors">Blog</router-link></li>
+            </ul>
+          </div>
+
+          <!-- Legal Links -->
           <div>
             <h3 class="text-lg font-semibold mb-4 text-slate-900 dark:text-slate-50">Legal</h3>
             <ul class="space-y-2 text-sm">
-              <li><a href="#" class="text-slate-500 dark:text-slate-400 hover:text-primary transition-colors">Privacy Policy</a></li>
-              <li><a href="#" class="text-slate-500 dark:text-slate-400 hover:text-primary transition-colors">Terms of Service</a></li>
+              <li><router-link to="/terms" class="text-slate-500 dark:text-slate-400 hover:text-primary transition-colors">Terms & Conditions</router-link></li>
+              <li><router-link to="/privacy" class="text-slate-500 dark:text-slate-400 hover:text-primary transition-colors">Privacy Policy</router-link></li>
             </ul>
           </div>
+
+          <!-- Social Links -->
           <div>
             <h3 class="text-lg font-semibold mb-4 text-slate-900 dark:text-slate-50">Social</h3>
             <div class="flex gap-4">

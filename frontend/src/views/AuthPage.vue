@@ -26,9 +26,9 @@
 
         <p class="text-center text-xs text-gray-500 px-4">
           By continuing, you agree to our 
-          <Button variant="link" class="text-xs h-auto p-0 text-gray-500">Terms</Button> 
+          <Button variant="link" class="text-xs h-auto p-0 text-gray-500" @click="router.push('/terms')">Terms</Button> 
           and 
-          <Button variant="link" class="text-xs h-auto p-0 text-gray-500">Privacy</Button>
+          <Button variant="link" class="text-xs h-auto p-0 text-gray-500" @click="router.push('/privacy')">Privacy</Button>
         </p>
       </div>
     </div>

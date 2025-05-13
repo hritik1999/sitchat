@@ -44,6 +44,20 @@
     </CardHeader>
   </Card>
 
+        <!-- Mobile-Only Links & Social Media Section -->
+        <Card class="mb-8 block md:hidden">
+        <CardHeader>
+          <CardTitle class="text-xl">Quick Links</CardTitle>
+          <div class="flex flex-col space-y-2 pt-4">
+            <RouterLink to="/about" class="text-primary hover:underline">About</RouterLink>
+            <RouterLink to="/blogs" class="text-primary hover:underline">Blog</RouterLink>
+            <RouterLink to="/career" class="text-primary hover:underline">Careers</RouterLink>
+            <RouterLink to="/terms" class="text-primary hover:underline">Terms & Conditions</RouterLink>
+            <RouterLink to="/privacy" class="text-primary hover:underline">Privacy Policy</RouterLink>
+          </div>
+        </CardHeader>
+      </Card>
+
     <!-- Writer Statistics Section -->
     <Card v-if="userShows.length > 0 || normalizedEpisodes.length > 0" class="mb-8">
       <CardHeader>
