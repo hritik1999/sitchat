@@ -399,6 +399,10 @@ export default {
 .dark .text-muted-foreground {
   color: #9CA3AF;
 }
+@supports (-webkit-touch-callout: none) {
+  .h-screen { height: -webkit-fill-available; }
+}
+input.ui-input { font-size: 16px !important; }
 
 /* Message bubble styles */
 .bg-gray-100 {
