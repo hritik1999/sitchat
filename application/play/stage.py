@@ -380,12 +380,23 @@ class Stage:
 
             # check player achievements using director.detect_achievements in the background using threading
             def check_player_achievements():
-                achievements = self.director.detect_achievements(self.context,self.player.name,self.achievements)
-                achievements = achievements.get('achievements', [])
-                print(achievements)
-                for achievement in achievements:
+                detected_achievements = self.director.detect_achievements(self.context, self.player.name, self.achievements)
+                detected_achievements = detected_achievements.get('achievements', [])
+                # Track newly added achievements to avoid duplicates
+                new_achievements = []
+                
+                for achievement in detected_achievements:
+                    # Skip if this achievement title is already in self.achievements
+                    if any(existing.get('title') == achievement['title'] for existing in self.achievements):
+                        continue
+                        
+                    # Add to database and local list
                     db.add_achievement(self.chat_id, achievement['title'], achievement['score'])
                     self.achievements.append(achievement)
+                    new_achievements.append(achievement)
+                
+                # Only emit events for truly new achievements
+                for achievement in new_achievements:
                     self.emit_event('achievement', achievement, self._gen)
 
             threading.Thread(target=check_player_achievements, daemon=True).start()
