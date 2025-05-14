@@ -80,13 +80,13 @@ const routes = [
     path: '/',
     name: 'Home',
     component: ShowPage,
-    meta: { requiresAuth: true, layout: 'main' }
+    meta: { requiresAuth: false, layout: 'main' }
   },
   {
     path: '/shows',
     name: 'Shows',
     component: ShowPage,
-    meta: { requiresAuth: true, layout: 'main' }
+    meta: { requiresAuth: false, layout: 'main' }
   },
   {
     path: '/show/:show_id/chat/:chat_id',
@@ -104,7 +104,7 @@ const routes = [
     path: '/show/:id',
     name:'ShowDetails',
     component:ShowDetailsPage,
-    meta: {requiresAuth:true,layout:'main'}
+    meta: {requiresAuth:false,layout:'main'}
   },
   {
     path: '/create/episode/:id',
@@ -152,7 +152,7 @@ const routes = [
     path: '/leaderboard',
     name:'Leaderboard',
     component:LeaderboardPage,
-    meta: {requiresAuth:true,layout:'main'}
+    meta: {requiresAuth:false,layout:'main'}
   },
   // Add more routes as needed
 ];

@@ -5,7 +5,7 @@
         <h1 class="text-3xl font-bold tracking-tight">Browse Shows</h1>
         <p class="text-muted-foreground">Discover interactive shows created by the community</p>
       </div>
-      <Button v-if="user" @click="navigateToCreate" variant="default">
+      <Button @click="navigateToCreate" variant="default">
         <PlusIcon class="h-4 w-4 mr-2" />
         Create Show
       </Button>

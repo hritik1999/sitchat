@@ -15,16 +15,16 @@
     <div class="relative min-h-[20rem] sm:h-96 bg-muted">
       <img
         :src="show.image_url || '/placeholder-show.jpg'"
-        class="w-full h-full object-cover object-top sm:object-center absolute inset-0"
+        class="w-full h-full object-cover object-top sm:object-center absolute inset-0 "
         alt="Show banner"
       />
       <div class="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
       <div class="container mx-auto px-4 relative pt-8 sm:pt-32 h-full flex flex-col justify-end">
         <div class="max-w-3xl mt-20" >
-          <h1 class="text-2xl sm:text-4xl lg:text-5xl font-bold text-white mb-3 sm:mb-4 drop-shadow-lg ">
+          <h1 class="text-2xl sm:text-4xl lg:text-5xl text-white mb-3 sm:mb-4 drop-shadow-lg font-black">
             {{ show.name }}
           </h1>
-          <p class="text-sm sm:text-lg text-white mb-4 sm:mb-6 line-clamp-3 sm:line-clamp-none">
+          <p class="text-sm sm:text-lg text-white mb-4 sm:mb-6 line-clamp-3 sm:line-clamp-none text-foreground">
             {{ show.description }}
           </p>
           <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6 sm:mb-8">
@@ -295,7 +295,7 @@ export default {
       error: null,   // Add error state
       show_id: this.$route.params.id,
       API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001',
-      user_name : localStorage.getItem('username').split(' ')[0] || 'player',
+      user_name : localStorage.getItem('username')?.split(' ')[0] || 'player',
       tempUserName: '',
       chatSpeed : parseFloat(localStorage.getItem('chatSpeed')) || 2.5,
       show: {
@@ -372,7 +372,6 @@ export default {
           chat_speed: this.chatSpeed
         })
       })
-      
       if (data.error) {
         toast.error(`Error starting episode: ${data.error}`)
       } else {
@@ -380,6 +379,7 @@ export default {
       }
     } catch (error) {
       toast.error(`Error starting episode: ${error.message}`)
+      this.$router.push('/login')
     } finally {
       this.isStarting = false
     }
