@@ -46,7 +46,7 @@
                   :alt="user.username || 'Anonymous'"
                 />
                 <div>
-                  <p class="font-medium">{{ user.username || 'Anonymous' }}</p>
+                  <p class="font-medium">{{ user.full_name || 'Anonymous' }}</p>
                 </div>
               </div>
               <div class="flex items-center gap-2">
@@ -99,6 +99,7 @@
           this.leaderboard = data.leaderboard.map(user => ({
             id: user.id,
             username: user.username,
+            full_name: user.full_name,
             avatar_url: user.avatar_url,
             total_score: user.total_score || 0,
             show_count: user.show_count || 0
