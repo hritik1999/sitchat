@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen flex flex-col md:flex-row bg-white">
     <!-- Left Side - Compact Auth (30%) -->
-    <div class="w-full md:w-[30%] flex items-center justify-center p-6 bg-white">
+    <div class="w-full md:w-[25%] flex items-center justify-center p-6 bg-white">
       <div class="w-full max-w-[320px] space-y-6">
         <div class="text-center space-y-2">
           <div class="mb-6">
@@ -34,46 +34,62 @@
     </div>
 
     <!-- Right Side - Immersive Preview (70%) -->
-    <div class="w-full md:w-[70%] relative min-h-[60vh] bg-black">
-      <div class="absolute inset-0 pattern-dots pattern-gray-500 pattern-opacity-20 pattern-size-4"></div>
-      
-      <div class="relative h-full flex items-center justify-center p-8">
-        <div class="max-w-4xl space-y-8 text-center">
-          <div class="space-y-4 animate-fade-in">
-            <h2 class="text-5xl font-bold text-white leading-tight">
-              Where Your Favourite Sitcoms Come<br>to <span class="text-gray-400">Life</span>
-            </h2>
-            <p class="text-xl text-gray-300">Interactive stories powered by AI</p>
-          </div>
-
-          <!-- Responsive Grid -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
-            <div class="feature-card">
-              <div class="icon-container">
-                <SparklesIcon class="h-6 w-6 text-white" />
-              </div>
-              <h3 class="text-lg font-medium text-white mt-4">Dynamic Episodes</h3>
-              <p class="text-sm text-gray-300 mt-2">Experience dynamic stories where you become part of the narrative.</p>
-            </div>
-
-            <div class="feature-card">
-              <div class="icon-container">
-                <GlobeIcon class="h-6 w-6 text-white" />
-              </div>
-              <h3 class="text-lg font-medium text-white mt-4">Create Stories</h3>
-              <p class="text-sm text-gray-300 mt-2">Design your shows with detailed characters, relationships, and plot objectives.</p>
-            </div>
-
-            <div class="feature-card">
-              <div class="icon-container">
-                <ShareIcon class="h-6 w-6 text-white" />
-              </div>
-              <h3 class="text-lg font-medium text-white mt-4">Participate</h3>
-              <p class="text-sm text-gray-300 mt-2">Join the conversation as an interactive character, influencing the story's direction.</p>
-            </div>
-          </div>
+    <div class="w-full md:w-[75%] relative min-h-[60vh] bg-black">
+      <!-- Hero Section -->
+      <section class="container mx-auto px-4 py-4 md:py-4">
+        <div class="text-center space-y-6">
+          <Badge variant="outline" class="text-lg py-2 px-4 bg-purple-100 dark:bg-purple-900/20">
+            🎬 The Future of Fan-Powered Storytelling
+          </Badge>
+          <h1 class="text-5xl md:text-6xl font-bold bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent">
+            Welcome to Sitchat
+          </h1>
+          <p class="text-xl md:text-2xl text-white text-muted-foreground max-w-3xl mx-auto">
+            Where you don't just watch - you participate. Dive into immersive group chats with AI versions of your favorite characters!
+          </p>
         </div>
-      </div>
+      </section>
+  
+      <!-- Features Grid -->
+      <section class="bg-muted/50 py-6">
+        <div class="container mx-auto px-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <Card
+            v-for="(feature, index) in features"
+            :key="index"
+            class="p-4 bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-xl transition-shadow duration-300"
+          >
+            <div class="flex items-center space-x-4 mb-4">
+              <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/20 rounded-lg flex items-center justify-center">
+                <Component :is="feature.icon" class="w-6 h-6 text-purple-600 dark:text-purple-400" />
+              </div>
+              <h3 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                {{ feature.title }}
+              </h3>
+            </div>
+            <p class="text-muted-foreground mb-4">
+              {{ feature.description }}
+            </p>
+            <div class="flex flex-wrap gap-2">
+              <Badge
+                v-for="(tag, tagIndex) in feature.tags"
+                :key="tagIndex"
+                variant="secondary"
+                class="px-2 py-1 text-sm"
+              >
+                {{ tag }}
+              </Badge>
+            </div>
+          </Card>
+        </div>
+      </section>
+      <!-- CTA Section -->
+      <section class="">
+        <div class=" mx-auto px-4 text-center">
+          <h3 class="text-xl text-muted-foreground mx-auto py-4 max-w-3xl text-white">
+            Create shows, build episodes, earn achievements, and experience being part of the show!
+          </h3>
+        </div>
+      </section>
     </div>
   </div>
 </template>
@@ -81,7 +97,20 @@
 <script>
 import { useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
-import { PlayIcon, SparklesIcon, GlobeIcon, ShareIcon } from 'lucide-vue-next'
+import { PlayIcon, SparklesIcon, GlobeIcon, ShareIcon,
+  Sparkles, 
+    Mail, 
+    Phone, 
+    Play,
+    Users,
+    Bot,
+    LayoutDashboard,
+    Trophy,
+    GalleryVerticalEnd
+ } from 'lucide-vue-next'
+ import { Badge } from '@/components/ui/badge'
+  import { Card } from '@/components/ui/card'
+  import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { supabase } from '@/composables/useSupabase';
 import { fetchApi } from '@/lib/utils';
 
@@ -89,10 +118,24 @@ export default {
   name: 'AuthPage',
   components: {
     Button,
+    Badge,
+    Card,
+    Avatar,
+    AvatarImage,
+    AvatarFallback,
     PlayIcon,
     SparklesIcon,
     GlobeIcon,
-    ShareIcon
+    ShareIcon,
+    Sparkles,
+    Mail,
+    Phone,
+    Play,
+    Users,
+    Bot,
+    LayoutDashboard,
+    Trophy,
+    GalleryVerticalEnd
   },
   setup() {
     const router = useRouter()
@@ -105,7 +148,45 @@ export default {
       email: '',
       username: '',
       password: '',
-      confirmPassword: ''
+      confirmPassword: '',
+      features : [
+  {
+    icon: Users,
+    title: "Group Chat Stories",
+    description: "Interact with multiple AI characters from your favourite shows in dynamic group chats",
+    tags: ["Multi-character", "Immersive", "Interactive"]
+  },
+  {
+    icon: LayoutDashboard,
+    title: "Create Your Shows",
+    description: "Create your favorite shows or imagine entirely new ones—craft worlds, characters. and storylines.",
+    tags: ["Customization", "Creative Freedom", "Fan-fiction"]
+  },
+  {
+    icon: Sparkles,
+    title: "Create Episodes",
+    description: "Design episodes by setting plot objectives and explore unique, personalized storylines!",
+    tags: ["Story Builder", "Unique Plots", "Episode Creation"]
+  },
+  {
+    icon: Trophy,
+    title: "Earn Achievements",
+    description: "Unlock hilarious milestones as you interact with characters",
+    tags: ["Badges", "Milestones", "Fun"]
+  },
+  {
+    icon: GalleryVerticalEnd,
+    title: "Story Progression",
+    description: "Structured narratives with real plot development",
+    tags: ["Plotlines", "Objectives", "Challenges"]
+  },
+  {
+  icon: ShareIcon,
+  title: "Share Your Stories",
+  description: "Create captivating storylines and share them with your friends to experience together.",
+  tags: ["Social", "Story Sharing", "Collaborative"]
+}
+]
     }
   },
   created() {
@@ -206,6 +287,9 @@ export default {
 
 .animate-slide-up {
   animation: slideUp 0.6s ease-out;
+}
+.card:hover {
+  border-color: theme('colors.purple.600');
 }
 
 @keyframes fadeIn {
