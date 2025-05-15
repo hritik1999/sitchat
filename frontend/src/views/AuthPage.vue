@@ -17,6 +17,7 @@
 
         <!-- Social Login -->
         <button
+        v-if="!showForgotPassword"
           @click="signInWithProvider('google')"
           class="w-full flex items-center justify-center gap-2 py-3 border border-gray-300 dark:border-gray-600 rounded-md
                  bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700
@@ -31,14 +32,88 @@
         </button>
 
         <!-- Divider -->
-        <div class="flex items-center">
+        <div v-if="!showForgotPassword"  class="flex items-center">
           <span class="flex-grow border-t border-gray-300 dark:border-gray-700"></span>
           <span class="mx-3 text-gray-500 dark:text-gray-400 text-sm">or</span>
           <span class="flex-grow border-t border-gray-300 dark:border-gray-700"></span>
         </div>
 
+                <!-- Forgot Password Form -->
+                <form v-if="showForgotPassword" @submit.prevent="handleResetPassword" class="space-y-4">
+          <div class="text-center mb-6">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100">Reset Your Password</h2>
+            <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Enter your email address and we'll send you a link to reset your password.
+            </p>
+          </div>
+          
+          <!-- Email -->
+          <div class="space-y-1">
+            <label
+              for="reset-email"
+              class="block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >Email</label
+            >
+            <input
+              id="reset-email"
+              v-model="resetEmail"
+              type="email"
+              required
+              placeholder="you@example.com"
+              :disabled="loading"
+              class="w-full px-4 py-2 border rounded-md
+                     border-gray-300 dark:border-gray-600
+                     bg-white dark:bg-gray-800
+                     text-gray-900 dark:text-gray-100
+                     placeholder-gray-400 dark:placeholder-gray-500
+                     focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+
+          <!-- Submit -->
+          <button
+            type="submit"
+            :disabled="loading"
+            class="w-full py-3 rounded-md bg-primary text-black dark:text-white border border-gray-300 dark:border-gray-600
+                   hover:bg-primary-dark transition disabled:opacity-50"
+          >
+            <svg
+              v-if="loading"
+              class="animate-spin h-5 w-5 mr-2 inline-block text-white"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              ></circle>
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v8z"
+              ></path>
+            </svg>
+            Send Reset Link
+          </button>
+          
+          <p class="text-center text-sm text-gray-600 dark:text-gray-400 mt-4">
+            <a
+              href="#"
+              @click.prevent="showForgotPassword = false"
+              class="font-medium text-primary hover:underline dark:text-primary-light"
+            >
+              Back to Sign In
+            </a>
+          </p>
+        </form>
+
         <!-- Email / Password Form -->
-        <form @submit.prevent="handleSubmit" class="space-y-4">
+        <form v-if="!showForgotPassword" @submit.prevent="handleSubmit" class="space-y-4">
           <!-- Email -->
           <div class="space-y-1">
             <label
@@ -95,7 +170,8 @@
               >
               <a
                 href="#"
-                class="text-xs text-primary hover:underline dark:text-primary-light"
+                @click.prevent="showForgotPassword = true"
+                class="text-xs text-primary hover:underline dark:text-white"
                 >Forgot?</a
               >
             </div>
@@ -169,7 +245,7 @@
         </form>
 
         <!-- Toggle Sign In / Sign Up -->
-        <p class="text-center text-sm text-gray-600 dark:text-gray-400">
+        <p v-if="!showForgotPassword" class="text-center text-sm text-gray-600 dark:text-gray-400">
           {{ isLogin
             ? "Don't have an account?"
             : 'Already have an account?' }}
@@ -304,6 +380,9 @@ export default {
       },
       isLogin: true,
       loading: false,
+      error: null,
+      showForgotPassword: false,
+      resetEmail: '',
       features : [
   {
     icon: Users,
@@ -412,6 +491,7 @@ export default {
     
     async handleSubmit() {
       this.loading = true;
+      const toast = useToast();
       try {
         if (this.isLogin) {
           await this.login();
@@ -510,8 +590,8 @@ export default {
       // Validate passwords match
       if (this.form.password !== this.form.confirmPassword) {
         const errorMsg = 'Passwords do not match';
-        if (toast) {
-          toast.error(errorMsg);
+        if (this.toast) {
+          this.toast.error(errorMsg);
         } else {
           alert(errorMsg);
         }
@@ -519,28 +599,6 @@ export default {
       }
       
       try {
-        // First check if this email might already be registered with a different provider
-        // Try to sign in with only the email to see if it returns a specific error
-        const { error: signInError } = await supabase.auth.signInWithOtp({
-          email: this.form.email,
-          options: {
-            shouldCreateUser: false // Don't create a new user if it doesn't exist
-          }
-        });
-        
-        // If the error doesn't indicate the user doesn't exist, the email is likely already registered
-        if (signInError && !signInError.message.includes("User not found") && 
-            !signInError.message.includes("Unable to validate email address")) {
-          console.log("Pre-check shows email might be registered:", signInError);
-          if (toast) {
-            toast.error('This email appears to be already registered. Please sign in or use "Continue with Google".');
-          } else {
-            alert('This email appears to be already registered. Please sign in or use "Continue with Google".');
-          }
-          this.isLogin = true;
-          return;
-        }
-        
         // Step 1: Sign up with Supabase Auth
         const { data, error } = await supabase.auth.signUp({
           email: this.form.email,
@@ -551,29 +609,12 @@ export default {
             }
           }
         });
-        
         if (error) {
           console.error('Registration error:', error);
-          
-          // Check specifically for the case where the email is already registered
-          if (error.message && (
-              error.message.includes('already registered') || 
-              error.message.includes('already in use') ||
-              error.message.includes('already exists'))) {
-            if (toast) {
-              toast.error('This email is already registered. Please sign in instead or use "Continue with Google".');
-            } else {
-              alert('This email is already registered. Please sign in instead or use "Continue with Google".');
-            }
-            // Switch to login view
-            this.isLogin = true;
+          if (toast) {
+            toast.error(error.message || 'Registration failed');
           } else {
-            // Handle other registration errors
-            if (toast) {
-              toast.error(error.message || 'Registration failed');
-            } else {
-              alert(error.message || 'Registration failed');
-            }
+            alert(error.message || 'Registration failed');
           }
           return;
         }
@@ -594,19 +635,6 @@ export default {
         // Store user information
         localStorage.setItem('user_id', data.user.id);
         localStorage.setItem("username", this.form.username);
-        
-        // Check if the user already has an account with a different provider
-        // Look for indicators in the response data
-        if (!data.session && data.user && 
-            (data.user.app_metadata?.providers?.includes('google') || 
-            data.user.identities?.some(i => i.provider === 'google'))) {
-          if (toast) {
-            toast.error('This email is already registered with Google. Please use "Continue with Google" instead.');
-          } else {
-            alert('This email is already registered with Google. Please use "Continue with Google" instead.');
-          }
-          return;
-        }
         
         // Check if email confirmation is required
         if (data.session) {
@@ -635,33 +663,11 @@ export default {
             this.$router.push('/');
           }
         } else {
-          // For confirmation_sent_at field being present but no session,
-          // check if we should detect existing user with different provider
-          if (data.user && data.user.confirmation_sent_at) {
-            // Try one more method to detect if this might be an existing account
-            try {
-              const { data: userData } = await supabase.auth.getUser();
-              console.log("Additional user check:", userData);
-              
-              if (userData && userData.user && userData.user.app_metadata && 
-                  userData.user.app_metadata.provider === 'google') {
-                if (toast) {
-                  toast.error('This email is already registered with Google. Please use "Continue with Google" instead.');
-                } else {
-                  alert('This email is already registered with Google. Please use "Continue with Google" instead.');
-                }
-                return;
-              }
-            } catch (userErr) {
-              console.error("Error getting additional user data:", userErr);
-            }
-          }
-          
-          // Email confirmation is required - but we will improve the message
+          // Email confirmation is required
           if (toast) {
-            toast.info('Please check your email to confirm your account. If you already have an account with this email via Google, please use the "Continue with Google" button instead.');
+            toast.info('Check your email to confirm your account.');
           } else {
-            alert('Please check your email to confirm your account. If you already have an account with this email via Google, please use the "Continue with Google" button instead.');
+            alert('Please check your email to confirm your account');
           }
           // Stay on the auth page but switch to login view
           this.isLogin = true;
@@ -669,12 +675,66 @@ export default {
       } catch (error) {
         console.error('Registration exception:', error);
         if (toast) {
-          toast.error(error.message || 'An error occurred during registration');
+          toast.error(error || 'An error occurred during registration');
         } else {
-          alert(error.message || 'An error occurred during registration');
+          alert(error || 'An error occurred during registration');
         }
       }
     },
+
+    async handleResetPassword() {
+      const toast = useToast();
+      this.loading = true;
+      
+      try {
+        // Validate email
+        if (!this.resetEmail) {
+          if (toast) {
+            toast.error('Please enter your email address');
+          } else {
+            alert('Please enter your email address');
+          }
+          return;
+        }
+        
+        // Send password reset email via Supabase
+        const { error } = await supabase.auth.resetPasswordForEmail(this.resetEmail, {
+          redirectTo: `${window.location.origin}/reset-password/`, // You'll need to create this route
+        });
+        
+        if (error) {
+          console.error("Password reset error:", error);
+          if (toast) {
+            toast.error(error.message || 'Failed to send password reset email');
+          } else {
+            alert(error.message || 'Failed to send password reset email');
+          }
+          return;
+        }
+        
+        // Show success message
+        if (toast) {
+          toast.success('Password reset email sent. Please check your inbox.');
+        } else {
+          alert('Password reset email sent. Please check your inbox.');
+        }
+        
+        // Reset form and show login
+        this.resetEmail = '';
+        this.showForgotPassword = false;
+        this.isLogin = true;
+      } catch (error) {
+        console.error("Password reset exception:", error);
+        if (toast) {
+          toast.error(error.message || 'An error occurred while sending the reset email');
+        } else {
+          alert(error.message || 'An error occurred while sending the reset email');
+        }
+      } finally {
+        this.loading = false;
+      }
+    },
+    
     
     async checkExistingSession() {
       try {

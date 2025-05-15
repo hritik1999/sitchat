@@ -20,6 +20,7 @@ import Blogs from '@/pages/blogs.vue';
 import createShowBlog from '@/pages/create-show-blog.vue';
 import createEpisodeBlog from '@/pages/create-episode-blog.vue';
 import Career from '@/pages/career.vue';
+import resetPassword from '@/views/resetPassword.vue';    
 // Define routes with meta for layout and auth requirements
 const routes = [
   {
@@ -75,6 +76,16 @@ const routes = [
     name: 'AuthCallback',
     component: AuthCallback,
     meta: { requiresAuth: false, layout: 'none' }
+  },
+  {
+    path: '/reset-password',
+    name: 'ResetPassword',
+    component: resetPassword,
+    meta: {
+      allowUnauthenticated: true,
+      requiresAuth: false,
+      layout: 'none'
+    }
   },
   {
     path: '/',
