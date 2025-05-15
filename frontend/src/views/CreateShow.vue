@@ -4,6 +4,7 @@
     <div class="mb-8">
       <h1 class="text-2xl font-bold tracking-tight">
         {{ isEditMode ? 'Edit Show' : 'Create New Show' }}
+        <a @click="this.$router.push('/blog/create-show')" class="text-primary text-blue-500 hover:underline cursor-pointer">(Guide)</a>
       </h1>
       <p class="text-muted-foreground text-sm mt-2">
         {{ isEditMode ? 'Update your show details' : 'Fill in the details to create a new show' }}

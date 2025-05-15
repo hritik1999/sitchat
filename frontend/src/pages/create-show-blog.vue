@@ -118,15 +118,17 @@
             <p class="text-foreground/80 mb-4">
               Use this in ChatGPT or any AI assistant to generate show ideas:
             </p>
-            <pre class="bg-muted p-4 rounded-lg text-sm relative">
-              <code>
-    Give me the following information about {Show Name} in {Language}:
-    1. Name of the Show
-    2. Description
-    3. Character names and descriptions
-    4. Character relationships (in one paragraph)
+            <div class="overflow-auto w-full">
+            <pre class="bg-muted p-4 rounded-lg text-sm min-w-full">
+              <code class="whitespace-pre">
+Give me the following information about {Show Name} in {Language}:
+  1. Name of the Show
+  2. Description
+  3. Character names and descriptions
+  4. Character relationships (in one paragraph)
               </code>
             </pre>
+          </div>
           </article>
   
           <!-- Example Section -->

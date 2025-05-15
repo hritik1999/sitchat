@@ -92,17 +92,27 @@
             <p class="text-foreground/80 mb-4">
               Use this AI prompt to generate episode ideas:
             </p>
-            <pre class="bg-muted p-4 rounded-lg text-sm relative">
-              <code>
-    You are a creative writer for an interactive storytelling platform.
-    Create a {type} episode of {Show Name} by providing:
-    1. Episode Name
-    2. Description
-    3. Player Role
-    4. Initial Setup
-    5. Sequential Plot Objectives
+            <div class="overflow-auto w-full">
+            <pre class="bg-muted p-4 rounded-lg text-sm min-w-full">
+              <code class="whitespace-pre">
+You are an creative writer who is writing episode scripts for an interactive storytelling platform where user's come to experience show's episodes in an group chat with AI characters.
+
+Create a {short description} episode of {show name} by providing:
+
+1.Episode Name
+2.Description
+3.Player Role -A single line telling the user's involvement in the episode
+4.Initial Setup-One paragraph giving only the background needed to launch the episode—establish the scene, characters, and stakes without spoilers.
+5.Sequential Plot Objectives- A numbered list of simple, one-task objectives that carry the story from the very beginning through rising tensions, a midpoint turning point, and finally to the climax and resolution.
+Ensure objectives are strictly chronological and together they map out the complete episode arc—setup, confrontation, climax, and denouement.
+
+remember-
+Do not give player a name
+Do not include the player in plot objectives 
+It should be like an authentic episode of the show
               </code>
             </pre>
+          </div>
           </article>
   
           <!-- Example Section -->

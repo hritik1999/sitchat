@@ -2,12 +2,14 @@
     <div class="container mx-auto px-4 py-8 max-w-4xl">
       <!-- Page Header -->
       <div class="mb-8">
-        <h1 class="text-2xl font-bold tracking-tight">
-          {{ isEditMode ? 'Edit Episode' : 'Create New Episode' }}
+        <h1 class="text-2xl font-bold tracking-tight ">
+          {{ isEditMode ? 'Edit Episode' : 'Create New Episode' }} 
+          <a @click="this.$router.push('/blog/create-episode')" class="text-primary text-blue-500 hover:underline cursor-pointer">(Guide)</a>
         </h1>
         <p class="text-muted-foreground text-sm mt-2">
-          {{ isEditMode ? 'Update your episode details' : 'Add a new episode to your show' }}
+          {{ isEditMode ? 'Update your episode details' : 'Add a new episode to your show' }} 
         </p>
+        
       </div>
   
       <!-- Loading State -->
