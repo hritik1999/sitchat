@@ -1,34 +1,184 @@
 <template>
   <div class="min-h-screen flex flex-col md:flex-row bg-white">
-    <!-- Left Side - Compact Auth (30%) -->
-    <div class="w-full md:w-[25%] flex items-center justify-center p-6 bg-white">
-      <div class="w-full max-w-[320px] space-y-6">
-        <div class="text-center space-y-2">
-          <div class="mb-6">
-            <span class="text-4xl font-bold text-black tracking-wider dark:text-white">SitChat</span>
-          </div>
-          <h1 class="text-2xl font-bold text-black dark:text-white">Begin Your Story</h1>
-          <p class="text-sm text-gray-500 dark:text-gray-400">Experience your Favourite Sitcoms!</p>
+    <!-- Left Side – unified auth panel -->
+    <div
+      class="w-full md:w-1/3 bg-white dark:bg-gray-900 flex items-start justify-center p-6"
+    >
+    <div class="w-full max-w-md space-y-8 pt-6 md:pt-16">
+        <!-- Logo & Tagline -->
+        <div class="text-center">
+          <h1 class="text-4xl font-extrabold text-gray-900 dark:text-gray-100">
+            SitChat
+          </h1>
+          <p class="mt-2 text-sm text-gray-600 dark:text-gray-400 pt-4">
+            Begin Your Story. Experience your Favourite Sitcoms!
+          </p>
         </div>
 
-        <div class="space-y-3">
-          <Button variant="outline" class="w-full h-11 gap-2 hover:bg-gray-100 transition-all dark:hover:bg-gray-800" @click="signInWithProvider('google')">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/7/7e/Gmail_icon_%282020%29.svg" alt="Google Logo" class="h-4 w-4" />
-            <span class="text-sm text-black dark:text-white">Continue with Google</span>
-          </Button>
-          
-          <div class="relative py-4">
-            <div class="absolute inset-0 flex items-center">
-              <span class="w-full border-t border-gray-300" />
+        <!-- Social Login -->
+        <button
+          @click="signInWithProvider('google')"
+          class="w-full flex items-center justify-center gap-2 py-3 border border-gray-300 dark:border-gray-600 rounded-md
+                 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700
+                 text-gray-800 dark:text-gray-200 transition"
+        >
+          <img
+            src="https://upload.wikimedia.org/wikipedia/commons/7/7e/Gmail_icon_%282020%29.svg"
+            alt="Google"
+            class="h-5 w-5"
+          />
+          Continue with Google
+        </button>
+
+        <!-- Divider -->
+        <div class="flex items-center">
+          <span class="flex-grow border-t border-gray-300 dark:border-gray-700"></span>
+          <span class="mx-3 text-gray-500 dark:text-gray-400 text-sm">or</span>
+          <span class="flex-grow border-t border-gray-300 dark:border-gray-700"></span>
+        </div>
+
+        <!-- Email / Password Form -->
+        <form @submit.prevent="handleSubmit" class="space-y-4">
+          <!-- Email -->
+          <div class="space-y-1">
+            <label
+              for="email"
+              class="block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >Email</label
+            >
+            <input
+              id="email"
+              v-model="form.email"
+              type="email"
+              required
+              placeholder="you@example.com"
+              :disabled="loading"
+              class="w-full px-4 py-2 border rounded-md
+                     border-gray-300 dark:border-gray-600
+                     bg-white dark:bg-gray-800
+                     text-gray-900 dark:text-gray-100
+                     placeholder-gray-400 dark:placeholder-gray-500
+                     focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+
+          <!-- Username (Sign up only) -->
+          <div v-if="!isLogin" class="space-y-1">
+            <label
+              for="username"
+              class="block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >Name</label
+            >
+            <input
+              id="username"
+              v-model="form.username"
+              type="text"
+              required
+              placeholder="johndoe"
+              :disabled="loading"
+              class="w-full px-4 py-2 border rounded-md
+                     border-gray-300 dark:border-gray-600
+                     bg-white dark:bg-gray-800
+                     text-gray-900 dark:text-gray-100
+                     placeholder-gray-400 dark:placeholder-gray-500
+                     focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+
+          <!-- Password -->
+          <div class="space-y-1">
+            <div class="flex justify-between items-center">
+              <label
+                for="password"
+                class="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >Password</label
+              >
+              <a
+                href="#"
+                class="text-xs text-primary hover:underline dark:text-primary-light"
+                >Forgot?</a
+              >
             </div>
+            <input
+              id="password"
+              v-model="form.password"
+              type="password"
+              required
+              :disabled="loading"
+              class="w-full px-4 py-2 border rounded-md
+                     border-gray-300 dark:border-gray-600
+                     bg-white dark:bg-gray-800
+                     text-gray-900 dark:text-gray-100
+                     placeholder-gray-400 dark:placeholder-gray-500
+                     focus:outline-none focus:ring-2 focus:ring-primary"
+            />
           </div>
-        </div>
 
-        <p class="text-center text-xs text-gray-500 px-4">
-          By continuing, you agree to our 
-          <Button variant="link" class="text-xs h-auto p-0 text-gray-500" @click="router.push('/terms')">Terms</Button> 
-          and 
-          <Button variant="link" class="text-xs h-auto p-0 text-gray-500" @click="router.push('/privacy')">Privacy</Button>
+          <!-- Confirm Password (Sign up only) -->
+          <div v-if="!isLogin" class="space-y-1">
+            <label
+              for="confirmPassword"
+              class="block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >Confirm Password</label
+            >
+            <input
+              id="confirmPassword"
+              v-model="form.confirmPassword"
+              type="password"
+              required
+              :disabled="loading"
+              class="w-full px-4 py-2 border rounded-md
+                     border-gray-300 dark:border-gray-600
+                     bg-white dark:bg-gray-800
+                     text-gray-900 dark:text-gray-100
+                     placeholder-gray-400 dark:placeholder-gray-500
+                     focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+
+          <!-- Submit -->
+          <button
+            type="submit"
+            :disabled="loading"
+            class="w-full py-3 rounded-md bg-primary text-black dark:text-white border border-gray-300 dark:border-gray-600
+                   hover:bg-primary-dark transition disabled:opacity-50"
+          >
+            <svg
+              v-if="loading"
+              class="animate-spin h-5 w-5 mr-2 inline-block text-white"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              ></circle>
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v8z"
+              ></path>
+            </svg>
+            {{ isLogin ? 'Sign In' : 'Create Account' }}
+          </button>
+        </form>
+
+        <!-- Toggle Sign In / Sign Up -->
+        <p class="text-center text-sm text-gray-600 dark:text-gray-400">
+          {{ isLogin
+            ? "Don't have an account?"
+            : 'Already have an account?' }}
+          <a
+            href="#"
+            @click.prevent="isLogin = !isLogin"
+            class="ml-1 font-medium text-primary hover:underline dark:text-primary-light"
+            >{{ isLogin ? 'Sign Up' : 'Sign In' }}</a
+          >
         </p>
       </div>
     </div>
@@ -113,6 +263,7 @@ import { PlayIcon, SparklesIcon, GlobeIcon, ShareIcon,
   import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { supabase } from '@/composables/useSupabase';
 import { fetchApi } from '@/lib/utils';
+import { useToast } from 'vue-toastification';
 
 export default {
   name: 'AuthPage',
@@ -145,10 +296,14 @@ export default {
     return {
       api_url: import.meta.env.VITE_API_URL || 'http://localhost:5001',
       authSubscription: null,
-      email: '',
-      username: '',
-      password: '',
-      confirmPassword: '',
+      form: {
+        email: '',
+        username: '',
+        password: '',
+        confirmPassword: '',
+      },
+      isLogin: true,
+      loading: false,
       features : [
   {
     icon: Users,
@@ -214,32 +369,241 @@ export default {
               }
             } catch (err) {
               console.error("Error verifying session:", err);
+              this.toast.error("Failed to verify your session. Please try logging in again.");
             }
           }
         } else if (event === 'SIGNED_OUT') {
           localStorage.removeItem("supabase_session");
+          localStorage.removeItem("user_id");
+          localStorage.removeItem("username");
           this.$router.push('/auth');
         }
       }
     );
     this.authSubscription = authListener;
   },
-  beforeDestroy() {
-    // Clean up the subscription to avoid memory leaks
+  beforeUnmount() {
+    // Clean up the subscription to avoid memory leaks (updated from beforeDestroy)
     if (this.authSubscription) {
-      this.authSubscription.unsubscribe();
+      this.authSubscription.subscription.unsubscribe();
     }
   },
   methods: {
     async signInWithProvider(provider) {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: provider, // "google" or "apple"
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-      if (error) console.error("OAuth error:", error);
+      this.loading = true;
+      try {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: provider, // "google" or "apple"
+          options: {
+            redirectTo: `${window.location.origin}/auth/callback`,
+          },
+        });
+        if (error) {
+          console.error("OAuth error:", error);
+          this.toast.error(`Failed to sign in with ${provider}: ${error}`);
+        }
+      } catch (err) {
+        console.error("OAuth exception:", err);
+        this.toast.error(`An unexpected error occurred: ${err.message}`);
+      } finally {
+        this.loading = false;
+      }
     },
+    
+    async handleSubmit() {
+      this.loading = true;
+      try {
+        if (this.isLogin) {
+          await this.login();
+        } else {
+          await this.register();
+        }
+      } catch (error) {
+        console.error("Form submission error:", error);
+        // Use Vue toast if available or fallback to alert
+        if (toast) {
+          toast.error(error.message || 'An unexpected error occurred');
+        } else {
+          alert(error.message || 'An unexpected error occurred');
+        }
+      } finally {
+        this.loading = false;
+      }
+    },
+    
+    async login() {
+      const toast = useToast();
+      // Validate form fields first
+      if (!this.form.email || !this.form.password) {
+        const errorMsg = 'Please provide both email and password';
+        if (toast) {
+          toast.error(errorMsg);
+        } else {
+          alert(errorMsg);
+        }
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: this.form.email,
+          password: this.form.password
+        });
+        
+        if (error) {
+          console.error("Login error:", error);
+          if (toast) {
+            toast.error(error.message || 'Login failed');
+          } else {
+            alert(error.message || 'Login failed');
+          }
+          return;
+        }
+        
+        if (!data || !data.user) {
+          const errorMsg = 'Login failed: No user data returned';
+          console.error(errorMsg);
+          if (toast) {
+            toast.error(errorMsg);
+          } else {
+            alert(errorMsg);
+          }
+          return;
+        }
+        
+        if (toast) {
+          toast.success('Logged in successfully');
+        }
+        
+        // Store user information
+        localStorage.setItem('user_id', data.user.id);
+        
+        // If username is available in user metadata, store it
+        if (data.user.user_metadata && data.user.user_metadata.username) {
+          localStorage.setItem("username", data.user.user_metadata.username);
+        }
+        
+        this.$router.push('/');
+      } catch (err) {
+        console.error("Login exception:", err);
+        if (toast) {
+          toast.error(`Login error: ${err.message || 'Unknown error'}`);
+        } else {
+          alert(`Login error: ${err.message || 'Unknown error'}`);
+        }
+      }
+    },
+
+    async register() {
+      const toast = useToast();
+      // Validate form fields first
+      if (!this.form.email || !this.form.password || !this.form.username) {
+        const errorMsg = 'Please fill out all required fields';
+        if (toast) {
+          toast.error(errorMsg);
+        } else {
+          alert(errorMsg);
+        }
+        return;
+      }
+      
+      // Validate passwords match
+      if (this.form.password !== this.form.confirmPassword) {
+        const errorMsg = 'Passwords do not match';
+        if (this.toast) {
+          this.toast.error(errorMsg);
+        } else {
+          alert(errorMsg);
+        }
+        return;
+      }
+      
+      try {
+        // Step 1: Sign up with Supabase Auth
+        const { data, error } = await supabase.auth.signUp({
+          email: this.form.email,
+          password: this.form.password,
+          options: {
+            data: {
+              username: this.form.username
+            }
+          }
+        });
+        
+        if (error) {
+          console.error('Registration error:', error);
+          if (toast) {
+            toast.error(error.message || 'Registration failed');
+          } else {
+            alert(error.message || 'Registration failed');
+          }
+          return;
+        }
+        
+        if (!data || !data.user) {
+          const errorMsg = 'Registration failed: No user data returned';
+          console.error(errorMsg);
+          if (toast) {
+            toast.error(errorMsg);
+          } else {
+            alert(errorMsg);
+          }
+          return;
+        }
+        
+        console.log('User registered successfully:', data.user);
+        
+        // Store user information
+        localStorage.setItem('user_id', data.user.id);
+        localStorage.setItem("username", this.form.username);
+        
+        // Check if email confirmation is required
+        if (data.session) {
+          // User is automatically signed in (email confirmation not required)
+          if (toast) {
+            toast.success('Account created successfully!');
+          } else {
+            alert('Account created successfully!');
+          }
+          
+          try {
+            // Attempt to verify with backend, but handle failure gracefully
+            await fetchApi('auth/verify', {
+              method: "POST",
+              body: JSON.stringify({ access_token: data.session.access_token }),
+            }).then(verifyData => {
+              console.log("Backend verification after registration:", verifyData);
+              this.$router.push('/');
+            }).catch(verifyErr => {
+              console.error("Backend verification failed, but proceeding with local registration:", verifyErr);
+              this.$router.push('/');
+            });
+          } catch (verifyErr) {
+            console.error("Backend verification exception:", verifyErr);
+            // Continue anyway since registration was successful
+            this.$router.push('/');
+          }
+        } else {
+          // Email confirmation is required
+          if (toast) {
+            toast.info('Please check your email to confirm your account');
+          } else {
+            alert('Please check your email to confirm your account');
+          }
+          // Stay on the auth page but switch to login view
+          this.isLogin = true;
+        }
+      } catch (error) {
+        console.error('Registration exception:', error);
+        if (toast) {
+          toast.error(error || 'An error occurred during registration');
+        } else {
+          alert(error || 'An error occurred during registration');
+        }
+      }
+    },
+    
+    
     async checkExistingSession() {
       try {
         // Check if we have an existing session

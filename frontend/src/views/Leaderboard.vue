@@ -40,11 +40,15 @@
               <div class="flex-1 flex items-center gap-4">
                 <span class="font-bold w-8">{{ index + 1 }}</span>
                 <img 
-                  :src="user.avatar_url || '/placeholder-avatar.jpg'"
+                  v-if="user.avatar_url"
+                  :src="user.avatar_url"
                   class="h-10 w-10 rounded-full object-cover"
                   @error="handleImageError"
                   :alt="user.username || 'Anonymous'"
                 />
+                <Avatar v-else>
+                  <AvatarFallback>{{ user.username.split(/[\s_-]/).map(n => n[0]).join('').toUpperCase() }}</AvatarFallback>
+                </Avatar>
                 <div>
                   <p class="font-medium">{{ user.full_name || 'Anonymous' }}</p>
                 </div>
@@ -64,13 +68,16 @@
   import { Button } from '@/components/ui/button'
   import { Card, CardContent } from '@/components/ui/card'
   import { fetchApi } from '@/lib/utils'
+  import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
   
   export default {
     name: 'LeaderboardPage',
     components: {
       Button,
       Card,
-      CardContent
+      CardContent,
+      Avatar,
+      AvatarFallback
     },
     data() {
       return {
