@@ -80,6 +80,29 @@
               </div>
             </div>
           </article>
+
+                  <!-- New AI Generation Section -->
+        <article class="p-6 bg-background rounded-xl border border-foreground/10">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="p-2 rounded-lg bg-primary/10">
+              🤖
+            </div>
+            <h2 class="text-2xl font-bold">Instant AI Episode Generation</h2>
+          </div>
+          <p class="text-foreground/80 mb-4">
+            Create complete episodes in seconds with our enhanced AI writer:
+          </p>
+          <div class="p-4 bg-muted/30 rounded-lg">
+            <ul class="list-disc ml-6 space-y-2 marker:text-foreground/50">
+              <li>Enter any premise (e.g., "what if Barney ran for mayor?")</li>
+              <li>Click <Button variant="outline" size="sm" class="mx-1">Generate with AI</Button></li>
+              <li>Get full episode structure with plot objectives and character roles</li>
+            </ul>
+          </div>
+          <p class="text-foreground/80 mt-4">
+            <strong>Pro Tip:</strong> Recreate classic episodes by entering their official designation (e.g., "Season 4 Finale")!
+          </p>
+        </article>
   
           <!-- Pro Tip Section -->
           <article class="p-6 bg-background rounded-xl border border-foreground/10">

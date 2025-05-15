@@ -2,6 +2,11 @@ from flask_restful import Resource, Api, marshal_with, fields, reqparse, marshal
 from flask import request, jsonify, g, Response, session
 from application.database.db import db
 from application.auth.auth import get_current_user
+from application.ai.llm import director_llm
+from pydantic import BaseModel, Field
+from typing import List, Optional
+from langchain_core.output_parsers import JsonOutputParser
+from langchain.prompts import PromptTemplate
 import os
 import uuid
 import json
@@ -504,5 +509,59 @@ class LeaderboardResource(Resource):
     def get(self):
         leaderboard = db.get_all_users()
         return jsonify({"leaderboard": leaderboard})
+    
+class GenerateScript(Resource):
+    def post(self,show_id):
+        user_id = get_current_user()
+        if not user_id:
+            return {"error": "Unauthorized. Please login again"}, 401
+        data = request.get_json()
+        show = db.get_show(show_id)
+        if not show:
+            return {"error": "Show not found"}, 404
+        show_name = show.get('name')
+        description = data.get('description')
+        if not description:
+            return {"error": "Description not provided"}, 400
+        
+        class Script(BaseModel):
+            episode_name: str
+            description: str
+            player_role: str
+            background: str
+            plot_objectives: List[str]
+
+        script_parser = JsonOutputParser(pydantic_schema=Script)
+        fmt = script_parser.get_format_instructions()
+        prompt = f"""
+            #ROLE
+            You are an creative writer who is writing episode scripts for an interactive storytelling platform where user's come to experience show's episodes in an group chat with AI characters.
+
+            #INSTRUCTIONS
+            Create a creative and fun episode of {show_name} by providing:
+
+            1.Episode Name
+            2.Description
+            3.Player Role -A single line telling the user's involvement in the episode
+            4.Initial Setup-One paragraph giving only the background needed to launch the episode—establish the scene, characters, and stakes without spoilers.
+            5.Sequential Plot Objectives- A numbered list of simple, one-task objectives that carry the story from the very beginning through rising tensions, a midpoint turning point, and finally to the climax and resolution.
+            Ensure objectives are strictly chronological and together they map out the complete episode arc—setup, confrontation, climax, and denouement.
+
+            #RESTRICTIONS
+            Do not give player a name
+            Do not include the player in plot objectives 
+            It should be like an authentic episode of the show
+
+            # Output Format
+            Please output ONLY valid JSON that conforms to the format instructions below:
+            {fmt}
+
+            # Description of the episode required:
+            {description}
+            """
+        prompt_template = PromptTemplate.from_template(prompt) 
+        chain = prompt_template | director_llm | script_parser
+        script = chain.invoke({})
+        return jsonify({"script": script})
         
     

@@ -31,17 +31,35 @@
           />
         </div>
   
-        <!-- Description -->
-        <div class="space-y-2">
-          <Label for="episode-description">Description</Label>
-          <Textarea
-            id="episode-description"
-            v-model="episodeForm.description"
-            placeholder="Brief description of the episode"
-            rows="3"
-            class="w-full"
-          />
-        </div>
+          <!-- Description -->
+          <div class="space-y-2">
+            <!-- flex container for label + button -->
+            <div class="flex items-center justify-between">
+              <Label
+                for="episode-description"
+                class="text-lg font-medium text-gray-700"
+              >
+                Description
+              </Label>
+              <Button
+                @click="generateScript"
+                type="button"
+                class="text-sm px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-shadow"
+              >
+                <Loader2Icon v-if="isGenerating" class="h-4 w-4 mr-2 animate-spin" />
+                  {{ isGenerating ? 'Generating...' : 'Generate with AI' }}<BrainCog/>
+              </Button>
+            </div>
+
+            <!-- textarea -->
+            <Textarea
+              id="episode-description"
+              v-model="episodeForm.description"
+              placeholder="Brief description of the episode for the users or if you are using AI to generate the script then the description will be used to generate the script"
+              rows="3"
+              class="w-full rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 transition"
+            />
+          </div>
 
 
 
@@ -128,7 +146,7 @@
   import { Input } from '@/components/ui/input'
   import { Label } from '@/components/ui/label'
   import { Textarea } from '@/components/ui/textarea'
-  import { Loader2Icon, PlusIcon, XIcon } from 'lucide-vue-next'
+  import { Loader2Icon, PlusIcon, XIcon,BrainCog } from 'lucide-vue-next'
   import { useToast } from 'vue-toastification'
   import { useRouter } from 'vue-router'
   import { fetchApi } from '@/lib/utils'
@@ -142,7 +160,8 @@
       Textarea,
       Loader2Icon,
       PlusIcon,
-      XIcon
+      XIcon,
+      BrainCog
     },
     
     setup() {
@@ -161,6 +180,7 @@
           plot_objectives: ['']
         },
         isSaving: false,
+        isGenerating: false,
         isLoading: false,
         API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001',
         // No longer storing session_token directly
@@ -273,6 +293,33 @@
           this.toast.error(error.message || 'An error occurred while saving')
         } finally {
           this.isSaving = false
+        }
+      },
+
+      async generateScript() {
+        this.isGenerating = true
+        try {
+          const response = await fetchApi(
+            `api/generate_script/${this.showId}`,
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                description: this.episodeForm.description,
+              })
+            }
+          )
+            const script = response.script
+            console.log('Script:', script)
+            this.episodeForm.description = script['Description']
+            this.episodeForm.plot_objectives = script['Sequential Plot Objectives']
+            this.episodeForm.background = script['Initial Setup']
+            this.episodeForm.player_role = script['Player Role']
+            this.episodeForm.name = script['Episode Name']
+
+        } catch (error) {
+          this.toast.error(error.message || 'An error occurred while generating script')
+        } finally {
+          this.isGenerating = false
         }
       },
   
