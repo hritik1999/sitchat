@@ -70,18 +70,6 @@
           />
         </div>
   
-        <!-- Email -->
-        <div class="space-y-2">
-          <Label for="email">Email</Label>
-          <Input
-            id="email"
-            v-model="userForm.email"
-            type="email"
-            placeholder="Your email address"
-            class="w-full"
-          />
-        </div>
-  
         <!-- Form Actions -->
         <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-6">
           <Button @click="cancel" type="button" variant="outline" class="w-full sm:w-auto">
