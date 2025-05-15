@@ -597,6 +597,18 @@ export default {
         }
         return;
       }
+
+      const { data: existing, error: fetchErr } = await supabase
+            .from('users')
+            .select('id')
+            .eq('email', this.form.email)
+            .single();
+
+        if (!fetchErr || existing) {
+          toast.error('Account already exists for that email. Please Sign In.');
+          this.loading = false;
+          return;
+        }
       
       try {
         // Step 1: Sign up with Supabase Auth
@@ -694,6 +706,18 @@ export default {
           } else {
             alert('Please enter your email address');
           }
+          return;
+        }
+
+        const { data: existing, error: fetchErr } = await supabase
+            .from('users')
+            .select('id')
+            .eq('email', this.resetEmail)
+            .single();
+
+        if (fetchErr || !existing) {
+          toast.error('No account found for that email. Please Sign Up first.');
+          this.loading = false;
           return;
         }
         
