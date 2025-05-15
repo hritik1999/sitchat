@@ -36,7 +36,7 @@
     
     <section class="mb-8">
       <h2 class="text-xl font-semibold mb-2">6. Contact</h2>
-      <p>For questions or issues, email <a href="mailto:guptahritik1999@gmail.com" class="text-blue-600 dark:text-blue-400">guptahritik1999@gmail.com</a></p>
+      <p>For questions or issues, email <a href="mailto:founder@sitchat.ai" class="text-blue-600 dark:text-blue-400">founder@sitchat.ai</a></p>
     </section>
     </div> 
 </template>

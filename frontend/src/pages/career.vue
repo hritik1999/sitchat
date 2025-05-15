@@ -36,7 +36,7 @@
   <script setup>
   import { Button } from '@/components/ui/button'
   
-  const email = 'guptahritik1999@gmail.com'
+  const email = 'founder@sitchat.ai'
   </script>
   
   <style scoped>

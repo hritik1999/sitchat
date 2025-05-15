@@ -85,7 +85,7 @@
           <CardContent class="mt-4 space-y-2">
             <p><strong>Hritik Gupta</strong> — Founder & Developer</p>
             <p>Tech enthusiast. Gamer. Sitcom & anime addict.</p>
-            <p>Email: <a href="mailto:guptahritik1999@gmail.com" class="underline text-blue-600 dark:text-blue-400">guptahritik1999@gmail.com</a></p>
+            <p>Email: <a href="mailto:founder@sitchat.ai" class="underline text-blue-600 dark:text-blue-400">founder@sitchat.ai</a></p>
             <p>Phone: <a href="tel:+918875749079" class="underline text-blue-600 dark:text-blue-400">+91 88757 49079</a></p>
           </CardContent>
         </Card>
