@@ -510,8 +510,8 @@ export default {
       // Validate passwords match
       if (this.form.password !== this.form.confirmPassword) {
         const errorMsg = 'Passwords do not match';
-        if (this.toast) {
-          this.toast.error(errorMsg);
+        if (toast) {
+          toast.error(errorMsg);
         } else {
           alert(errorMsg);
         }
@@ -519,6 +519,28 @@ export default {
       }
       
       try {
+        // First check if this email might already be registered with a different provider
+        // Try to sign in with only the email to see if it returns a specific error
+        const { error: signInError } = await supabase.auth.signInWithOtp({
+          email: this.form.email,
+          options: {
+            shouldCreateUser: false // Don't create a new user if it doesn't exist
+          }
+        });
+        
+        // If the error doesn't indicate the user doesn't exist, the email is likely already registered
+        if (signInError && !signInError.message.includes("User not found") && 
+            !signInError.message.includes("Unable to validate email address")) {
+          console.log("Pre-check shows email might be registered:", signInError);
+          if (toast) {
+            toast.error('This email appears to be already registered. Please sign in or use "Continue with Google".');
+          } else {
+            alert('This email appears to be already registered. Please sign in or use "Continue with Google".');
+          }
+          this.isLogin = true;
+          return;
+        }
+        
         // Step 1: Sign up with Supabase Auth
         const { data, error } = await supabase.auth.signUp({
           email: this.form.email,
@@ -532,10 +554,26 @@ export default {
         
         if (error) {
           console.error('Registration error:', error);
-          if (toast) {
-            toast.error(error.message || 'Registration failed');
+          
+          // Check specifically for the case where the email is already registered
+          if (error.message && (
+              error.message.includes('already registered') || 
+              error.message.includes('already in use') ||
+              error.message.includes('already exists'))) {
+            if (toast) {
+              toast.error('This email is already registered. Please sign in instead or use "Continue with Google".');
+            } else {
+              alert('This email is already registered. Please sign in instead or use "Continue with Google".');
+            }
+            // Switch to login view
+            this.isLogin = true;
           } else {
-            alert(error.message || 'Registration failed');
+            // Handle other registration errors
+            if (toast) {
+              toast.error(error.message || 'Registration failed');
+            } else {
+              alert(error.message || 'Registration failed');
+            }
           }
           return;
         }
@@ -556,6 +594,19 @@ export default {
         // Store user information
         localStorage.setItem('user_id', data.user.id);
         localStorage.setItem("username", this.form.username);
+        
+        // Check if the user already has an account with a different provider
+        // Look for indicators in the response data
+        if (!data.session && data.user && 
+            (data.user.app_metadata?.providers?.includes('google') || 
+            data.user.identities?.some(i => i.provider === 'google'))) {
+          if (toast) {
+            toast.error('This email is already registered with Google. Please use "Continue with Google" instead.');
+          } else {
+            alert('This email is already registered with Google. Please use "Continue with Google" instead.');
+          }
+          return;
+        }
         
         // Check if email confirmation is required
         if (data.session) {
@@ -584,11 +635,33 @@ export default {
             this.$router.push('/');
           }
         } else {
-          // Email confirmation is required
+          // For confirmation_sent_at field being present but no session,
+          // check if we should detect existing user with different provider
+          if (data.user && data.user.confirmation_sent_at) {
+            // Try one more method to detect if this might be an existing account
+            try {
+              const { data: userData } = await supabase.auth.getUser();
+              console.log("Additional user check:", userData);
+              
+              if (userData && userData.user && userData.user.app_metadata && 
+                  userData.user.app_metadata.provider === 'google') {
+                if (toast) {
+                  toast.error('This email is already registered with Google. Please use "Continue with Google" instead.');
+                } else {
+                  alert('This email is already registered with Google. Please use "Continue with Google" instead.');
+                }
+                return;
+              }
+            } catch (userErr) {
+              console.error("Error getting additional user data:", userErr);
+            }
+          }
+          
+          // Email confirmation is required - but we will improve the message
           if (toast) {
-            toast.info('Please check your email to confirm your account');
+            toast.info('Please check your email to confirm your account. If you already have an account with this email via Google, please use the "Continue with Google" button instead.');
           } else {
-            alert('Please check your email to confirm your account');
+            alert('Please check your email to confirm your account. If you already have an account with this email via Google, please use the "Continue with Google" button instead.');
           }
           // Stay on the auth page but switch to login view
           this.isLogin = true;
@@ -596,13 +669,12 @@ export default {
       } catch (error) {
         console.error('Registration exception:', error);
         if (toast) {
-          toast.error(error || 'An error occurred during registration');
+          toast.error(error.message || 'An error occurred during registration');
         } else {
-          alert(error || 'An error occurred during registration');
+          alert(error.message || 'An error occurred during registration');
         }
       }
     },
-    
     
     async checkExistingSession() {
       try {
