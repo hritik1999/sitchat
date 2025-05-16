@@ -6,7 +6,11 @@ from application.ai.llm import director_llm
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from langchain_core.output_parsers import JsonOutputParser
+from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
+import replicate
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Optional, Type, Any, List, Dict
 import os
 import uuid
 import json
@@ -563,5 +567,90 @@ class GenerateScript(Resource):
         chain = prompt_template | director_llm | script_parser
         script = chain.invoke({})
         return jsonify({"script": script})
-        
     
+class GenerateShow(Resource):
+    def post(self):
+        data = request.json or {}
+        show_name = data.get('show_name')
+        if not show_name:
+            return {"error": "Missing 'show_name' in request body."}, 400
+
+        # Generate show metadata via LLM
+        prompt = f"""
+            You are an assistant that builds TV show metadata given a show title.
+            Input: the exact show name.
+            Output a JSON object with these keys:
+            - name: string (the show title)
+            - description: string (brief summary)
+            - characters: array of objects, each with:
+                * name: string (the character's name as called in-show)
+                * description: string (brief personality/role)
+            - relations: string (a paragraph describing relationships among characters)
+            Return ONLY valid JSON. Do NOT include image URLs here.
+            Show name: {show_name}
+        """
+        template = PromptTemplate.from_template(prompt)
+        llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.7)
+        raw = (template | llm).invoke({}).content.strip()
+
+        # Strip Markdown fences if present
+        for fence in ("```json", "```"):
+            if raw.startswith(fence):
+                raw = raw[len(fence):]
+            if raw.endswith(fence):
+                raw = raw[:-len(fence)]
+
+        try:
+            metadata = json.loads(raw)
+        except json.JSONDecodeError as e:
+            return {"error": f"LLM returned invalid JSON: {e}"}, 500
+
+        # Prepare Replicate client
+        replicate_token = os.environ.get('REPLICATE_API_TOKEN')
+        if not replicate_token:
+            return {"error": "Missing 'REPLICATE_API_TOKEN' in environment."}, 500
+        client = replicate.Client(api_token=replicate_token)
+
+        def generate_image(prompt_text: str) -> str:
+            model = "black-forest-labs/flux-1.1-pro"
+            output_urls = client.run(
+                model,
+                input={"prompt": prompt_text,"prompt_upsampling": True}
+            )
+            first = output_urls[0]
+            return first.url
+
+        # Collect all prompts
+        tasks = {}
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            # schedule poster
+            poster_prompt = (
+                    f"A whimsical, animated‑style poster for the TV show titled “{show_name},” "
+                    "featuring bold, playful typography and a dynamic composition. "
+                    "Render in a vibrant cartoon aesthetic with thick outlines, a bright color palette, "
+                    "and lively background elements—think confetti, stars, or stylized swirls—to convey "
+                    "a cheerful, energetic vibe."
+                )
+            tasks[executor.submit(generate_image, poster_prompt)] = ("poster_url", None)
+
+            # schedule each character
+            for char in metadata.get("characters", []):
+                name = char.get("name", "")
+                prompt_text = (
+                        f"A fun, animated portrait of the character “{name}” from the show “{show_name}.” "
+                        "Depict them in a cartoon style with exaggerated, expressive features (big sparkling eyes, "
+                        "wide smile), a dynamic pose, and a colorful, patterned backdrop. "
+                        "Use vibrant hues and bold linework to give it a playful, lighthearted feel."
+                    )
+                tasks[executor.submit(generate_image, prompt_text)] = ("char", char)
+
+            # wait for all to finish
+            for future in as_completed(tasks):
+                key, target = tasks[future]
+                url = future.result()
+                if key == "poster_url":
+                    metadata["poster_url"] = url
+                else:  # character image
+                    target["image_url"] = url
+        print(f"Generated metadata: {metadata}")
+        return metadata, 200

@@ -4,7 +4,7 @@ import os
 from flask import Flask, request, jsonify, session
 from application.auth.auth import supabase
 from application.database.db import db
-from application.api.api import ShowsResource, ShowResource, EpisodesResource, EpisodeResource, UserResource, ChatResource , RatingResource, AchievementsResource, LeaderboardResource,GenerateScript
+from application.api.api import ShowsResource, ShowResource, EpisodesResource, EpisodeResource, UserResource, ChatResource , RatingResource, AchievementsResource, LeaderboardResource,GenerateScript, GenerateShow
 from application.api.socket import  setup_socket_handlers, active_stages
 from flask_cors import CORS
 from flask_restful import Api
@@ -149,6 +149,7 @@ web_api.add_resource(RatingResource, '/api/ratings', '/api/ratings/<string:episo
 web_api.add_resource(AchievementsResource, '/api/achievements/<string:chat_id>')
 web_api.add_resource(LeaderboardResource, '/api/leaderboard')
 web_api.add_resource(GenerateScript, '/api/generate_script/<string:show_id>')
+web_api.add_resource(GenerateShow, '/api/generate_show')
 
 
 if __name__ == '__main__':

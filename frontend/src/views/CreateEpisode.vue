@@ -43,6 +43,8 @@
               </Label>
               <Button
                 @click="generateScript"
+                v-if="!isEditMode"
+                :disabled="isGenerating"
                 type="button"
                 class="text-sm px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-shadow"
               >
