@@ -11,10 +11,11 @@
             Currently, I am the only employee and founder. If you think you can help in any way possible, please feel free to reach out!
           </p>
           <div class="flex justify-center">
-            <Button as="a" :href="`mailto:${email}`" variant="primary" size="lg" class="font-bold">
+            <Button as="a" :href="`mailto:${email}`" variant="primary" size="lg" class="font-bold text-blue-600">
               Contact Me
-            </Button>
+            </Button><br>
           </div>
+          <p>or email me at {{ email }}</p>
         </section>
   
         <section class="space-y-6">
