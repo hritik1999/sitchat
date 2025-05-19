@@ -11,3 +11,4 @@ python-dotenv==1.1.0
 replicate==1.0.6
 schedule==1.2.2
 supabase==2.15.1
+psutil==7.0.0

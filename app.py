@@ -8,9 +8,11 @@ from application.api.api import ShowsResource, ShowResource, EpisodesResource, E
 from application.api.socket import  setup_socket_handlers, active_stages
 from flask_cors import CORS
 from flask_restful import Api
-from flask_socketio import SocketIO
+from flask_socketio import SocketIO,disconnect
+
 import logging
 import sys
+import psutil
 sys.stdout.flush()
 
 # Simple solution: just set higher log levels for the libraries you want to silence
@@ -40,6 +42,23 @@ SECRET_KEY = os.getenv('SECRET_KEY') or 'your-secret-key-for-socket-io'
 app.config['SECRET_KEY'] = SECRET_KEY
 app.config['DEBUG'] = DEBUG
 
+# Set CPU and memory thresholds
+CPU_THRESHOLD = 90.0
+MEM_THRESHOLD = 85.0
+
+# Check if server is overloaded
+@app.before_request
+def reject_if_overloaded():
+    # measure over a short interval so it’s “current”
+    cpu = psutil.cpu_percent(interval=None)
+    mem = psutil.virtual_memory().percent
+    print(f"CPU: {cpu}, MEM: {mem}")
+    if cpu > CPU_THRESHOLD or mem > MEM_THRESHOLD:
+        # 503 → Service Unavailable
+        return jsonify({
+            "error": "Server is at full capacity, please try again later."
+        }), 503
+
 # Initialize Socket.IO with more compatible settings
 socketio = SocketIO(
     app, 
@@ -64,6 +83,12 @@ def health():
 def authenticate_socket():
     auth_header = None
     token = None
+
+    cpu = psutil.cpu_percent(interval=None)
+    mem = psutil.virtual_memory().percent
+    if cpu > CPU_THRESHOLD or mem > MEM_THRESHOLD:
+        # immediately drop the socket
+        return disconnect()
     
     # Check for token in auth data
     if hasattr(request, 'args') and request.args.get('token'):

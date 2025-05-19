@@ -49,6 +49,9 @@ export async function fetchApi(endpoint, options = {}) {
   if (response.status === 401) {
     console.error('Unauthorized - session may have expired');
   }
+  if (response.status === 503) {
+    throw new Error('Server is at full capacity, please try again later.');
+  }
 
   if (response.headers.get('content-type')?.includes('application/json')) {
     const data = await response.json();
