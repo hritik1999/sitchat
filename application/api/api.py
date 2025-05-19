@@ -538,33 +538,44 @@ class GenerateScript(Resource):
         script_parser = JsonOutputParser(pydantic_schema=Script)
         fmt = script_parser.get_format_instructions()
         prompt = f"""
-            #ROLE
-            You are an creative writer who is writing episode scripts for an interactive storytelling platform where user's come to experience show's episodes in an group chat with AI characters.
+            # ROLE
+            You are a creative writer designing immersive episode scripts for an interactive group‑chat storytelling platform.
 
-            #INSTRUCTIONS
-            Create a creative and fun episode of {show_name} by providing:
+            # INSTRUCTIONS
+            Generate an episode of {show_name} by producing:
 
-            1.Episode Name
-            2.Description
-            3.Player Role -A single line telling the user's involvement in the episode
-            4.Initial Setup-One paragraph giving only the background needed to launch the episode—establish the scene, characters, and stakes without spoilers.
-            5.Sequential Plot Objectives- A numbered list of simple, one-task objectives that carry the story from the very beginning through rising tensions, a midpoint turning point, and finally to the climax and resolution.
-            Ensure objectives are strictly chronological and together they map out the complete episode arc—setup, confrontation, climax, and denouement.
+            1. **Episode Name**  
+            2. **Description**  
+            3. **Player Role** – A concise, story‑appropriate role (e.g. “a devoted apprentice,” “the new academy officer,” “an old friend”) that naturally explains the player’s presence and also important enough that the player's input has value in the story.  
+            4. **Initial Setup** – One paragraph establishing the world, introducing the main characters, and hinting at the stakes (no spoilers).  
+            5. **Plot Objectives** – A chronological list of 6–8 succinct, open‑ended goals that:
+            - Cover setup → rising tension → midpoint twist → climax → resolution  
+            - Describe *what* must happen but remain ambiguous about *how*, so the player’s choices (or silence) shape the outcome  
+            - Are self‑contained and achievable without explicit player input  
 
-            #RESTRICTIONS
-            Do not give player a name
-            Do not include the player in plot objectives 
-            It should be like an authentic episode of the show
+            # RESTRICTIONS
+            - Do **not** assign the player a personal name.  
+            - Do **not** reference or include the player directly within objectives.  
+            - Maintain the authentic tone and pacing of a canonical episode.
 
-            # Output Format
-            Please output ONLY valid JSON that conforms to the format instructions below:
+            # OUTPUT FORMAT
+            Return **only** valid JSON matching this schema:
             {fmt}
 
-            # Description of the episode required:
+            # EPISODE CONTEXT
             {description}
             """
+        reasoning = {
+            "effort": "medium",  # 'low', 'medium', or 'high'
+        }
+
+        llm = ChatOpenAI(
+            model="o4-mini",
+            use_responses_api=True,
+            model_kwargs={"reasoning": reasoning},
+        )
         prompt_template = PromptTemplate.from_template(prompt) 
-        chain = prompt_template | director_llm | script_parser
+        chain = prompt_template | llm | script_parser
         script = chain.invoke({})
         return jsonify({"script": script})
     

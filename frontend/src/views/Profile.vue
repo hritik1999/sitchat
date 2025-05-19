@@ -237,6 +237,7 @@
   
   <script>
   import { Button } from '@/components/ui/button'
+  import { useToast } from 'vue-toastification'
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
   import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
   import { Loader2Icon, MoonIcon, SunIcon, PencilIcon, Trash2Icon, LogOutIcon,StarIcon, EyeIcon, ClockIcon,ChevronDownIcon,Book, FileText, Eye, PiggyBank } from 'lucide-vue-next'
@@ -444,6 +445,7 @@ import { fetchApi } from '@/lib/utils'
         this.$router.push('/edit/episode/'+ showId + '/' + episodeId);
       },
       async getUserDetails() {
+        const toast = useToast();
         try {
             const data = await fetchApi(`api/user`);
             console.log('API Response:', data);
@@ -479,6 +481,7 @@ import { fetchApi } from '@/lib/utils'
             episodes: this.userEpisodes
             });
         } catch (error) {
+            toast.error('Failed to load user details:', error);
             console.error('Failed to fetch user details:', error);
             this.error = 'Failed to load user details';
             this.loadingShows = false;

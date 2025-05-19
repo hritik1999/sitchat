@@ -100,85 +100,91 @@
           <Label>Characters</Label>
         </div>
 
-        <!-- Character Cards -->
-        <div
-          v-for="(character, index) in showForm.characters"
-          :key="index"
-          class="p-4 border rounded-lg relative space-y-2 mt-2"
-        >
-          <Button
-            type="button"
-            variant="destructive"
-            size="icon"
-            class="absolute right-2 top-2"
-            @click="removeCharacter(index)"
-          >
-            <XIcon class="h-4 w-4" />
-            <span class="sr-only">Remove</span>
-          </Button>
-          <div class="space-y-2">
-            <Label :for="`character-name-${index}`">Character Name</Label>
-            <Input
-              :id="`character-name-${index}`"
-              v-model="character.name"
-              placeholder="Character name"
-              class="w-full"
-            />
+           <!-- Character Cards -->
+    <div class="space-y-4">
+      <div
+        v-for="(character, index) in showForm.characters"
+        :key="index"
+        class="group relative p-4 border rounded-lg hover:border-primary transition-colors"
+      >
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- Text Fields -->
+          <div class="md:col-span-2 space-y-3">
+            <div class="space-y-1">
+              <Label>Character Name</Label>
+              <Input
+                v-model="character.name"
+                placeholder="e.g. Rachel Green"
+                class="w-full"
+              />
+            </div>
+            <div class="space-y-1">
+              <Label>Description</Label>
+              <Textarea
+                v-model="character.description"
+                placeholder="Character traits and role in story"
+                rows="2"
+                class="w-full"
+              />
+            </div>
           </div>
+
+          <!-- Image Upload -->
           <div class="space-y-2">
-            <Label :for="`character-desc-${index}`">Description</Label>
-            <Textarea
-              :id="`character-desc-${index}`"
-              v-model="character.description"
-              placeholder="Character description and personality"
-              rows="2"
-              class="w-full"
-            />
-          </div>
-          <div class="space-y-2">
-            <Label>Character Image</Label>
-            <div class="grid grid-cols-1 gap-4">
+            <Label>Portrait</Label>
+            <div class="relative aspect-square w-full">
               <div
                 v-if="character.imagePreview"
-                class="relative aspect-square bg-muted rounded-md overflow-hidden"
+                class="relative h-full w-full rounded-md overflow-hidden border"
               >
-                <img :src="character.imagePreview" alt="Preview" class="object-cover w-full h-full" />
+                <img
+                  :src="character.imagePreview"
+                  class="object-cover w-full h-full"
+                />
                 <Button
-                  type="button"
                   variant="destructive"
                   size="icon"
-                  class="absolute top-2 right-2 h-8 w-8 rounded-full"
+                  class="absolute top-1 right-1 h-6 w-6 rounded-sm opacity-90 hover:opacity-100"
                   @click="clearCharacterImage(index)"
                 >
-                  <XIcon class="h-4 w-4" />
+                  <XIcon class="h-3 w-3" />
                 </Button>
               </div>
               <div
                 v-else
-                class="border border-dashed rounded-md p-4 flex flex-col items-center justify-center"
+                class="h-full w-full border-2 border-dashed rounded-md flex items-center justify-center cursor-pointer hover:border-primary transition-colors"
+                @click="triggerCharacterFileInput(index)"
               >
-                <input
-                  type="file"
-                  accept="image/*"
-                  :ref="el => characterFileInputs[index] = el"
-                  class="hidden"
-                  @change="e => handleCharacterImageChange(e, index)"
-                />
-
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  @click="triggerCharacterFileInput(index)"
-                >
-                  <UploadIcon class="h-4 w-4 mr-2" />
-                  Upload Image
-                </Button>
-                <p class="text-xs text-muted-foreground mt-2">PNG, JPG or GIF, max 2MB</p>
+                <div class="text-center p-2">
+                  <UploadIcon class="h-5 w-5 text-muted-foreground mb-1 mx-auto" />
+                  <p class="text-xs text-muted-foreground px-2">
+                    Click to upload portrait
+                  </p>
+                </div>
               </div>
+              <input
+                type="file"
+                accept="image/*"
+                :ref="el => characterFileInputs[index] = el"
+                class="hidden"
+                @change="e => handleCharacterImageChange(e, index)"
+              />
             </div>
           </div>
         </div>
+
+        <!-- Remove Button -->
+        <Button
+          variant="destructive"
+          size="icon"
+          class="absolute -top-3 -right-3 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+          @click="removeCharacter(index)"
+        >
+          <XIcon class="h-3.5 w-3.5" />
+        </Button>
       </div>
+    </div>
+  </div>
        <Button @click="addCharacter" type="button"  size="sm" class="w-full">
             <PlusIcon class="h-4 w-4 mr-2" />
             Add Character

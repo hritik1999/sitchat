@@ -10,6 +10,7 @@ class ScriptStep(BaseModel):
     content: Optional[str] = Field(None, description="Scene setting for narration if applicable")
 
 class TurnOutput(BaseModel):
+    planning: str = Field(..., description="Planning for the next turn.")
     scripts: List[ScriptStep] = Field(..., description="List of script elements with role and instruction or content")
 
 class Achievement(BaseModel):
@@ -81,20 +82,23 @@ class Director:
             - Identify significant decisions, turning points, and their consequences
             - Note established relationships, conflicts, and emotional dynamics
             - Highlight the player's specific choices and their impact on the narrative
+
             2. Develop the Next Scene Outline
-            - Create a natural progression from established events
+            - A concise paragraph describing a flexible scene framework for the director's script—structured enough to advance the plot toward the objective and achieve it, yet purposefully open-ended so that once the player provides input, the script seamlessly adapts to their choices and propels the narrative dynamically.
+            - a natural progression from established events
             - Maintain consistency with character motivations and personalities
             - Integrate consequences of previous player choices
             - Advance meaningfully toward the plot objective
             - Include potential decision points for player agency
-            - Build appropriate tension that serves the overall narrative
             3. Constraints for Scene Development
             - Focus on narrative description rather than dialogue scripting
             - Maintain established tone, world rules, and character voices
             - Avoid forced plot developments or artificial twists
             - Ensure continuity with previous events
+            - Ensure continuity with all prior events, while allowing the outline to adapt if minor details change.  
             - Create meaningful stakes that connect to the plot objective
-            - Provide organic opportunities for player choice and impact
+            - Offer organic entry points for new player choices, without asking the player to invent essential narrative facts.
+
             # Context
             ##Chat History:
             {chat_history}
@@ -117,66 +121,80 @@ class Director:
     def generate_turn_instructions(self,chat_history,outline,plot_failure_reason='None',plot_objective='',num_lines=5):
         fmt = self.turn_parser.get_format_instructions()
         dialogue_turn_prompt = f"""
-            #Instruction for Script Creation
-            ##Core Task
-            Transform the provided outline into an actionable script that advances the narrative while prioritizing player engagement and narrative coherence.
-            
-            ##Script Parameters
-            - Generate exactly {num_lines} script elements (or fewer if the outline completes naturally)
-            - Each element must be either:
-                - Character instruction (role + action guidance)
-                - Brief narrative direction (scene-setting or transition)
+                    # Planning Step
+                    ## Before generating any script elements, evaluate:
+                    # 1. Is the plot objective already satisfied in chat_history? If yes, return [] immediately.
+                    # 2. Does chat_history contain an unresolved player message? If yes, mark it as "unattended".
+                    ## Once planning is complete, proceed only if objective not met.
 
-            ## Script Writing Guidelines
-            ### Character Instructions:
-                - Use concise, actionable direction rather than spelled-out dialogue
-                - Specify emotional tone, intent, and key information to convey
-                - Allow flexibility for natural performance and improvisation
+                    # Instruction for Script Creation
+                    ## Core Task
+                    Transform the provided outline into an actionable script that advances the narrative while prioritizing player engagement and narrative coherence.
 
-            ### Narrative Elements:
-                - Keep scene-setting brief and visual
-                - Focus on atmosphere, environment changes, and non-verbal action
-                - Use narration sparingly - prioritize character interactions
+                    ## Script Parameters
+                    - Generate exactly {num_lines} script elements (or fewer if the outline completes naturally)
+                    - Each element must be either:
+                        - Character instruction (role + action guidance)
+                        - Brief narrative direction (scene-setting or transition)
 
-            ### Player Engagement (CRITICAL):
-                - If the player has contributed, address them in the first script element
-                - Ensure characters acknowledge player by name when interacting
-                - Create meaningful interaction opportunities that respect player agency
-                - Never dictate player emotions, thoughts, or decisions
+                    ## Script Writing Guidelines
+                    ### Character Instructions:
+                        - Use concise, actionable direction rather than spelled-out dialogue
+                        - Specify emotional tone, intent, and key information to convey
+                        - Allow flexibility for natural performance and improvisation
 
-            ### Narrative Coherence:
-                - Follow logical progression from chat history and outline
-                - Maintain established character personalities and dynamics
-                - Address plot failure reasons subtly through character behavior
-                - Skip any outline elements already covered in chat history
+                    ### Narrative Elements:
+                        - Keep scene-setting brief and visual
+                        - Focus on atmosphere, environment changes, and non-verbal action
+                        - Use narration sparingly - prioritize character interactions
 
-            ## Script Structure Priorities
-            - Address player input immediately if present
-            - Progress narrative according to outline
-            - Correct course if plot failure is identified
-            - Conclude naturally if outline is completed before reaching line limit
+                    ### 1. Plot Objective Check
+                        - If the plot objective has been met in chat_history, return an empty list and skip all other steps.
 
-            ## Content Constraints
-            - NEVER repeat scenes or dialogue already in chat history
-            - NEVER narrate the player's feelings, thoughts, or decisions
-            - NEVER ignore player contributions or agency
-            - NEVER include explicit dialogue - use intent-based instructions instead
+                    ### 2. Player Engagement (CRITICAL)
+                        - Do NOT include the player as a scripted character.
+                        - If there is any unattended player message in chat_history, the FIRST script element must address that player message directly.
+                        - Do not rely on the player to supply key plot details; present clear choices when decision points arise.
+                        - Create meaningful interaction opportunities that respect player agency.
 
-            # Context Resources
+                    ### 3. Narrative Coherence
+                        - Follow logical progression from chat_history and outline.
+                        - Maintain established character personalities and dynamics.
+                        - Address subtle reasons for past plot failures through character behavior.
+                        - Skip any outline elements already covered in chat_history.
 
-                ## Outline: 
-                    {outline}
-                ## Chat History: 
-                    {chat_history}
-                ## Plot Objective:
-                    {plot_objective}
-                ## Plot Failure Reason: 
-                    {plot_failure_reason}
+                    ### 4. Script Structure Priorities
+                    - Perform the planning step first (see above).
+                    - Address unattended player input immediately, if present.
+                    - Progress narrative according to outline and scene order.
+                    - Introduce choices rather than requiring player-supplied details.
+                    - Conclude naturally if outline completes before reaching the line limit.
 
-            # Output Format
-            Please output ONLY valid JSON that conforms to the format instructions below:
-            {fmt}
-            """
+                    ## Content Constraints
+                    - NEVER repeat scenes or dialogue from chat_history.
+                    - NEVER narrate the player’s internal states.
+                    - NEVER ignore player contributions or agency.
+                    - NEVER include explicit dialogue—use intent-based instructions instead.
+                    - NEVER include player in the script.
+                    - NEVER include player in narration.
+                    - AVOID using narration whenever possible i.e use character instructions instead as much as possible.
+
+                    # Context Resources
+
+                        ## Outline: 
+                            {outline}
+                        ## Chat History: 
+                            {chat_history}
+                        ## Plot Objective:
+                            {plot_objective}
+                        ## Plot Failure Reason: 
+                            {plot_failure_reason}
+
+                    # Output Format
+                    Please output ONLY valid JSON that conforms to the format instructions below:
+                    {fmt}
+                    """
+
         messages = [
             SystemMessage(content=self.system_prompt),
             HumanMessage(content=dialogue_turn_prompt)
