@@ -20,7 +20,19 @@
     <form v-else @submit.prevent="saveShow" class="space-y-6">
       <!-- Show Name -->
       <div class="space-y-2">
+        <div class="flex items-center justify-between">
         <Label for="show-name">Show Name</Label>
+        <Button
+            @click="generateShow"
+            v-if="!isEditMode"
+            :disabled="isGenerating"
+            type="button"
+            class="text-sm px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-shadow"
+          >
+          <Loader2Icon v-if="isGenerating" class="h-4 w-4 mr-2 animate-spin" />
+                {{ isGenerating ? 'Generating...' : 'Generate with AI (Beta)' }}<BrainCog/>
+          </Button>
+          </div>
         <Input
           id="show-name"
           v-model="showForm.name"
@@ -86,10 +98,6 @@
       <div class="space-y-2">
         <div class="flex justify-between items-center">
           <Label>Characters</Label>
-          <Button @click="addCharacter" type="button" variant="outline" size="sm">
-            <PlusIcon class="h-4 w-4 mr-2" />
-            Add Character
-          </Button>
         </div>
 
         <!-- Character Cards -->
@@ -171,7 +179,10 @@
           </div>
         </div>
       </div>
-
+       <Button @click="addCharacter" type="button"  size="sm" class="w-full">
+            <PlusIcon class="h-4 w-4 mr-2" />
+            Add Character
+          </Button>
       <!-- Character Relationships -->
       <div class="space-y-2">
         <Label for="show-relations">Character Relationships</Label>
@@ -206,12 +217,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { ImageIcon, Loader2Icon, PlusIcon, UploadIcon, XIcon } from 'lucide-vue-next'
+import { ImageIcon, Loader2Icon, PlusIcon, UploadIcon, XIcon,BrainCog } from 'lucide-vue-next'
 import { fetchApi } from '@/lib/utils'
 
 export default {
   name: 'CreateShow',
-  components: { Button, Input, Label, Textarea, ImageIcon, Loader2Icon, PlusIcon, UploadIcon, XIcon },
+  components: { Button, Input, Label, Textarea, ImageIcon, Loader2Icon, PlusIcon, UploadIcon, XIcon,BrainCog },
 
   setup() {
     const router = useRouter()
@@ -234,6 +245,7 @@ export default {
     const characterFileInputs = ref([null])
 
     const isEditMode = computed(() => !!router.currentRoute.value.params.showId)
+    const isGenerating = ref(false)
     const showId = computed(() => router.currentRoute.value.params.showId)
 
     const isFormValid = computed(() => {
@@ -376,6 +388,75 @@ export default {
 
     const cancel = () => router.go(-1)
 
+    const generateShow = async () => {
+      if (!showForm.name.trim()) {
+        toast.error('Please enter a show name to generate')
+        return
+      }
+
+      isGenerating.value = true
+      try {
+        const response = await fetchApi('api/generate_show', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ show_name: showForm.name })
+        })
+
+        // Update main show fields
+        showForm.name = response.name
+        showForm.description = response.description
+        showForm.relations = response.relations
+
+        // Handle main image
+        if (response.poster_url) {
+          try {
+            const imageRes = await fetch(response.poster_url)
+            const blob = await imageRes.blob()
+            const file = new File([blob], 'poster.jpg', { type: blob.type })
+            selectedFile.value = file
+            imagePreview.value = URL.createObjectURL(file)
+          } catch (error) {
+            toast.error('Could not load show image: ' + error.message)
+          }
+        }
+
+        // Process characters
+        const processedCharacters = await Promise.all(
+          response.characters.map(async (char) => {
+            let imageFile = null
+            let imagePreview = null
+            
+            if (char.image_url) {
+              try {
+                const charImageRes = await fetch(char.image_url)
+                const charBlob = await charImageRes.blob()
+                imageFile = new File([charBlob], `${char.name}.jpg`, { type: charBlob.type })
+                imagePreview = URL.createObjectURL(charBlob)
+              } catch (error) {
+                console.error('Error loading character image:', error)
+              }
+            }
+
+            return {
+              name: char.name,
+              description: char.description,
+              imagePreview,
+              imageFile
+            }
+          })
+        )
+
+        showForm.characters = processedCharacters
+        characterFileInputs.value = new Array(processedCharacters.length).fill(null)
+
+        toast.success('Show generated successfully!')
+      } catch (error) {
+        toast.error('Failed to generate show: ' + error.message)
+      } finally {
+        isGenerating.value = false
+      }
+    }
+
     return {
       showForm,
       imagePreview,
@@ -383,6 +464,7 @@ export default {
       isSaving,
       isLoading,
       isEditMode,
+      isGenerating,
       isFormValid,
       fileInput,
       characterFileInputs,
@@ -395,6 +477,7 @@ export default {
       triggerCharacterFileInput,
       clearCharacterImage,
       saveShow,
+      generateShow,
       cancel
     }
   }

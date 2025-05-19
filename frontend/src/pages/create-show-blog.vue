@@ -23,6 +23,22 @@
             With Sitchat, creating your own sitcom-style experience is just a few clicks away.
           </p>
         </section>
+
+                <!-- Experimental AI Feature -->
+        <section class="mb-12">
+          <article class="p-6 bg-accent/10 rounded-xl border border-accent/20">
+            <div class="flex items-center gap-3 mb-4">
+              <div class="p-2 rounded-lg bg-primary/10">
+                🤖
+              </div>
+              <h2 class="text-2xl font-bold">New: AI-Generate Show (Experimental)</h2>
+            </div>
+            <p class="text-foreground/80">
+              We’ve introduced an experimental "Generate with AI" feature! Now you can create a show by simply providing its name and pressing the <strong>Generate with AI</strong> button. 
+              Please note, this feature is still in testing—make sure to review and confirm all show details before finalizing creation. It currently works only with existing shows.
+            </p>
+          </article>
+        </section>
   
         <section class="space-y-8">
           <!-- Step-by-Step Guide -->

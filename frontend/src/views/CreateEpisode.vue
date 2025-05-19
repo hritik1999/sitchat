@@ -93,10 +93,6 @@
         <div class="space-y-2">
           <div class="flex justify-between items-center">
             <Label>Plot Objectives</Label>
-            <Button @click="addObjective" type="button" variant="outline" size="sm">
-              <PlusIcon class="h-4 w-4 mr-2" />
-              Add Objective
-            </Button>
           </div>
   
           <!-- Objective Cards -->
@@ -128,7 +124,10 @@
             </div>
           </div>
         </div>
-  
+          <Button @click="addObjective" type="button" class="w-full" size="sm">
+              <PlusIcon class="h-4 w-4 mr-2" />
+              Add Objective
+            </Button>
         <!-- Form Actions -->
         <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-6">
           <Button @click="cancel" type="button" variant="outline" class="w-full sm:w-auto">

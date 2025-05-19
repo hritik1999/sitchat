@@ -8,7 +8,7 @@ from typing import List, Optional
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
-import replicate
+from tvdb_v4_official import TVDB
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Type, Any, List, Dict
 import os
@@ -570,19 +570,23 @@ class GenerateScript(Resource):
     
 class GenerateShow(Resource):
     def post(self):
-        data = request.json or {}
+        try:
+            data = request.get_json(force=True)
+        except Exception as e:
+            return {"error": "Invalid JSON."}, 400
+
         show_name = data.get('show_name')
-        if not show_name:
-            return {"error": "Missing 'show_name' in request body."}, 400
+        if not show_name or not isinstance(show_name, str):
+            return {"error": "Missing or invalid 'show_name' in request body."}, 400
 
         # Generate show metadata via LLM
         prompt = f"""
             You are an assistant that builds TV show metadata given a show title.
-            Input: the exact show name.
+            Input: show name.
             Output a JSON object with these keys:
             - name: string (the show title)
             - description: string (brief summary)
-            - characters: array of objects, each with:
+            - characters: array of objects with all the main characters, each with:
                 * name: string (the character's name as called in-show)
                 * description: string (brief personality/role)
             - relations: string (a paragraph describing relationships among characters)
@@ -590,10 +594,14 @@ class GenerateShow(Resource):
             Show name: {show_name}
         """
         template = PromptTemplate.from_template(prompt)
-        llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.7)
-        raw = (template | llm).invoke({}).content.strip()
+        llm = ChatOpenAI(model_name="gpt-4.1-mini", temperature=0.7)
 
-        # Strip Markdown fences if present
+        try:
+            raw = (template | llm).invoke({}).content.strip()
+        except Exception as e:
+            return {"error": "Failed to generate metadata."}, 502
+
+        # Strip Markdown fences
         for fence in ("```json", "```"):
             if raw.startswith(fence):
                 raw = raw[len(fence):]
@@ -603,54 +611,54 @@ class GenerateShow(Resource):
         try:
             metadata = json.loads(raw)
         except json.JSONDecodeError as e:
-            return {"error": f"LLM returned invalid JSON: {e}"}, 500
+            return {"error": f"Invalid JSON from LLM: {str(e)}"}, 500
 
-        # Prepare Replicate client
-        replicate_token = os.environ.get('REPLICATE_API_TOKEN')
-        if not replicate_token:
-            return {"error": "Missing 'REPLICATE_API_TOKEN' in environment."}, 500
-        client = replicate.Client(api_token=replicate_token)
+        api_key = os.getenv("TVDB_API_KEY")
+        if not api_key:
+            return {"error": "Server configuration error."}, 500
 
-        def generate_image(prompt_text: str) -> str:
-            model = "black-forest-labs/flux-1.1-pro"
-            output_urls = client.run(
-                model,
-                input={"prompt": prompt_text,"prompt_upsampling": True}
-            )
-            first = output_urls[0]
-            return first.url
+        try:
+            tvdb = TVDB(api_key)
+        except Exception as e:
+            return {"error": "Service unavailable."}, 503
 
-        # Collect all prompts
-        tasks = {}
-        with ThreadPoolExecutor(max_workers=20) as executor:
-            # schedule poster
-            poster_prompt = (
-                    f"A whimsical, animated‑style poster for the TV show titled “{show_name},” "
-                    "featuring bold, playful typography and a dynamic composition. "
-                    "Render in a vibrant cartoon aesthetic with thick outlines, a bright color palette, "
-                    "and lively background elements—think confetti, stars, or stylized swirls—to convey "
-                    "a cheerful, energetic vibe."
-                )
-            tasks[executor.submit(generate_image, poster_prompt)] = ("poster_url", None)
+        # Search series
+        try:
+            results = tvdb.search(show_name, language="en")
+        except Exception as e:
+            results = []
 
-            # schedule each character
-            for char in metadata.get("characters", []):
-                name = char.get("name", "")
-                prompt_text = (
-                        f"A fun, animated portrait of the character “{name}” from the show “{show_name}.” "
-                        "Depict them in a cartoon style with exaggerated, expressive features (big sparkling eyes, "
-                        "wide smile), a dynamic pose, and a colorful, patterned backdrop. "
-                        "Use vibrant hues and bold linework to give it a playful, lighthearted feel."
-                    )
-                tasks[executor.submit(generate_image, prompt_text)] = ("char", char)
+        if not results:
+            metadata["poster_url"] = None
+            series = {}
+        else:
+            series_id = results[0].get("tvdb_id")
+            if not series_id:
+                metadata["poster_url"] = None
+                series = {}
+            else:
+                try:
+                    series = tvdb.get_series_extended(id=series_id)
+                except Exception as e:
+                    series = {}
+                # Extract poster
+                artworks = series.get('artworks', [])
+                poster_url = None
+                if artworks:
+                    try:
+                        portrait_eng = [p for p in artworks if p.get('type') == 3 and p.get('language') == 'eng' and p.get('width', 0) > p.get('height', 0)]
+                        portrait_eng.sort(key=lambda x: x.get('score', 0), reverse=True)
+                        poster_url = portrait_eng[0].get('image') if portrait_eng else None
+                    except Exception:
+                        poster_url = None
+                metadata["poster_url"] = poster_url
 
-            # wait for all to finish
-            for future in as_completed(tasks):
-                key, target = tasks[future]
-                url = future.result()
-                if key == "poster_url":
-                    metadata["poster_url"] = url
-                else:  # character image
-                    target["image_url"] = url
-        print(f"Generated metadata: {metadata}")
+        # Map character images
+        cast_list = series.get('characters', []) or []
+        print(cast_list)
+        image_map = {c.get('name', '').lower(): c.get('image') for c in cast_list}
+        for char in metadata.get('characters', []):
+            name_key = char.get('name', '').lower()
+            char['image_url'] = image_map.get(name_key)
+
         return metadata, 200

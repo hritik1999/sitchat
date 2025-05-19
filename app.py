@@ -43,8 +43,8 @@ app.config['SECRET_KEY'] = SECRET_KEY
 app.config['DEBUG'] = DEBUG
 
 # Set CPU and memory thresholds
-CPU_THRESHOLD = 90.0
-MEM_THRESHOLD = 85.0
+CPU_THRESHOLD = 95.0
+MEM_THRESHOLD = 95.0
 
 # Check if server is overloaded
 @app.before_request
@@ -52,7 +52,7 @@ def reject_if_overloaded():
     # measure over a short interval so it’s “current”
     cpu = psutil.cpu_percent(interval=None)
     mem = psutil.virtual_memory().percent
-    print(f"CPU: {cpu}, MEM: {mem}")
+    logger.info(f"CPU: {cpu}, Memory: {mem}")
     if cpu > CPU_THRESHOLD or mem > MEM_THRESHOLD:
         # 503 → Service Unavailable
         return jsonify({
