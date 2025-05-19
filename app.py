@@ -43,8 +43,8 @@ app.config['SECRET_KEY'] = SECRET_KEY
 app.config['DEBUG'] = DEBUG
 
 # Set CPU and memory thresholds
-CPU_THRESHOLD = 95.0
-MEM_THRESHOLD = 95.0
+CPU_THRESHOLD = 90.0
+MEM_THRESHOLD = 90.0
 
 # Check if server is overloaded
 @app.before_request

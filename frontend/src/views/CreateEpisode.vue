@@ -37,7 +37,7 @@
             <div class="flex items-center justify-between">
               <Label
                 for="episode-description"
-                class="text-lg font-medium text-gray-700"
+                class="text-lg font-medium text-gray-700 dark:text-white"
               >
                 Description
               </Label>
