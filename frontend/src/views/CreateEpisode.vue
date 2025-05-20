@@ -49,7 +49,7 @@
                 class="text-sm px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-shadow"
               >
                 <Loader2Icon v-if="isGenerating" class="h-4 w-4 mr-2 animate-spin" />
-                  {{ isGenerating ? 'Generating...' : 'Generate with AI' }}<BrainCog/>
+                  {{ isGenerating ? 'Generating...' : 'Generate with AI (Beta)' }}<BrainCog/>
               </Button>
             </div>
 

@@ -88,7 +88,7 @@ class Director:
             - a natural progression from established events
             - Maintain consistency with character motivations and personalities
             - Integrate consequences of previous player choices
-            - Advance meaningfully toward the plot objective
+            - Advance meaningfully toward the plot objective and achieve it
             - Include potential decision points for player agency
             3. Constraints for Scene Development
             - Focus on narrative description rather than dialogue scripting

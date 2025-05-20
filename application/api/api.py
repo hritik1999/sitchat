@@ -11,6 +11,7 @@ from langchain.prompts import PromptTemplate
 from tvdb_v4_official import TVDB
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Type, Any, List, Dict
+import difflib
 import os
 import uuid
 import json
@@ -605,7 +606,7 @@ class GenerateShow(Resource):
             Show name: {show_name}
         """
         template = PromptTemplate.from_template(prompt)
-        llm = ChatOpenAI(model_name="gpt-4.1-mini", temperature=0.7)
+        llm = ChatOpenAI(model_name="gpt-4o", temperature=0.7)
 
         try:
             raw = (template | llm).invoke({}).content.strip()
@@ -664,12 +665,49 @@ class GenerateShow(Resource):
                         poster_url = None
                 metadata["poster_url"] = poster_url
 
-        # Map character images
+        def normalize(name):
+            return ''.join(name.lower().split())
+
+        def find_best_match(name, candidates, cutoff=0.6):
+            """
+            Try exact, token‐overlap, and fuzzy matches in that order.
+            Returns the best candidate key or None.
+            """
+            norm = normalize(name)
+
+            # 1. Exact normalized match
+            if norm in candidates:
+                return norm
+
+            # 2. Token overlap: require at least one token in common
+            name_tokens = set(name.lower().split())
+            overlaps = []
+            for cand in candidates:
+                cand_tokens = set(cand.split())
+                if name_tokens & cand_tokens:
+                    overlaps.append(cand)
+            if overlaps:
+                # if multiple, pick the one with highest overlap count
+                overlaps.sort(key=lambda c: len(name_tokens & set(c.split())), reverse=True)
+                return overlaps[0]
+
+            # 3. Fuzzy matching
+            close = difflib.get_close_matches(norm, candidates, n=1, cutoff=cutoff)
+            return close[0] if close else None
+
         cast_list = series.get('characters', []) or []
-        print(cast_list)
-        image_map = {c.get('name', '').lower(): c.get('image') for c in cast_list}
+        image_map = {
+            normalize(c.get('name','')): c.get('image')
+            for c in cast_list
+            if c.get('name')
+        }
+
         for char in metadata.get('characters', []):
-            name_key = char.get('name', '').lower()
-            char['image_url'] = image_map.get(name_key)
+            raw_name = char.get('name', '')
+            if not raw_name:
+                continue
+
+            best = find_best_match(raw_name, image_map.keys())
+            char['image_url'] = image_map.get(best) if best else None
 
         return metadata, 200
