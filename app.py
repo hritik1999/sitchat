@@ -9,8 +9,9 @@ from application.api.socket import  setup_socket_handlers, active_stages
 from flask_cors import CORS
 from flask_restful import Api
 from flask_socketio import SocketIO,disconnect
-
+import threading
 import logging
+import time
 import sys
 import psutil
 sys.stdout.flush()
@@ -46,18 +47,41 @@ app.config['DEBUG'] = DEBUG
 CPU_THRESHOLD = 90.0
 MEM_THRESHOLD = 90.0
 
-# Check if server is overloaded
+# thread‑safe container for latest metrics
+_latest = {
+    "cpu_ema": psutil.cpu_percent(interval=None),
+    "mem_ema": psutil.virtual_memory().percent,
+}
+_lock   = threading.Lock()
+
+def _metric_loop():
+    """Single background thread: sleep, sample, repeat."""
+    alpha = 0.2  # smoothing factor: lower → smoother, slower to react
+    while True:
+        cpu = psutil.cpu_percent(interval=None)
+        mem = psutil.virtual_memory().percent
+        with _lock:
+            # update both the EMA and (optionally) the raw values
+            _latest["cpu_ema"] = alpha * cpu + (1 - alpha) * _latest["cpu_ema"]
+            _latest["mem_ema"] = alpha * mem + (1 - alpha) * _latest["mem_ema"]
+        time.sleep(1.0)  # sample once per second
+
+# start once, as a daemon so it won’t block shutdown
+thread = threading.Thread(target=_metric_loop, daemon=True)
+thread.start()
+
 @app.before_request
 def reject_if_overloaded():
-    # measure over a short interval so it’s “current”
-    cpu = psutil.cpu_percent(interval=None)
-    mem = psutil.virtual_memory().percent
-    logger.info(f"CPU: {cpu}, Memory: {mem}")
+    with _lock:
+        cpu = _latest["cpu_ema"]
+        mem = _latest["mem_ema"]
+
+    app.logger.info(f"CPU (EMA): {cpu:.1f}%, Memory (EMA): {mem:.1f}%")
     if cpu > CPU_THRESHOLD or mem > MEM_THRESHOLD:
-        # 503 → Service Unavailable
         return jsonify({
             "error": "Server is at full capacity, please try again later."
         }), 503
+
 
 # Initialize Socket.IO with more compatible settings
 socketio = SocketIO(
@@ -84,11 +108,9 @@ def authenticate_socket():
     auth_header = None
     token = None
 
-    cpu = psutil.cpu_percent(interval=None)
-    mem = psutil.virtual_memory().percent
-    if cpu > CPU_THRESHOLD or mem > MEM_THRESHOLD:
-        # immediately drop the socket
-        return disconnect()
+    with _lock:
+        if _latest["cpu_ema"] > CPU_THRESHOLD or _latest["mem_ema"] > MEM_THRESHOLD:
+            return disconnect() 
     
     # Check for token in auth data
     if hasattr(request, 'args') and request.args.get('token'):
