@@ -153,7 +153,7 @@ class Director:
 
                     ### 2. Player Engagement (CRITICAL)
                         - Do NOT include the player as a scripted character.
-                        - If there is any unattended player message in chat_history, the FIRST script element must address that player message directly.
+                        -(**MOST IMPORTANT**) If there is any unattended player message in chat_history, the FIRST script instruction/element must address that player message directly.(**MOST IMPORTANT**)
                         - Do not rely on the player to supply key plot details; present clear choices when decision points arise.
                         - Create meaningful interaction opportunities that respect player agency.
 
