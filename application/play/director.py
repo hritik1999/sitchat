@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from application.ai.llm import director_llm
 class ScriptStep(BaseModel):
-    role: str = Field(..., description="Character name or 'Narration'")
+    role: str = Field(..., description="Character name or 'Narration' (should not be the player)")
     instruction: Optional[str] = Field(None, description="Instruction guidance for characters")
     content: Optional[str] = Field(None, description="Scene setting for narration if applicable")
 
@@ -153,7 +153,7 @@ class Director:
 
                     ### 2. Player Engagement (CRITICAL)
                         - Do NOT include the player as a scripted character.
-                        -(**MOST IMPORTANT**) If there is any player message in chat_history that has not been answered by any character then the FIRST script instruction/element must address the player message immediately.(**MOST IMPORTANT**)
+                        -(**MOST IMPORTANT**) If there is any player message in chat_history that has not been answered by any character then the FIRST script instruction should be to a character to answer the player's message.(**MOST IMPORTANT**)
                         - Do not rely on the player to supply key plot details; present clear choices when decision points arise.
                         - Create meaningful interaction opportunities that respect player agency.
 
