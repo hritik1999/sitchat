@@ -312,10 +312,10 @@
             const script = response.script
             console.log('Script:', script)
             this.episodeForm.description = script['Description'] || script['description'] 
-            this.episodeForm.plot_objectives = script['Plot Objectives'] || script['plot_objectives'] || script['PlotObjectives']
-            this.episodeForm.background = script['Initial Setup'] || script['initial_setup'] || script['InitialSetup']
-            this.episodeForm.player_role = script['Player Role'] || script['player_role'] || script['PlayerRole']
-            this.episodeForm.name = script['Episode Name'] || script['episode_name'] || script['EpisodeName']
+            this.episodeForm.plot_objectives = script['Plot Objectives'] || script['plot_objectives'] || script['PlotObjectives'] || script['plotObjective']
+            this.episodeForm.background = script['Initial Setup'] || script['initial_setup'] || script['InitialSetup'] || script['initialSetup']
+            this.episodeForm.player_role = script['Player Role'] || script['player_role'] || script['PlayerRole'] || script['playerRole']
+            this.episodeForm.name = script['Episode Name'] || script['episode_name'] || script['EpisodeName'] || script['episodeName']
 
         } catch (error) {
           this.toast.error(error.message || 'An error occurred while generating script')
