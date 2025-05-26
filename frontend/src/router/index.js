@@ -436,7 +436,6 @@ router.afterEach((to) => {
     ogImg.setAttribute('content', to.meta.ogImage);
   }
 
-  document.dispatchEvent(new Event('render-event'));
 });
 
 export default router;
