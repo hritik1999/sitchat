@@ -7,7 +7,7 @@
         <div class="container mx-auto flex justify-between items-center">
           <div class="flex items-center">
             <!-- Show Thumbnail -->
-            <img v-if="showImageUrl" :src="showImageUrl" alt="Show Thumbnail" class="h-12 w-12 mr-4 rounded" />
+            <img v-if="showImageUrl" :src="showImageUrl" loading="lazy" alt="Show Thumbnail" class="h-12 w-12 mr-4 rounded" />
             <div>
               <h1 class="text-xl font-bold inline-block dark:text-white">{{ showName }}</h1>
               <p class="text-sm text-muted-foreground dark:text-gray-400">{{ episodeName }}</p>
@@ -56,7 +56,7 @@
             <!-- Avatar -->
             <img
               v-if="(msg.role !== 'Player' && getCharacterImageUrl(msg.role)) || (msg.role === 'Player' && playerImageUrl)"
-              :src="msg.role === 'Player' ? playerImageUrl : getCharacterImageUrl(msg.role)" alt="Avatar"
+              :src="msg.role === 'Player' ? playerImageUrl : getCharacterImageUrl(msg.role)" alt="Avatar" loading='lazy'
               class="h-14 w-14 rounded-full flex-shrink-0" />
 
             <!-- Content -->
@@ -77,7 +77,7 @@
           <div v-if="hasActiveTypingIndicators" class="my-2">
             <div v-for="(status, role) in typingIndicators" :key="role">
               <div v-if="status === 'typing'" class="flex items-start gap-3">
-                <img v-if="getCharacterImageUrl(role)" :src="getCharacterImageUrl(role)" alt="Typing Avatar"
+                <img v-if="getCharacterImageUrl(role)" :src="getCharacterImageUrl(role)" alt="Typing Avatar" loading="lazy"
                   class="h-10 w-10 rounded-full flex-shrink-0" />
                 <div class="flex-1 max-w-[70%]">
                   <div class="flex items-center">

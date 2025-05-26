@@ -37,11 +37,11 @@
       >
       <div class="relative w-full pb-[56.25%] bg-muted overflow-hidden">
           <img
-            :src="show.imageUrl || '/placeholder-image.jpg'"
+            :src="show.imageUrl || '@/assets/og_default.jpg'"
             class="absolute inset-0 w-full h-full object-contain"
+            loading='lazy'
             :alt="`${show.name} thumbnail`"
             @error="handleImageError"
-            loading="lazy"
             @click="viewShowDetails(show.id)"
           />
           <!-- optional gradient overlay—if you still want it -->
@@ -150,7 +150,7 @@ export default {
     
     handleImageError(event) {
       // Replace broken image with placeholder
-      event.target.src = '/placeholder-image.jpg'
+      event.target.src = '@/assets/og_default.jpg'
     },
     toggleDescription(show) {
       show.isExpanded = !show.isExpanded;

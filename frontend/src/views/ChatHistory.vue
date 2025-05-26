@@ -38,7 +38,7 @@
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
               <div class="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center text-primary font-bold overflow-hidden">
-                <img v-if="showData.show_image" :src="showData.show_image" alt="Show image" class="h-full w-full object-cover">
+                <img v-if="showData.show_image" :src="showData.show_image" loading="lazy" alt="Show image" class="h-full w-full object-cover">
                 <span v-else>{{ showData.show_name.charAt(0) }}</span>
               </div>
               <h2 class="text-xl font-bold">{{ showData.show_name }}</h2>

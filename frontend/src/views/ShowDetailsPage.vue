@@ -15,6 +15,7 @@
     <div class="relative min-h-[20rem] sm:h-96 bg-muted">
       <img
         :src="show.image_url || '/placeholder-show.jpg'"
+        loading='lazy'
         class="w-full h-full object-cover object-top sm:object-center absolute inset-0 "
         alt="Show banner"
       />
@@ -122,7 +123,7 @@
             class="text-center space-y-2"
           >
             <div class="relative w-full aspect-square rounded-full overflow-hidden bg-muted mx-auto">
-              <img :src="character.image_url" alt="Character Image" class="object-cover w-full h-full" />
+              <img :src="character.image_url" alt="Character Image" class="object-cover w-full h-full" loading='lazy' />
             </div>
             <h3 class="font-medium text-foreground">{{ character.name }}</h3>
           </div>

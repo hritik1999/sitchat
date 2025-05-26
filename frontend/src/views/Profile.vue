@@ -387,11 +387,10 @@ import { fetchApi } from '@/lib/utils'
         },
     mounted() {
       this.getUserDetails()
-      this.initializeTheme()
     },
     methods: {
       initializeTheme() {
-        const savedTheme = localStorage.getItem('theme') || 'light'
+        const savedTheme = localStorage.getItem('theme')
         document.documentElement.classList.toggle('dark', savedTheme === 'dark')
       },
       toggleDarkMode() {

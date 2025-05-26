@@ -45,6 +45,7 @@
                   class="h-10 w-10 rounded-full object-cover"
                   @error="handleImageError"
                   :alt="user.username || 'Anonymous'"
+                  loading='lazy'
                 />
                 <Avatar v-else>
                   <AvatarFallback>{{ user.username.split(/[\s_-]/).map(n => n[0]).join('').toUpperCase() }}</AvatarFallback>
