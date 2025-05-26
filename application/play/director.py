@@ -154,7 +154,7 @@ class Director:
                         - If the plot objective has been met in chat_history, return an empty list and skip all other steps.
 
                     ### 2. Player Engagement (CRITICAL)
-                        - Do NOT include the player as a scripted character.
+                        - Do NOT include the player in the script element as they have full agency and can make their own choices.
                         -(**MOST IMPORTANT**) If there is any player message in chat_history that has not been answered by any character then the FIRST script instruction should be to a character to answer the player's message.(**MOST IMPORTANT**)
                         - Do not rely on the player to supply key plot details; present clear choices when decision points arise.
                         - Create meaningful interaction opportunities that respect player agency.
