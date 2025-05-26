@@ -409,33 +409,119 @@ router.beforeEach(async (to, from, next) => {
 });
 
 router.afterEach((to) => {
-  // 1) document.title
+  // Helper function to update or create meta tag
+  const updateMetaTag = (selector, attribute, attributeName, content) => {
+    let tag = document.querySelector(selector);
+    if (!tag) {
+      tag = document.createElement('meta');
+      tag.setAttribute(attribute, attributeName);
+      document.head.appendChild(tag);
+    }
+    tag.setAttribute('content', content);
+  };
+
+  // 1) Document title
   if (to.meta.title) {
     document.title = to.meta.title;
   }
 
-  // 2) description tag
+  // 2) Meta description
   if (to.meta.description) {
-    let desc = document.querySelector('meta[name="description"]');
-    if (!desc) {
-      desc = document.createElement('meta');
-      desc.setAttribute('name', 'description');
-      document.head.appendChild(desc);
-    }
-    desc.setAttribute('content', to.meta.description);
+    updateMetaTag('meta[name="description"]', 'name', 'description', to.meta.description);
   }
 
-  // 3) Open Graph image (similarly you can handle og:title, og:description, twitter:card…)
+  // 3) Open Graph title
+  if (to.meta.ogTitle) {
+    updateMetaTag('meta[property="og:title"]', 'property', 'og:title', to.meta.ogTitle);
+  }
+
+  // 4) Open Graph description
+  if (to.meta.ogDescription) {
+    updateMetaTag('meta[property="og:description"]', 'property', 'og:description', to.meta.ogDescription);
+  }
+
+  // 5) Open Graph image
   if (to.meta.ogImage) {
-    let ogImg = document.querySelector('meta[property="og:image"]');
-    if (!ogImg) {
-      ogImg = document.createElement('meta');
-      ogImg.setAttribute('property', 'og:image');
-      document.head.appendChild(ogImg);
-    }
-    ogImg.setAttribute('content', to.meta.ogImage);
+    updateMetaTag('meta[property="og:image"]', 'property', 'og:image', to.meta.ogImage);
   }
 
+  // 6) Open Graph type (default to 'website' if not specified)
+  const ogType = to.meta.ogType || 'website';
+  updateMetaTag('meta[property="og:type"]', 'property', 'og:type', ogType);
+
+  // 7) Open Graph URL (current page URL)
+  const ogUrl = window.location.href;
+  updateMetaTag('meta[property="og:url"]', 'property', 'og:url', ogUrl);
+
+  // 8) Open Graph site name
+  updateMetaTag('meta[property="og:site_name"]', 'property', 'og:site_name', SITE_NAME);
+
+  // 9) Twitter card type
+  if (to.meta.twitterCard) {
+    updateMetaTag('meta[name="twitter:card"]', 'name', 'twitter:card', to.meta.twitterCard);
+  }
+
+  // 10) Twitter title (use ogTitle or title as fallback)
+  const twitterTitle = to.meta.twitterTitle || to.meta.ogTitle || to.meta.title;
+  if (twitterTitle) {
+    updateMetaTag('meta[name="twitter:title"]', 'name', 'twitter:title', twitterTitle);
+  }
+
+  // 11) Twitter description (use ogDescription or description as fallback)
+  const twitterDescription = to.meta.twitterDescription || to.meta.ogDescription || to.meta.description;
+  if (twitterDescription) {
+    updateMetaTag('meta[name="twitter:description"]', 'name', 'twitter:description', twitterDescription);
+  }
+
+  // 12) Twitter image (use ogImage as fallback)
+  const twitterImage = to.meta.twitterImage || to.meta.ogImage;
+  if (twitterImage) {
+    updateMetaTag('meta[name="twitter:image"]', 'name', 'twitter:image', twitterImage);
+  }
+
+  // 13) Twitter site handle (if you have one)
+  if (to.meta.twitterSite) {
+    updateMetaTag('meta[name="twitter:site"]', 'name', 'twitter:site', to.meta.twitterSite);
+  }
+
+  // 14) Twitter creator handle (if specified)
+  if (to.meta.twitterCreator) {
+    updateMetaTag('meta[name="twitter:creator"]', 'name', 'twitter:creator', to.meta.twitterCreator);
+  }
+
+  // 15) Canonical URL (helps with SEO)
+  let canonical = document.querySelector('link[rel="canonical"]');
+  if (!canonical) {
+    canonical = document.createElement('link');
+    canonical.setAttribute('rel', 'canonical');
+    document.head.appendChild(canonical);
+  }
+  canonical.setAttribute('href', window.location.href);
+
+  // 16) Additional meta tags if specified
+  if (to.meta.keywords) {
+    updateMetaTag('meta[name="keywords"]', 'name', 'keywords', to.meta.keywords);
+  }
+
+  if (to.meta.author) {
+    updateMetaTag('meta[name="author"]', 'name', 'author', to.meta.author);
+  }
+
+  if (to.meta.robots) {
+    updateMetaTag('meta[name="robots"]', 'name', 'robots', to.meta.robots);
+  }
+
+  // 17) Viewport meta tag (if not already set globally)
+  if (!document.querySelector('meta[name="viewport"]')) {
+    updateMetaTag('meta[name="viewport"]', 'name', 'viewport', 'width=device-width, initial-scale=1.0');
+  }
+
+  // 18) Theme color (if specified)
+  if (to.meta.themeColor) {
+    updateMetaTag('meta[name="theme-color"]', 'name', 'theme-color', to.meta.themeColor);
+  }
+
+  // Dispatch the render event (keeping your existing functionality)
   document.dispatchEvent(new Event('render-event'));
 });
 
