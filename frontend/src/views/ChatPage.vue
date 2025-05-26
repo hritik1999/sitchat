@@ -14,8 +14,8 @@
             </div>
           </div>
           <Button variant="outline" @click="goBack" size="sm" class="dark:border-gray-600 dark:text-gray-300">
-            <ArrowLeftIcon class="h-4 w-4 mr-2" />
-            Back
+            <ArrowLeftIcon class="h-4 w-4" />
+           <span class="hidden sm:inline">Back</span>
           </Button>
         </div>
       </div>
@@ -103,21 +103,29 @@
           </div>
         </div>
 
-        <!-- Input Area -->
-        <div class="border-t dark:border-gray-700 p-4">
-          <Textarea ref="messageInput" v-model="input" placeholder="Type your response..." 
-            class="resize-none dark:bg-gray-800 dark:text-white dark:border-gray-600" rows="2"
-            :disabled="isSending || storyCompleted" maxlength="500" @keydown.enter.exact.prevent="sendMessage"
-            @keydown="handleTyping" />
-          <div class="mt-2 flex justify-between items-center">
-            <span class="text-sm text-muted-foreground dark:text-gray-400">{{ input.length }}/500</span>
-            <Button @click="sendMessage" :disabled="!input.trim() || isSending || storyCompleted"
-              class="dark:bg-blue-600 dark:hover:bg-blue-700 dark:text-white">
-              Send
-              <SendIcon class="h-4 w-4 ml-2" />
-            </Button>
-          </div>
-        </div>
+<!-- Mobile-Friendly Input Area -->
+<div class="border-t dark:border-gray-700 p-3">
+  <div class="flex gap-2 items-end">
+    <Textarea 
+      ref="messageInput" 
+      v-model="input" 
+      placeholder="Type your response..."
+      class="flex-1 resize-none dark:bg-gray-800 dark:text-white dark:border-gray-600 min-h-[40px]" 
+      rows="1"
+      :disabled="isSending || storyCompleted" 
+      maxlength="500" 
+      @keydown.enter.exact.prevent="sendMessage"
+      @keydown="handleTyping" 
+    />
+    <Button 
+      @click="sendMessage" 
+      :disabled="!input.trim() || isSending || storyCompleted"
+      class="dark:bg-blue-600 dark:hover:bg-blue-700 dark:text-white shrink-0 h-[40px] w-[40px] p-0"
+    >
+      <SendIcon class="h-4 w-4" />
+    </Button>
+  </div>
+</div>
       </div>
     </div>
   </div>

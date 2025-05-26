@@ -61,7 +61,7 @@
     </nav>
 
     <!-- Mobile Bottom Nav -->
-    <div class="fixed bottom-0 left-0 right-0 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-950/60 md:hidden z-50">
+    <div class="fixed pb-2 pt-2 bottom-0 left-0 right-0 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-slate-950/60 md:hidden z-50">
       <div class="grid grid-cols-4 gap-2 p-2">
         <router-link 
           to="/shows"

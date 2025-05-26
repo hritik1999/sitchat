@@ -4,6 +4,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from application.ai.llm import director_llm
+import json
 class ScriptStep(BaseModel):
     role: str = Field(..., description="Character name or 'Narration' (should not be the player)")
     instruction: Optional[str] = Field(None, description="Instruction guidance for characters")
@@ -116,6 +117,7 @@ class Director:
         chat_prompt = ChatPromptTemplate.from_messages(messages)
         chain = chat_prompt | self.llm | self.outline_parser
         outline = chain.invoke({})
+        print(json.dumps(outline, indent=4))
         return outline
     
     def generate_turn_instructions(self,chat_history,outline,plot_failure_reason='None',plot_objective='',num_lines=5):
@@ -202,6 +204,7 @@ class Director:
         chat_prompt = ChatPromptTemplate.from_messages(messages)
         chain = chat_prompt | self.llm | self.turn_parser
         script = chain.invoke({})
+        print(json.dumps(script, indent=4))
         return script
     
     def check_objective(self,chat_history,plot_objective):
