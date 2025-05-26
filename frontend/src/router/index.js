@@ -436,6 +436,17 @@ router.afterEach((to) => {
     ogImg.setAttribute('content', to.meta.ogImage);
   }
 
+  // 4) twitter card
+  if (to.meta.twitterCard) {
+    let twitterCard = document.querySelector('meta[name="twitter:card"]');
+    if (!twitterCard) {
+      twitterCard = document.createElement('meta');
+      twitterCard.setAttribute('name', 'twitter:card');
+      document.head.appendChild(twitterCard);
+    }
+    twitterCard.setAttribute('content', to.meta.twitterCard);
+  }
+
   document.dispatchEvent(new Event('render-event'));
 });
 
