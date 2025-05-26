@@ -1,40 +1,48 @@
-// scripts/generate-sitemap.js
-const path = require('path');
-const fs = require('fs-extra');
-const { SitemapStream, streamToPromise } = require('sitemap');
+#!/usr/bin/env node
+import fs from 'fs-extra';
+import path from 'path';
+import { SitemapStream, streamToPromise } from 'sitemap';
 
-// 1) Load your router file and grab the routes array
-const { routes } = require('@/src/router/index.js');
-
-// 2) Define your hostname
-const hostname = 'https://sitchat.ai';
-
-// 3) Filter out dynamic routes (those with “:” in the path)
-const staticRoutes = routes
-  .map(r => r.path)
-  .filter(p => !p.includes(':'));
-
-// 4) Create the sitemap
 async function buildSitemap() {
-  // ensure dist folder exists
-  const distPath = path.resolve(__dirname, '@/dist');
-  await fs.ensureDir(distPath);
+  // 1) Read your router file as plain text
+  const routerFile = path.resolve('src/router/index.js');
+  const content = await fs.readFile(routerFile, 'utf-8');
 
-  const sitemapStream = new SitemapStream({ hostname });
-  const writeStream = fs.createWriteStream(path.join(distPath, 'sitemap.xml'));
-  sitemapStream.pipe(writeStream);
+  // 2) Extract all `path: '/something'` values
+  const pathRegex = /path:\s*['"`]([^'"`]+)['"`]/g;
+  const allPaths = Array.from(content.matchAll(pathRegex), m => m[1]);
 
+  // 3) De-duplicate and filter out dynamic routes (those containing ':')
+  const staticRoutes = [...new Set(allPaths)].filter(p => !p.includes(':'));
+
+  // 4) Ensure your dist folder exists
+  const distDir = path.resolve('dist');
+  await fs.ensureDir(distDir);
+
+  // 5) Create & write sitemap.xml
+  const sitemapPath = path.join(distDir, 'sitemap.xml');
+  const writeStream = fs.createWriteStream(sitemapPath);
+  const smStream = new SitemapStream({ hostname: 'https://sitchat.ai' });
+
+  // Pipe the sitemap data into the file
+  smStream.pipe(writeStream);
+
+  // Write each URL entry
   staticRoutes.forEach(url => {
-    sitemapStream.write({
+    smStream.write({
       url,
       changefreq: 'daily',
       priority: url === '/' ? 1.0 : 0.8,
     });
   });
-  sitemapStream.end();
 
-  await streamToPromise(writeStream);
-  console.log(`📄  sitemap.xml created with ${staticRoutes.length} entries.`);
+  // Close the stream to flush everything
+  smStream.end();
+
+  // **Here’s the fix**: wait on the SitemapStream, not the write stream
+  await streamToPromise(smStream);
+
+  console.log(`✔️  Generated sitemap.xml with ${staticRoutes.length} URLs.`);
 }
 
 buildSitemap().catch(err => {
