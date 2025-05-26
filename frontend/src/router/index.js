@@ -409,36 +409,34 @@ router.beforeEach(async (to, from, next) => {
 });
 
 router.afterEach((to) => {
-  const head = document.head
-
-  // Helper to upsert a meta tag
-  function upsertMeta(attrName, attrValue, content) {
-    let tag = head.querySelector(`meta[${attrName}="${attrValue}"]`)
-    if (!tag) {
-      tag = document.createElement('meta')
-      tag.setAttribute(attrName, attrValue)
-      head.appendChild(tag)
-    }
-    tag.setAttribute('content', content)
+  // 1) document.title
+  if (to.meta.title) {
+    document.title = to.meta.title;
   }
 
-  // standard description (not used by previews but good for SEO)
+  // 2) description tag
   if (to.meta.description) {
-    upsertMeta('name', 'description', to.meta.description)
+    let desc = document.querySelector('meta[name="description"]');
+    if (!desc) {
+      desc = document.createElement('meta');
+      desc.setAttribute('name', 'description');
+      document.head.appendChild(desc);
+    }
+    desc.setAttribute('content', to.meta.description);
   }
 
-  // Open Graph
-  if (to.meta.ogTitle)       upsertMeta('property', 'og:title',       to.meta.ogTitle)
-  if (to.meta.ogDescription) upsertMeta('property', 'og:description', to.meta.ogDescription)
-  if (to.meta.ogImage)       upsertMeta('property', 'og:image',       to.meta.ogImage)
+  // 3) Open Graph image (similarly you can handle og:title, og:description, twitter:card…)
+  if (to.meta.ogImage) {
+    let ogImg = document.querySelector('meta[property="og:image"]');
+    if (!ogImg) {
+      ogImg = document.createElement('meta');
+      ogImg.setAttribute('property', 'og:image');
+      document.head.appendChild(ogImg);
+    }
+    ogImg.setAttribute('content', to.meta.ogImage);
+  }
 
-  // Twitter
-  if (to.meta.twitterCard)        upsertMeta('name', 'twitter:card',        to.meta.twitterCard)
-  if (to.meta.ogTitle)            upsertMeta('name', 'twitter:title',       to.meta.ogTitle)
-  if (to.meta.ogDescription)      upsertMeta('name', 'twitter:description', to.meta.ogDescription)
-  if (to.meta.ogImage)            upsertMeta('name', 'twitter:image',       to.meta.ogImage)
-
-  document.dispatchEvent(new Event('render-event'))
-})
+  document.dispatchEvent(new Event('render-event'));
+});
 
 export default router;
