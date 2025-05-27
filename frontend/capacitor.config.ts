@@ -4,8 +4,18 @@ const config: CapacitorConfig = {
   appId: 'ai.sitchat.app',
   appName: 'Sitchat',
   webDir: 'dist',
+    server: {
+    allowNavigation: ['https://wpwichwnfgbpggcqujld.supabase.co','https://*.supabase.co'],
+     hostname: 'sitchat',
+    iosScheme: 'capacitor'
+  },
+  ios: {
+    limitsNavigationsToAppBoundDomains: false, // Critical for iOS
+    preferredContentMode: 'mobile',
+    scheme: 'App'
+  },
   plugins: {
-    "Keyboard": {
+    "keyboard": {
       "resize": "body"
     }
   }

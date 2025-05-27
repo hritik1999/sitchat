@@ -1,6 +1,7 @@
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { supabase } from '@/composables/useSupabase';
+import { Capacitor } from '@capacitor/core';
 
 export function cn(...inputs) {
   return twMerge(clsx(inputs));
@@ -20,9 +21,18 @@ export function valueUpdater(updaterOrValue, ref) {
  * @returns {Promise<Object>} - Response data
  */
 export async function fetchApi(endpoint, options = {}) {
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-  const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  const platform = Capacitor.getPlatform();
+  let API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+  
 
+    if (platform === 'android') {
+    // Android emulator → host machine
+    API_BASE_URL = import.meta.env.VITE_API_URL  || 'http://10.0.2.2:5001';
+  } else if (platform === 'ios' && !import.meta.env.VITE_API_URL) {
+    // iOS simulator can still use localhost
+    API_BASE_URL =  import.meta.env.VITE_API_URL || 'http://localhost:5001';
+  }
+  const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
   // Get current session
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
