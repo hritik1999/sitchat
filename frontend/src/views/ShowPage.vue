@@ -136,7 +136,7 @@ export default {
           id: show.id || '',
           name: show.name || '',
           description: show.description || '',
-          imageUrl: show.image_url || '' // Note: API returns image_url, not imageUrl
+          imageUrl: (show.image_url || '').replace(/\?$/, '')
         }))
         
         console.log('Fetched shows:', this.shows)

@@ -48,21 +48,18 @@
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-		<key>NSExceptionDomains</key>
+		<true/> <key>NSExceptionDomains</key>
 		<dict>
-			<key>supabase.co</key>
+			<key>wpwichwnfgbpggcqujld.supabase.co</key>
 			<dict>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<false/>
 				<key>NSIncludesSubdomains</key>
 				<true/>
-				<key>NSRequiresCertificateTransparency</key>
+				<key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSExceptionRequiresForwardSecrecy</key>
 				<false/>
-				<key>NSThirdPartyExceptionMinimumTLSVersion</key>
-				<string>TLSv1.3</string>
 			</dict>
-		</dict>
+			</dict>
 	</dict>
 </dict>
 </plist>

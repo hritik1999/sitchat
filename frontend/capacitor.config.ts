@@ -12,7 +12,6 @@ const config: CapacitorConfig = {
   ios: {
     limitsNavigationsToAppBoundDomains: false, // Critical for iOS
     preferredContentMode: 'mobile',
-    scheme: 'App'
   },
   plugins: {
     "keyboard": {
