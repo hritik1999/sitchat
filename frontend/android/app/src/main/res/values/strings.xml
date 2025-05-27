@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Sitchat</string>
+    <string name="title_activity_main">Sitchat</string>
+    <string name="package_name">ai.sitchat.app</string>
+    <string name="custom_url_scheme">ai.sitchat.app</string>
+</resources>
