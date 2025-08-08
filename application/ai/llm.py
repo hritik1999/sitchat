@@ -3,12 +3,10 @@ import os
 
 actor_llm = ChatOpenAI(
     model_name="gpt-5-2025-08-07",
-    temperature=0.5,
     api_key=os.getenv('OPENAI_API_KEY')
 )
 
 director_llm = ChatOpenAI(
     model_name="gpt-5-mini",
-    temperature=0.3,
     api_key=os.getenv('OPENAI_API_KEY')
 )
