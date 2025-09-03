@@ -18,7 +18,7 @@
     "jiti": "^2.4.2",
     "lucide-vue-next": "^0.475.0",
     "radix-vue": "^1.9.16",
-    "reka-ui": "^2.0.2",
+    "reka-ui": "^2.3.0",
     "shadcn-vue": "^1.0.1",
     "sitemap": "^8.0.0",
     "socket.io": "^4.8.1",
